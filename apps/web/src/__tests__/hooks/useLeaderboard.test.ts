@@ -1,30 +1,56 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { renderHook } from '@testing-library/react'
-import { useLeaderboard } from '@/hooks/useLeaderboard'
+import { useLeaderboard, type OwnerProfileData } from '@/hooks/useLeaderboard'
 import type { PixelView } from '@/lib/mock'
-import { ZERO_ADDRESS } from '@/constants/map'
+import { WIDTH, HEIGHT, ZERO_ADDRESS, TOTAL_PIXELS } from '@/constants/map'
 
-function makePx(overrides: Partial<PixelView> = {}): PixelView {
-  return {
+// The maps module filters water pixels, so the hook only ranks land. For the
+// tests we make every pixel land by stubbing the live land mask before the
+// hook runs.
+beforeAll(async () => {
+  const { fetchLandMaskFromContract } = await import('@/lib/landMask')
+  const wordCount = Math.ceil(TOTAL_PIXELS / 256)
+  const allOnes: bigint[] = []
+  for (let i = 0; i < wordCount; i++) {
+    // All 256 bits set => every pixel marked as land.
+    allOnes.push((1n << 256n) - 1n)
+  }
+  await fetchLandMaskFromContract(
+    async () => allOnes,
+    '0x0000000000000000000000000000000000000000',
+    [],
+  )
+})
+
+function emptyMap(): PixelView[] {
+  return Array.from({ length: WIDTH * HEIGHT }, () => ({
     owner: ZERO_ADDRESS,
     saleCount: 0,
-    currentPrice: 10000n,
+    currentPrice: 100000n,
     color: '',
     label: '',
     url: '',
-    ...overrides,
+  }))
+}
+
+function place(data: PixelView[], x: number, y: number, owner: string, price = 100000n) {
+  data[y * WIDTH + x] = {
+    owner,
+    saleCount: 1,
+    currentPrice: price,
+    color: '',
+    label: '',
+    url: '',
   }
 }
 
 describe('useLeaderboard', () => {
-  it('AREA: ranks by total pixel count', () => {
-    // Alice owns 3, Bob owns 1 — scattered IDs so just array positions
-    const data: PixelView[] = [
-      makePx({ owner: '0xAlice', label: 'Alice', color: '#f00' }),
-      makePx({ owner: '0xAlice', label: 'Alice', color: '#f00' }),
-      makePx({ owner: '0xAlice', label: 'Alice', color: '#f00' }),
-      makePx({ owner: '0xBob', label: 'Bob', color: '#00f' }),
-    ]
+  it('AREA: ranks by total pixel count (LOCAL scope)', () => {
+    const data = emptyMap()
+    place(data, 0, 0, '0xAlice')
+    place(data, 1, 0, '0xAlice')
+    place(data, 2, 0, '0xAlice')
+    place(data, 3, 0, '0xBob')
 
     const { result } = renderHook(() => useLeaderboard(data))
     const { area } = result.current
@@ -39,15 +65,14 @@ describe('useLeaderboard', () => {
   })
 
   it('EMPIRE: ranks by largest contiguous region', () => {
-    // Build a small 5-wide grid. Alice has 3 contiguous at (0,0),(1,0),(2,0).
-    // Bob has 2 contiguous at (0,1),(1,1).
-    // Width is 300, so pixel IDs: alice at 0,1,2 and bob at 300,301
-    const data: PixelView[] = Array.from({ length: 45000 }, () => makePx())
-    data[0] = makePx({ owner: '0xAlice', label: 'Alice', color: '#f00' })
-    data[1] = makePx({ owner: '0xAlice', label: 'Alice', color: '#f00' })
-    data[2] = makePx({ owner: '0xAlice', label: 'Alice', color: '#f00' })
-    data[300] = makePx({ owner: '0xBob', label: 'Bob', color: '#00f' })
-    data[301] = makePx({ owner: '0xBob', label: 'Bob', color: '#00f' })
+    const data = emptyMap()
+    // Alice has 3 contiguous in row 0
+    place(data, 0, 0, '0xAlice')
+    place(data, 1, 0, '0xAlice')
+    place(data, 2, 0, '0xAlice')
+    // Bob has 2 contiguous in row 1 (far from Alice so they don't connect)
+    place(data, 50, 1, '0xBob')
+    place(data, 51, 1, '0xBob')
 
     const { result } = renderHook(() => useLeaderboard(data))
     const { empire } = result.current
@@ -59,30 +84,60 @@ describe('useLeaderboard', () => {
     expect(empire[1].value).toBe('2')
   })
 
-  it('HOT_PX: ranks by highest pixel price per owner', () => {
-    const data: PixelView[] = [
-      makePx({ owner: '0xAlice', label: 'Alice', color: '#f00', currentPrice: 50000n }),
-      makePx({ owner: '0xAlice', label: 'Alice', color: '#f00', currentPrice: 100000n }),
-      makePx({ owner: '0xBob', label: 'Bob', color: '#00f', currentPrice: 80000n }),
-    ]
+  it('TYCOONS: ranks by highest pixel price per owner, formatted as USDT', () => {
+    const data = emptyMap()
+    // 50000 micro-USDT = 0.05, 100000 = 0.10, 80000 = 0.08
+    place(data, 0, 0, '0xAlice', 50000n)
+    place(data, 1, 0, '0xAlice', 100000n)
+    place(data, 2, 0, '0xBob', 80000n)
 
     const { result } = renderHook(() => useLeaderboard(data))
     const { tycoons } = result.current
 
     expect(tycoons).toHaveLength(2)
-    // Alice's best is 100000, Bob's is 80000
     expect(tycoons[0].owner).toBe('0xAlice')
     expect(tycoons[0].unit).toBe('USDT')
     expect(tycoons[1].owner).toBe('0xBob')
   })
 
   it('excludes ZERO_ADDRESS pixels', () => {
-    const data: PixelView[] = [
-      makePx(), // unowned
-      makePx({ owner: '0xAlice', label: 'Alice', color: '#f00' }),
-    ]
+    const data = emptyMap()
+    place(data, 0, 0, '0xAlice')
 
     const { result } = renderHook(() => useLeaderboard(data))
     expect(result.current.area).toHaveLength(1)
+  })
+
+  it('GLOBAL scope matches LOCAL when only one map is revealed', () => {
+    const data = emptyMap()
+    place(data, 0, 0, '0xAlice')
+    place(data, 1, 0, '0xAlice')
+    place(data, 2, 0, '0xBob')
+
+    const { result } = renderHook(() => useLeaderboard(data))
+    const { local, global } = result.current
+
+    expect(global.area.map((e) => [e.owner, e.value])).toEqual(
+      local.area.map((e) => [e.owner, e.value]),
+    )
+    expect(global.empire.map((e) => [e.owner, e.value])).toEqual(
+      local.empire.map((e) => [e.owner, e.value]),
+    )
+    expect(global.tycoons.map((e) => [e.owner, e.value])).toEqual(
+      local.tycoons.map((e) => [e.owner, e.value]),
+    )
+  })
+
+  it('applies on-chain profile labels via profilesMap', () => {
+    const data = emptyMap()
+    place(data, 0, 0, '0xAlice')
+
+    const profiles = new Map<string, OwnerProfileData>([
+      ['0xalice', { label: 'AliceCorp', url: 'https://a.test', color: '#ff0000' }],
+    ])
+
+    const { result } = renderHook(() => useLeaderboard(data, 0, profiles))
+    expect(result.current.area[0].label).toBe('AliceCorp')
+    expect(result.current.area[0].color).toBe('#ff0000')
   })
 })

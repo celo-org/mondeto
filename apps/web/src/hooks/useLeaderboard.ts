@@ -2,11 +2,16 @@
 
 import { useMemo } from 'react'
 import type { PixelView } from '@/lib/mock'
-import { ZERO_ADDRESS } from '@/constants/map'
-import { computeEmpires } from '@/lib/pixelMath'
+import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
+import {
+  allLeaderboards,
+  allGlobalLeaderboards,
+} from '@/lib/maps/leaderboards'
+import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { formatUSDT } from '@/lib/colorUtils'
 
 export type LeaderboardTab = 'AREA' | 'EMPIRE' | 'TYCOONS'
+export type LeaderboardScope = 'LOCAL' | 'GLOBAL'
 
 export interface LeaderboardEntry {
   rank: number
@@ -24,107 +29,102 @@ export interface OwnerProfileData {
   color: string
 }
 
-export function useLeaderboard(pixelData: PixelView[], profilesMap?: Map<string, OwnerProfileData>) {
-  const getProfile = (owner: string): OwnerProfileData => {
-    const p = profilesMap?.get(owner.toLowerCase())
-    return p ?? { label: '', url: '', color: '' }
+interface BoardSet {
+  area: LeaderboardEntry[]
+  empire: LeaderboardEntry[]
+  tycoons: LeaderboardEntry[]
+}
+
+function decorate(
+  entries: LeaderEntry[],
+  unit: string,
+  format: (value: number) => string,
+  profilesMap?: Map<string, OwnerProfileData>,
+): LeaderboardEntry[] {
+  return entries.map((entry, i) => {
+    const prof = profilesMap?.get(entry.address.toLowerCase())
+    return {
+      rank: i + 1,
+      owner: entry.address,
+      label: prof?.label ?? '',
+      url: prof?.url ?? '',
+      color: prof?.color ?? '',
+      value: format(entry.value),
+      unit,
+    }
+  })
+}
+
+const LIMIT = 1000
+
+function boards(
+  snapshots: MapSnapshot[],
+  scope: LeaderboardScope,
+  profilesMap?: Map<string, OwnerProfileData>,
+): BoardSet {
+  const fmtCount = (v: number) => String(v)
+  // Micro-USDT (6 decimals) → bigint for the shared formatter.
+  const fmtPrice = (v: number) => formatUSDT(BigInt(Math.round(v)))
+
+  if (scope === 'GLOBAL') {
+    const r = allGlobalLeaderboards(snapshots, LIMIT)
+    return {
+      area: decorate(r.mostPixels, 'px', fmtCount, profilesMap),
+      empire: decorate(r.biggestConnectedArea, 'px', fmtCount, profilesMap),
+      tycoons: decorate(r.mostExpensivePixel, 'USDT', fmtPrice, profilesMap),
+    }
   }
-  const area = useMemo<LeaderboardEntry[]>(() => {
-    const counts = new Map<string, { count: number; label: string; color: string }>()
-    for (const px of pixelData) {
-      if (px.owner === ZERO_ADDRESS) continue
-      const existing = counts.get(px.owner)
-      if (existing) {
-        existing.count++
-      } else {
-        counts.set(px.owner, { count: 1, label: px.label, color: px.color })
-      }
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([owner, data], i) => {
-        const prof = getProfile(owner)
-        return {
-          rank: i + 1,
-          owner,
-          label: prof.label || data.label,
-          url: prof.url,
-          color: prof.color || data.color,
-          value: String(data.count),
-          unit: 'px',
-        }
-      })
-  }, [pixelData, profilesMap])
+  // LOCAL: first revealed map, or empty if none.
+  const m = snapshots[0]
+  if (!m) {
+    return { area: [], empire: [], tycoons: [] }
+  }
+  const r = allLeaderboards(m, LIMIT)
+  return {
+    area: decorate(r.mostPixels, 'px', fmtCount, profilesMap),
+    empire: decorate(r.biggestConnectedArea, 'px', fmtCount, profilesMap),
+    tycoons: decorate(r.mostExpensivePixel, 'USDT', fmtPrice, profilesMap),
+  }
+}
 
-  const empire = useMemo<LeaderboardEntry[]>(() => {
-    const ownerMap = new Map<number, string>()
-    for (let i = 0; i < pixelData.length; i++) {
-      if (pixelData[i].owner !== ZERO_ADDRESS) {
-        ownerMap.set(i, pixelData[i].owner)
-      }
-    }
-    const empires = computeEmpires(ownerMap)
+/**
+ * Leaderboard hook for a single revealed map.
+ *
+ * The hook accepts a flat `PixelView[]` for one map plus its `mapId`, converts
+ * it to a `MapSnapshot` via the adapter, and runs both per-map (LOCAL) and
+ * cross-map (GLOBAL) boards. With only one map revealed at launch, LOCAL and
+ * GLOBAL produce the same ordering — kept distinct so the UI scales naturally
+ * once additional maps come online.
+ */
+export function useLeaderboard(
+  pixelData: PixelView[],
+  mapId: MapId = 0,
+  profilesMap?: Map<string, OwnerProfileData>,
+) {
+  const snapshots = useMemo<MapSnapshot[]>(
+    () =>
+      pixelData.length > 0
+        ? [pixelViewToMapSnapshot(pixelData, mapId, true)]
+        : [],
+    [pixelData, mapId],
+  )
 
-    // For each owner find their largest empire
-    const bestEmpire = new Map<string, { size: number; label: string; color: string }>()
-    for (const emp of empires) {
-      const existing = bestEmpire.get(emp.owner)
-      if (!existing || emp.size > existing.size) {
-        // find a pixel from this owner to get label/color
-        const px = pixelData.find((p) => p.owner === emp.owner)
-        bestEmpire.set(emp.owner, {
-          size: emp.size,
-          label: px?.label ?? '',
-          color: px?.color ?? '#888',
-        })
-      }
-    }
+  const local = useMemo(
+    () => boards(snapshots, 'LOCAL', profilesMap),
+    [snapshots, profilesMap],
+  )
+  const global = useMemo(
+    () => boards(snapshots, 'GLOBAL', profilesMap),
+    [snapshots, profilesMap],
+  )
 
-    return [...bestEmpire.entries()]
-      .sort((a, b) => b[1].size - a[1].size)
-      .map(([owner, data], i) => {
-        const prof = getProfile(owner)
-        return {
-          rank: i + 1,
-          owner,
-          label: prof.label || data.label,
-          url: prof.url,
-          color: prof.color || data.color,
-          value: String(data.size),
-          unit: 'px',
-        }
-      })
-  }, [pixelData, profilesMap])
-
-  const hotPx = useMemo<LeaderboardEntry[]>(() => {
-    const best = new Map<string, { price: bigint; label: string; color: string }>()
-    for (const px of pixelData) {
-      if (px.owner === ZERO_ADDRESS) continue
-      const existing = best.get(px.owner)
-      if (!existing || px.currentPrice > existing.price) {
-        best.set(px.owner, { price: px.currentPrice, label: px.label, color: px.color })
-      }
-    }
-
-    return [...best.entries()]
-      .sort((a, b) => {
-        if (b[1].price > a[1].price) return 1
-        if (b[1].price < a[1].price) return -1
-        return 0
-      })
-      .map(([owner, data], i) => {
-        const prof = getProfile(owner)
-        return {
-          rank: i + 1,
-          owner,
-          label: prof.label || data.label,
-          url: prof.url,
-          color: prof.color || data.color,
-          value: formatUSDT(data.price),
-          unit: 'USDT',
-        }
-      })
-  }, [pixelData, profilesMap])
-
-  return { area, empire, tycoons: hotPx }
+  return {
+    // Back-compat: existing tests / callers expect these at the top level
+    // (they correspond to the LOCAL scope).
+    area: local.area,
+    empire: local.empire,
+    tycoons: local.tycoons,
+    local,
+    global,
+  }
 }

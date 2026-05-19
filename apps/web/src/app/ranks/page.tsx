@@ -5,8 +5,14 @@ import { usePublicClient } from 'wagmi'
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import LeaderboardTabs from '@/components/Leaderboard/LeaderboardTabs'
+import ScopeTabs from '@/components/Leaderboard/ScopeTabs'
 import LeaderboardRow from '@/components/Leaderboard/LeaderboardRow'
-import { useLeaderboard, type LeaderboardTab, type OwnerProfileData } from '@/hooks/useLeaderboard'
+import {
+  useLeaderboard,
+  type LeaderboardScope,
+  type LeaderboardTab,
+  type OwnerProfileData,
+} from '@/hooks/useLeaderboard'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
@@ -14,11 +20,16 @@ import { ZERO_ADDRESS } from '@/constants/map'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 
+// Only one map revealed at launch (mapId 0). When `useMaps()` lands, this
+// hook will accept an array and the scope toggle becomes meaningful.
+const HOME_MAP_ID = 0
+
 export default function RanksPage() {
   const publicClient = usePublicClient()
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
-  const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
+  const [scope, setScope] = useState<LeaderboardScope>('LOCAL')
+  const [metric, setMetric] = useState<LeaderboardTab>('AREA')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -83,22 +94,27 @@ export default function RanksPage() {
     load()
   }, [publicClient])
 
-  const { area, empire, tycoons } = useLeaderboard(pixelData, profilesMap)
+  const { local, global } = useLeaderboard(pixelData, HOME_MAP_ID, profilesMap)
 
-  const dataMap: Record<LeaderboardTab, typeof area> = {
-    AREA: area,
-    EMPIRE: empire,
-    TYCOONS: tycoons,
+  const scopeBoards = scope === 'LOCAL' ? local : global
+  const dataMap: Record<LeaderboardTab, typeof scopeBoards.area> = {
+    AREA: scopeBoards.area,
+    EMPIRE: scopeBoards.empire,
+    TYCOONS: scopeBoards.tycoons,
   }
 
-  const currentData = dataMap[activeTab]
+  const currentData = dataMap[metric]
   const displayData = showAll ? currentData : currentData.slice(0, 20)
   const hasOwned = currentData.length > 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
       <TopBar title="MONDETO" />
-      <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      <ScopeTabs
+        activeScope={scope}
+        onScopeChange={(s) => { setScope(s); setShowAll(false) }}
+      />
+      <LeaderboardTabs activeTab={metric} onTabChange={(tab) => { setMetric(tab); setShowAll(false) }} />
       <div
         style={{
           flex: 1,
