@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@celo/builder-codes": "^0.2.0",
+    "@neondatabase/serverless": "^0.10.0",
     "@privy-io/react-auth": "^3.17.0",
     "@privy-io/wagmi": "^4.0.2",
     "@radix-ui/react-dialog": "^1.0.5",
@@ -21,6 +22,7 @@
     "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
+    "drizzle-orm": "^0.36.0",
     "lucide-react": "^0.460.0",
     "next": "^14.0.0",
     "obscenity": "^0.4.6",
