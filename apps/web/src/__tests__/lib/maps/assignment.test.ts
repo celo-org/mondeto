@@ -27,10 +27,10 @@ function makeMap(id: number, open: boolean, prices: number[]): MapSnapshot {
 
 class MemStore implements AssignmentStore {
   private m = new Map<string, MapId>();
-  get(a: string) {
+  async get(a: string): Promise<MapId | null> {
     return this.m.has(a) ? (this.m.get(a) as MapId) : null;
   }
-  set(a: string, id: MapId) {
+  async set(a: string, id: MapId): Promise<void> {
     this.m.set(a, id);
   }
   size() {
@@ -70,39 +70,39 @@ describe("hashAddress", () => {
 });
 
 describe("assignUserToMap", () => {
-  it("returns the existing assignment (sticky, never reassigned)", () => {
+  it("returns the existing assignment (sticky, never reassigned)", async () => {
     const store = new MemStore();
-    store.set("0xuser", 3);
+    await store.set("0xuser", 3);
     const maps = [makeMap(0, true, [0.003]), makeMap(3, true, [5])];
-    expect(assignUserToMap("0xuser", maps, store)).toBe(3); // stays on 3 even though 0 is fresher
+    expect(await assignUserToMap("0xuser", maps, store)).toBe(3); // stays on 3 even though 0 is fresher
   });
 
-  it("assigns a new user to the freshest open map", () => {
+  it("assigns a new user to the freshest open map", async () => {
     const store = new MemStore();
     const maps = [
       makeMap(0, true, [4, 4, 4]), // mature
       makeMap(1, true, [0.003, 0.003]), // freshest
       makeMap(2, true, [1, 1]),
     ];
-    expect(assignUserToMap("0xnew", maps, store)).toBe(1);
+    expect(await assignUserToMap("0xnew", maps, store)).toBe(1);
   });
 
-  it("never assigns to a closed map", () => {
+  it("never assigns to a closed map", async () => {
     const store = new MemStore();
     const maps = [
       makeMap(0, false, [0.001]), // fresher but closed
       makeMap(1, true, [2, 2]),
     ];
-    expect(assignUserToMap("0xnew", maps, store)).toBe(1);
+    expect(await assignUserToMap("0xnew", maps, store)).toBe(1);
   });
 
-  it("throws when no map is open", () => {
+  it("throws when no map is open", async () => {
     const store = new MemStore();
     const maps = [makeMap(0, false, [1]), makeMap(1, false, [1])];
-    expect(() => assignUserToMap("0xnew", maps, store)).toThrow(/no open map/);
+    await expect(assignUserToMap("0xnew", maps, store)).rejects.toThrow(/no open map/);
   });
 
-  it("spreads launch users across equally-fresh maps (no stampede)", () => {
+  it("spreads launch users across equally-fresh maps (no stampede)", async () => {
     const store = new MemStore();
     // Six brand-new maps, all at initial price -> within balanceEpsilon.
     const maps = Array.from({ length: 6 }, (_, i) =>
@@ -111,7 +111,7 @@ describe("assignUserToMap", () => {
     const buckets = new Map<number, number>();
     for (let i = 0; i < 6000; i++) {
       const addr = "0x" + i.toString(16).padStart(40, "0");
-      const m = assignUserToMap(addr, maps, store);
+      const m = await assignUserToMap(addr, maps, store);
       buckets.set(m, (buckets.get(m) ?? 0) + 1);
     }
     // All six maps used, and no single map got the whole crowd.
@@ -121,12 +121,12 @@ describe("assignUserToMap", () => {
     }
   });
 
-  it("is deterministic: same address always lands on the same map", () => {
+  it("is deterministic: same address always lands on the same map", async () => {
     const maps = Array.from({ length: 6 }, (_, i) =>
       makeMap(i, true, [0.003])
     );
-    const a = assignUserToMap("0xdeadbeef", maps, new MemStore());
-    const b = assignUserToMap("0xdeadbeef", maps, new MemStore());
+    const a = await assignUserToMap("0xdeadbeef", maps, new MemStore());
+    const b = await assignUserToMap("0xdeadbeef", maps, new MemStore());
     expect(a).toBe(b);
   });
 });
@@ -169,48 +169,48 @@ describe("shouldOpenNextMap", () => {
 import { migrateUser } from "@/lib/maps/assignment";
 
 describe("referral placement", () => {
-  it("places a brand-new user on a valid open referred map", () => {
+  it("places a brand-new user on a valid open referred map", async () => {
     const store = new MemStore();
     const maps = [makeMap(0, true, [0.003]), makeMap(5, true, [3, 3])];
     expect(
-      assignUserToMap("0xfriend", maps, store, { referredMapId: 5 })
+      await assignUserToMap("0xfriend", maps, store, { referredMapId: 5 })
     ).toBe(5); // honored even though map 0 is fresher
   });
 
-  it("ignores a closed/invalid referral and falls back to freshest", () => {
+  it("ignores a closed/invalid referral and falls back to freshest", async () => {
     const store = new MemStore();
     const maps = [makeMap(0, true, [0.003]), makeMap(5, false, [3])];
     expect(
-      assignUserToMap("0xfriend", maps, store, { referredMapId: 5 })
+      await assignUserToMap("0xfriend", maps, store, { referredMapId: 5 })
     ).toBe(0);
     expect(
-      assignUserToMap("0xother", maps, store, { referredMapId: 99 })
+      await assignUserToMap("0xother", maps, store, { referredMapId: 99 })
     ).toBe(0);
   });
 
-  it("never lets a referral override an existing home", () => {
+  it("never lets a referral override an existing home", async () => {
     const store = new MemStore();
-    store.set("0xexisting", 1);
+    await store.set("0xexisting", 1);
     const maps = [makeMap(0, true, [0.003]), makeMap(1, true, [9])];
     expect(
-      assignUserToMap("0xexisting", maps, store, { referredMapId: 0 })
+      await assignUserToMap("0xexisting", maps, store, { referredMapId: 0 })
     ).toBe(1);
   });
 });
 
 describe("migrateUser", () => {
-  it("overwrites an existing home to an open target", () => {
+  it("overwrites an existing home to an open target", async () => {
     const store = new MemStore();
-    store.set("0xp", 0);
+    await store.set("0xp", 0);
     const maps = [makeMap(0, true, [5]), makeMap(7, true, [0.003])];
-    expect(migrateUser("0xp", 7, maps, store)).toBe(7);
-    expect(store.get("0xp")).toBe(7);
+    expect(await migrateUser("0xp", 7, maps, store)).toBe(7);
+    expect(await store.get("0xp")).toBe(7);
   });
 
-  it("refuses to migrate to a closed or missing map", () => {
+  it("refuses to migrate to a closed or missing map", async () => {
     const store = new MemStore();
     const maps = [makeMap(0, true, [1]), makeMap(7, false, [0.003])];
-    expect(() => migrateUser("0xp", 7, maps, store)).toThrow(/closed/);
-    expect(() => migrateUser("0xp", 42, maps, store)).toThrow(/does not exist/);
+    await expect(migrateUser("0xp", 7, maps, store)).rejects.toThrow(/closed/);
+    await expect(migrateUser("0xp", 42, maps, store)).rejects.toThrow(/does not exist/);
   });
 });

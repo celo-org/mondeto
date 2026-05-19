@@ -37,11 +37,15 @@ export interface MapSnapshot {
 
 /**
  * Sticky assignment store. Injectable so tests use an in-memory impl and
- * production can back it with Airtable / Postgres / KV — the module does not care.
+ * production can back it with Postgres / KV — the module does not care.
+ *
+ * The interface is async because the production adapter is network-bound
+ * (Postgres). In-memory implementations resolve synchronously via Promise
+ * wrappers, so test ergonomics stay light.
  */
 export interface AssignmentStore {
-  get(address: Address): MapId | null;
-  set(address: Address, mapId: MapId): void;
+  get(address: Address): Promise<MapId | null>;
+  set(address: Address, mapId: MapId): Promise<void>;
 }
 
 export interface LeaderEntry {

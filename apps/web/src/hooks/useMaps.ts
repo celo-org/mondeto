@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { getRevealedMaps, isRevealedMapId, type MapContract } from '@/lib/maps/contracts'
 import { hashAddress, assignUserToMap } from '@/lib/maps/assignment'
-import { memoryAssignmentStore } from '@/lib/maps/store'
+import { getStore } from '@/lib/maps/store'
 import type { MapId, MapSnapshot } from '@/lib/maps/types'
 
 const STORAGE_KEY = 'mondeto-current-map-id'
@@ -86,33 +86,62 @@ export function useMaps(): UseMapsResult {
   const { address } = useAccount()
   const revealedMaps = useMemo(() => getRevealedMaps(), [])
 
-  // Compute home map id from the wallet address. Recomputed when address
-  // or the revealed list changes; deterministic and trivially cheap.
-  const homeMapId = useMemo<MapId | null>(() => {
+  // Compute home map id from the wallet address. The store is async
+  // (Postgres in prod, in-memory in dev), so we kick a resolve effect and
+  // also keep a deterministic synchronous fallback (hash-based) so the UI
+  // never blocks on a network call.
+  const syncHomeMapId = useMemo<MapId | null>(() => {
     if (!address || revealedMaps.length === 0) return null
     const ids = revealedMaps.map((m) => m.id).sort((a, b) => a - b)
+    return ids[hashAddress(address) % ids.length]
+  }, [address, revealedMaps])
 
-    // Honor a referral only on the very first visit (no record + no
-    // localStorage current map yet). assignUserToMap is sticky so any
-    // existing assignment wins.
-    const referredMapId = readReferredMapId()
-    if (referredMapId !== undefined && isRevealedMapId(referredMapId)) {
-      try {
-        return assignUserToMap(address, toSnapshots(revealedMaps), memoryAssignmentStore, {
-          referredMapId,
-        })
-      } catch {
-        // No open map — fall through to hash-based default.
+  const [homeMapId, setHomeMapId] = useState<MapId | null>(syncHomeMapId)
+
+  useEffect(() => {
+    setHomeMapId(syncHomeMapId)
+    if (!address || revealedMaps.length === 0) return
+    let cancelled = false
+    const store = getStore()
+    const ids = revealedMaps.map((m) => m.id).sort((a, b) => a - b)
+
+    const resolve = async (): Promise<MapId | null> => {
+      // Honor a referral only on the very first visit. assignUserToMap is
+      // sticky so any existing assignment wins.
+      const referredMapId = readReferredMapId()
+      if (referredMapId !== undefined && isRevealedMapId(referredMapId)) {
+        try {
+          return await assignUserToMap(
+            address,
+            toSnapshots(revealedMaps),
+            store,
+            { referredMapId },
+          )
+        } catch {
+          // No open map — fall through to hash-based default.
+        }
       }
+
+      const existing = await store.get(address)
+      if (existing !== null && ids.includes(existing)) return existing
+
+      const pick = ids[hashAddress(address) % ids.length]
+      await store.set(address, pick)
+      return pick
     }
 
-    const existing = memoryAssignmentStore.get(address)
-    if (existing !== null && ids.includes(existing)) return existing
+    resolve()
+      .then((id) => {
+        if (!cancelled && id !== null) setHomeMapId(id)
+      })
+      .catch(() => {
+        // Postgres unreachable / network blip — keep the sync fallback.
+      })
 
-    const pick = ids[hashAddress(address) % ids.length]
-    memoryAssignmentStore.set(address, pick)
-    return pick
-  }, [address, revealedMaps])
+    return () => {
+      cancelled = true
+    }
+  }, [address, revealedMaps, syncHomeMapId])
 
   // Current view defaults to home; localStorage rehydrates browse-anywhere.
   const [currentMapId, setCurrentMapIdState] = useState<MapId>(() => {

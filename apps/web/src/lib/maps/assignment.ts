@@ -80,20 +80,20 @@ const DEFAULT_BALANCE_EPSILON = 0.01;
  *
  * Throws only if there is no open map at all (caller must keep >=1 open).
  */
-export function assignUserToMap(
+export async function assignUserToMap(
   address: Address,
   maps: MapSnapshot[],
   store: AssignmentStore,
   opts: AssignOptions = {}
-): MapId {
-  const existing = store.get(address);
+): Promise<MapId> {
+  const existing = await store.get(address);
   if (existing !== null) return existing;
 
   // Referral placement (new users only).
   if (opts.referredMapId !== undefined) {
     const ref = findMap(maps, opts.referredMapId);
     if (ref && ref.meta.open) {
-      store.set(address, ref.meta.id);
+      await store.set(address, ref.meta.id);
       return ref.meta.id;
     }
     // invalid/closed referral -> silently fall through to freshest
@@ -113,7 +113,7 @@ export function assignUserToMap(
     .sort((a, b) => a.id - b.id);
 
   const pick = candidates[hashAddress(address) % candidates.length].id;
-  store.set(address, pick);
+  await store.set(address, pick);
   return pick;
 }
 
@@ -128,12 +128,12 @@ export function assignUserToMap(
  *
  * Throws if the target map does not exist or is closed.
  */
-export function migrateUser(
+export async function migrateUser(
   address: Address,
   targetMapId: MapId,
   maps: MapSnapshot[],
   store: AssignmentStore
-): MapId {
+): Promise<MapId> {
   const target = findMap(maps, targetMapId);
   if (!target) {
     throw new Error(`migrateUser: map ${targetMapId} does not exist`);
@@ -141,7 +141,7 @@ export function migrateUser(
   if (!target.meta.open) {
     throw new Error(`migrateUser: map ${targetMapId} is closed`);
   }
-  store.set(address, targetMapId);
+  await store.set(address, targetMapId);
   return targetMapId;
 }
 
