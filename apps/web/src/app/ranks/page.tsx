@@ -9,13 +9,17 @@ import LeaderboardRow from '@/components/Leaderboard/LeaderboardRow'
 import { useLeaderboard, type LeaderboardTab, type OwnerProfileData } from '@/hooks/useLeaderboard'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
-import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
+import { MONDETO_ABI } from '@/lib/contract'
+import { useMaps } from '@/hooks/useMaps'
+import { getContractByMapId } from '@/lib/maps/contracts'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 
 export default function RanksPage() {
   const publicClient = usePublicClient()
+  const { currentMapId } = useMaps()
+  const mondetoAddress = getContractByMapId(currentMapId)
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
@@ -29,7 +33,8 @@ export default function RanksPage() {
       try {
         if (publicClient) {
           data = await fetchAllPixelsFromContract(
-            publicClient.readContract.bind(publicClient) as Parameters<typeof fetchAllPixelsFromContract>[0]
+            publicClient.readContract.bind(publicClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
+            mondetoAddress,
           )
         }
       } catch (e) {
@@ -53,7 +58,7 @@ export default function RanksPage() {
           const results = await Promise.allSettled(
             batch.map(addr =>
               publicClient.readContract({
-                address: MONDETO_ADDRESS,
+                address: mondetoAddress,
                 abi: MONDETO_ABI,
                 functionName: 'profiles',
                 args: [addr as `0x${string}`],
@@ -81,7 +86,7 @@ export default function RanksPage() {
       setLoading(false)
     }
     load()
-  }, [publicClient])
+  }, [publicClient, mondetoAddress])
 
   const { area, empire, tycoons } = useLeaderboard(pixelData, profilesMap)
 

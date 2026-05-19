@@ -2,13 +2,16 @@
 
 import { useState, useCallback } from 'react'
 import { useWriteContract, useAccount, usePublicClient } from 'wagmi'
-import { MONDETO_ABI, MONDETO_ADDRESS, USDT_ABI } from '@/lib/contract'
+import { MONDETO_ABI, USDT_ABI } from '@/lib/contract'
 import { USDT_ADDRESS } from '@/lib/contract'
 import { getBuilderCodeSuffix } from '@/lib/builderCode'
+import { getContractByMapId } from '@/lib/maps/contracts'
+import type { MapId } from '@/lib/maps/types'
 
 export type TxStep = 'idle' | 'approving' | 'buying' | 'confirming' | 'success' | 'error'
 
-export function useBuyPixels() {
+export function useBuyPixels(mapId?: MapId) {
+  const contractAddress = getContractByMapId(mapId ?? 0)
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const [step, setStep] = useState<TxStep>('idle')
@@ -40,7 +43,7 @@ export function useBuyPixels() {
       let realPrice = _totalPriceHint
       try {
         const onChainPrice = await publicClient.readContract({
-          address: MONDETO_ADDRESS,
+          address: contractAddress,
           abi: MONDETO_ABI,
           functionName: 'selectionPrice',
           args: [bigIds],
@@ -56,7 +59,7 @@ export function useBuyPixels() {
         address: usdtAddress,
         abi: USDT_ABI,
         functionName: 'allowance',
-        args: [address, MONDETO_ADDRESS],
+        args: [address, contractAddress],
       }) as bigint
 
       const approveAmount = realPrice * 102n / 100n
@@ -74,7 +77,7 @@ export function useBuyPixels() {
           address: usdtAddress,
           abi: USDT_ABI,
           functionName: 'approve',
-          args: [MONDETO_ADDRESS, safeApprove],
+          args: [contractAddress, safeApprove],
           dataSuffix,
         })
 
@@ -90,7 +93,7 @@ export function useBuyPixels() {
       // Step 2: Buy pixels
       setStep('buying')
       const buyHash = await writeContractAsync({
-        address: MONDETO_ADDRESS,
+        address: contractAddress,
         abi: MONDETO_ABI,
         functionName: 'buyPixels',
         args: [bigIds],
@@ -106,7 +109,7 @@ export function useBuyPixels() {
         // Try to get the revert reason
         try {
           await publicClient.simulateContract({
-            address: MONDETO_ADDRESS,
+            address: contractAddress,
             abi: MONDETO_ABI,
             functionName: 'buyPixels',
             args: [bigIds],
@@ -131,7 +134,7 @@ export function useBuyPixels() {
       setError(short)
       setStep('error')
     }
-  }, [writeContractAsync, usdtAddress, publicClient, address])
+  }, [writeContractAsync, usdtAddress, publicClient, address, contractAddress])
 
   const reset = useCallback(() => {
     setStep('idle')

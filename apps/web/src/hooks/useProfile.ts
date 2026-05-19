@@ -2,14 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
-import { MONDETO_ABI, MONDETO_ADDRESS } from '@/lib/contract'
+import { MONDETO_ABI } from '@/lib/contract'
 import { uint24ToHex, hexToUint24 } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { getBuilderCodeSuffix } from '@/lib/builderCode'
+import { getContractByMapId } from '@/lib/maps/contracts'
+import type { MapId } from '@/lib/maps/types'
 
 export type ProfileSaveState = 'idle' | 'saving' | 'confirming' | 'saved' | 'error'
 
-export function useProfile(address: string | undefined) {
+export function useProfile(address: string | undefined, mapId?: MapId) {
+  const contractAddress = getContractByMapId(mapId ?? 0)
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [color, setColor] = useState('#e74c3c')
@@ -17,7 +20,7 @@ export function useProfile(address: string | undefined) {
 
   // Read profile from contract
   const { data: profileData } = useReadContract({
-    address: MONDETO_ADDRESS,
+    address: contractAddress,
     abi: MONDETO_ABI,
     functionName: 'profiles',
     args: [(address ?? '0x0000000000000000000000000000000000000000') as `0x${string}`],
@@ -61,7 +64,7 @@ export function useProfile(address: string | undefined) {
 
     try {
       writeContract({
-        address: MONDETO_ADDRESS,
+        address: contractAddress,
         abi: MONDETO_ABI,
         functionName: 'updateProfile',
         args: [hexToUint24(color), name, url],
