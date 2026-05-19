@@ -6,7 +6,13 @@ import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import LeaderboardTabs from '@/components/Leaderboard/LeaderboardTabs'
 import LeaderboardRow from '@/components/Leaderboard/LeaderboardRow'
-import { useLeaderboard, type LeaderboardTab, type OwnerProfileData } from '@/hooks/useLeaderboard'
+import {
+  useLeaderboard,
+  type LeaderboardTab,
+  type LeaderboardScope,
+  type OwnerProfileData,
+} from '@/hooks/useLeaderboard'
+import { useMaps } from '@/hooks/useMaps'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
@@ -14,11 +20,17 @@ import { ZERO_ADDRESS } from '@/constants/map'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 
+const PIXEL_FONT = "'Press Start 2P', monospace"
+
 export default function RanksPage() {
   const publicClient = usePublicClient()
+  const { revealedMaps, homeMapId } = useMaps()
+  const showScopeToggle = revealedMaps.length > 1
+
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
+  const [scope, setScope] = useState<LeaderboardScope>('local')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -83,7 +95,11 @@ export default function RanksPage() {
     load()
   }, [publicClient])
 
-  const { area, empire, tycoons } = useLeaderboard(pixelData, profilesMap)
+  const { area, empire, tycoons, loading: boardsLoading } = useLeaderboard(
+    pixelData,
+    profilesMap,
+    { scope, homeMapId },
+  )
 
   const dataMap: Record<LeaderboardTab, typeof area> = {
     AREA: area,
@@ -94,10 +110,21 @@ export default function RanksPage() {
   const currentData = dataMap[activeTab]
   const displayData = showAll ? currentData : currentData.slice(0, 20)
   const hasOwned = currentData.length > 0
+  const isLoading = loading || boardsLoading
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
       <TopBar title="MONDETO" />
+      {showScopeToggle && (
+        <ScopeToggle
+          scope={scope}
+          onScopeChange={(next) => {
+            setScope(next)
+            setShowAll(false)
+          }}
+          homeMapId={homeMapId}
+        />
+      )}
       <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
       <div
         style={{
@@ -111,7 +138,7 @@ export default function RanksPage() {
           justifyContent: 'flex-start',
         }}
       >
-        {loading ? (
+        {isLoading ? (
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '40%', gap: 8 }}>
             <svg viewBox="0 0 24 24" width={28} height={28} fill="none" stroke="var(--text-muted)" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 2s linear infinite' }}>
               <circle cx={12} cy={12} r={10} />
@@ -131,7 +158,7 @@ export default function RanksPage() {
                   display: 'block',
                   margin: '8px auto',
                   fontSize: 7,
-                  fontFamily: "'Press Start 2P', monospace",
+                  fontFamily: PIXEL_FONT,
                   color: 'var(--text-muted)',
                   background: 'none',
                   border: '1px solid var(--border)',
@@ -176,6 +203,69 @@ export default function RanksPage() {
         )}
       </div>
       <BottomNav activeRoute="/ranks" />
+    </div>
+  )
+}
+
+interface ScopeToggleProps {
+  scope: LeaderboardScope
+  onScopeChange: (scope: LeaderboardScope) => void
+  homeMapId: number
+}
+
+function ScopeToggle({ scope, onScopeChange, homeMapId }: ScopeToggleProps) {
+  const caption =
+    scope === 'local'
+      ? `your home — map ${homeMapId}`
+      : 'all maps'
+
+  return (
+    <div
+      style={{
+        background: 'var(--card-bg)',
+        borderBottom: '1px solid var(--border)',
+        padding: '8px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', gap: 6 }}>
+        {(['local', 'global'] as const).map((s) => {
+          const isActive = s === scope
+          return (
+            <button
+              key={s}
+              onClick={() => onScopeChange(s)}
+              style={{
+                fontSize: 8,
+                fontFamily: PIXEL_FONT,
+                letterSpacing: 2,
+                padding: '6px 10px',
+                cursor: 'pointer',
+                background: isActive ? 'var(--text)' : 'transparent',
+                color: isActive ? 'var(--bg)' : 'var(--text-muted)',
+                border: '1px solid var(--border)',
+                borderRadius: 999,
+              }}
+            >
+              {s === 'local' ? 'LOCAL' : 'GLOBAL'}
+            </button>
+          )
+        })}
+      </div>
+      <span
+        style={{
+          fontSize: 7,
+          fontFamily: PIXEL_FONT,
+          color: 'var(--text-muted)',
+          letterSpacing: 1,
+        }}
+      >
+        {caption}
+      </span>
     </div>
   )
 }
