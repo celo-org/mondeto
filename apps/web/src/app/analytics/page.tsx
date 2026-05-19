@@ -3,7 +3,10 @@
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import { OPEN_NEXT_THRESHOLD, useMapSnapshots } from '@/hooks/useMapSnapshots'
 import { formatUSDT } from '@/lib/colorUtils'
+import { averagePrice, shouldOpenNextMap } from '@/lib/maps/assignment'
+import { percentClaimed } from '@/lib/maps/adapter'
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
 
@@ -85,8 +88,188 @@ function SectionHeader({ children }: { children: string }) {
   )
 }
 
+function AdvisoryPanel({
+  decision,
+  threshold,
+  loading,
+}: {
+  decision: ReturnType<typeof shouldOpenNextMap> | null
+  threshold: number
+  loading: boolean
+}) {
+  if (loading || !decision) {
+    return (
+      <div
+        style={{
+          background: 'var(--card-bg)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+          padding: '12px 14px',
+          fontFamily: PIXEL_FONT,
+          fontSize: 8,
+          color: 'var(--text-muted)',
+          letterSpacing: 1,
+          marginBottom: 12,
+        }}
+      >
+        loading map snapshots…
+      </div>
+    )
+  }
+
+  const avg = decision.freshestOpenMapAvgPrice ?? 0
+  const open = decision.open
+  // Operator-facing copy. Keep tone consistent with the rest of /analytics.
+  const headline = open
+    ? `Reveal another map — freshest map avg $${avg.toFixed(2)} >= threshold $${threshold.toFixed(2)}`
+    : `Healthy — freshest map avg $${avg.toFixed(2)} < threshold $${threshold.toFixed(2)}`
+  const dot = open ? '🟡' : '🟢'
+  const border = open ? '#d4a017' : '#2a8c4a'
+  const tint = open ? 'rgba(212, 160, 23, 0.12)' : 'rgba(42, 140, 74, 0.12)'
+
+  return (
+    <div
+      data-testid="advisory-panel"
+      data-decision={open ? 'open' : 'hold'}
+      style={{
+        background: tint,
+        border: `1px solid ${border}`,
+        borderRadius: 10,
+        padding: '12px 14px',
+        marginBottom: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 6,
+          fontFamily: PIXEL_FONT,
+          color: 'var(--text-muted)',
+          letterSpacing: 2,
+        }}
+      >
+        OPEN-NEXT-MAP SIGNAL
+      </div>
+      <div
+        style={{
+          fontSize: 9,
+          fontFamily: PIXEL_FONT,
+          color: 'var(--text)',
+          letterSpacing: 1,
+          lineHeight: 1.6,
+        }}
+      >
+        {dot} {headline}
+      </div>
+    </div>
+  )
+}
+
+function MapBreakdownTable({
+  rows,
+  thresholdAvg,
+}: {
+  rows: Array<{
+    id: number
+    revealed: boolean
+    avg: number
+    claimed: number
+    status: 'open' | 'hidden'
+  }>
+  thresholdAvg: number
+}) {
+  if (rows.length === 0) return null
+
+  const cell: React.CSSProperties = {
+    padding: '8px 6px',
+    fontSize: 7,
+    fontFamily: PIXEL_FONT,
+    color: 'var(--text)',
+    letterSpacing: 1,
+    borderBottom: '1px solid var(--border)',
+    whiteSpace: 'nowrap',
+  }
+  const headCell: React.CSSProperties = {
+    ...cell,
+    color: 'var(--text-muted)',
+    fontSize: 6,
+    letterSpacing: 2,
+    textAlign: 'left',
+  }
+
+  return (
+    <div
+      style={{
+        background: 'var(--card-bg)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        overflowX: 'auto',
+        marginBottom: 8,
+      }}
+    >
+      <table
+        data-testid="map-breakdown"
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          minWidth: 320,
+        }}
+      >
+        <thead>
+          <tr>
+            <th style={headCell}>MAP</th>
+            <th style={headCell}>REVEALED</th>
+            <th style={headCell}>AVG PRICE</th>
+            <th style={headCell}>% CLAIMED</th>
+            <th style={headCell}>STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} data-testid={`map-row-${r.id}`}>
+              <td style={cell}>{r.id}</td>
+              <td style={cell}>{r.revealed ? '✓' : '—'}</td>
+              <td style={cell}>${r.avg.toFixed(2)}</td>
+              <td style={cell}>{(r.claimed * 100).toFixed(0)}%</td>
+              <td
+                style={{
+                  ...cell,
+                  color:
+                    r.status === 'open' && r.avg >= thresholdAvg
+                      ? '#d4a017'
+                      : cell.color,
+                }}
+              >
+                {r.status}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function AnalyticsPage() {
   const a = useAnalytics()
+  const maps = useMapSnapshots()
+
+  const decision =
+    maps.snapshots.length > 0
+      ? shouldOpenNextMap(maps.snapshots, {
+          averagePriceThreshold: OPEN_NEXT_THRESHOLD,
+        })
+      : null
+
+  const rows = maps.snapshots.map((m) => ({
+    id: m.meta.id,
+    revealed: m.meta.open,
+    avg: averagePrice(m),
+    claimed: percentClaimed(m),
+    status: m.meta.open ? ('open' as const) : ('hidden' as const),
+  }))
 
   const feePct = a.feeRateBps / 100
 
@@ -151,6 +334,29 @@ export default function AnalyticsPage() {
             failed to load: {a.error}
           </div>
         )}
+
+        <AdvisoryPanel
+          decision={decision}
+          threshold={OPEN_NEXT_THRESHOLD}
+          loading={maps.loading}
+        />
+
+        <MapBreakdownTable rows={rows} thresholdAvg={OPEN_NEXT_THRESHOLD} />
+
+        <div
+          style={{
+            fontSize: 6,
+            fontFamily: PIXEL_FONT,
+            color: 'var(--text-muted)',
+            letterSpacing: 1,
+            lineHeight: 1.7,
+            marginBottom: 4,
+          }}
+        >
+          how to reveal another map: open the vercel project&apos;s postgres
+          data editor, update the settings row&apos;s revealed_map_ids array,
+          redeploy or wait for the next isr refresh.
+        </div>
 
         <SectionHeader>PLAYERS</SectionHeader>
         <div
