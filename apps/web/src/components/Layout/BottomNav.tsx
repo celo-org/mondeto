@@ -12,9 +12,9 @@ const navItems = [
   { label: 'PROFILE', href: '/profile', icon: '/brand/icons/users.svg'  },
 ]
 
-// SVG icons in /brand/icons are hard-filled white. The active-state lime tint
-// is applied via a CSS filter — see the comment in the JSX for the recipe.
-const ACTIVE_FILTER = 'invert(86%) sepia(75%) saturate(2000%) hue-rotate(20deg) brightness(105%)'
+const BRAND_LIME = '#A7FF05'
+// White SVG → brand-lime via CSS filter (icons are hard-filled white).
+const LIME_FILTER = 'invert(86%) sepia(75%) saturate(2000%) hue-rotate(20deg) brightness(105%)'
 
 export default function BottomNav({ activeRoute }: BottomNavProps) {
   return (
@@ -29,7 +29,7 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
         zIndex: 40,
         display: 'flex',
         justifyContent: 'space-around',
-        alignItems: 'center',
+        alignItems: 'stretch',
       }}
     >
       {navItems.map((item) => {
@@ -39,26 +39,42 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
             key={item.href}
             href={item.href}
             aria-label={item.label}
+            aria-current={isActive ? 'page' : undefined}
             style={{
+              flex: 1,
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 44,
-              height: 44,
+              gap: 4,
               textDecoration: 'none',
+              borderTop: `2px solid ${isActive ? BRAND_LIME : 'transparent'}`,
+              backgroundColor: isActive ? 'rgba(167, 255, 5, 0.08)' : 'transparent',
+              transition: 'background-color 120ms ease',
             }}
           >
             <img
               src={item.icon}
               alt=""
-              width={28}
-              height={28}
+              width={26}
+              height={26}
               style={{
                 imageRendering: 'pixelated' as const,
-                filter: isActive ? ACTIVE_FILTER : 'none',
-                opacity: isActive ? 1 : 0.85,
+                filter: isActive ? LIME_FILTER : 'none',
+                opacity: isActive ? 1 : 0.7,
               }}
             />
+            <span
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: 7,
+                letterSpacing: 2,
+                textTransform: 'uppercase',
+                color: isActive ? BRAND_LIME : 'rgba(255, 255, 255, 0.6)',
+              }}
+            >
+              {item.label}
+            </span>
           </Link>
         )
       })}

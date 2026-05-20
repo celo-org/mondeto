@@ -8,6 +8,7 @@ interface LeaderboardRowProps {
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
+const BRAND_LIME = '#A7FF05'
 
 function rankSuffix(rank: number): string {
   if (rank === 1) return '1ST'
@@ -16,17 +17,11 @@ function rankSuffix(rank: number): string {
   return `${rank}TH`
 }
 
-function rankColor(rank: number): string {
-  if (rank === 1) return '#c9962a'
-  if (rank === 2) return '#8a9aaa'
-  if (rank === 3) return '#a07050'
-  return 'var(--text-muted)'
-}
-
 export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
   // URL field hidden — unverified user-entered URLs are an injection /
   // phishing vector. Re-enable once URL verification is in place.
   const isTop3 = entry.rank <= 3
+  const rankColor = isTop3 ? BRAND_LIME : 'rgba(255,255,255,0.55)'
 
   return (
     <div
@@ -35,7 +30,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
         alignItems: 'center',
         gap: 12,
         padding: isTop3 ? '14px 16px' : '10px 16px',
-        borderBottom: '1px solid var(--border)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
         maxWidth: 500,
         margin: '0 auto',
         width: '100%',
@@ -46,9 +41,9 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
         style={{
           fontSize: isTop3 ? 12 : 9,
           fontWeight: 700,
-          width: 40,
+          width: 44,
           textAlign: 'right',
-          color: rankColor(entry.rank),
+          color: rankColor,
           flexShrink: 0,
           fontFamily: PIXEL_FONT,
           letterSpacing: 2,
@@ -61,10 +56,10 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: isTop3 ? 10 : 8,
+            fontSize: isTop3 ? 10 : 9,
             fontFamily: PIXEL_FONT,
             letterSpacing: 2,
-            color: 'var(--text)',
+            color: '#FFFFFF',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -77,9 +72,9 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
       {/* Score */}
       <span
         style={{
-          fontSize: isTop3 ? 12 : 9,
+          fontSize: isTop3 ? 12 : 10,
           letterSpacing: 2,
-          color: 'var(--text)',
+          color: isTop3 ? BRAND_LIME : '#FFFFFF',
           whiteSpace: 'nowrap',
           flexShrink: 0,
           fontFamily: PIXEL_FONT,
@@ -92,7 +87,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
       <span
         style={{
           fontSize: 7,
-          color: 'var(--text-muted)',
+          color: 'rgba(255,255,255,0.45)',
           flexShrink: 0,
           fontFamily: PIXEL_FONT,
         }}
