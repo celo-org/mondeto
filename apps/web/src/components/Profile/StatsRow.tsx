@@ -4,16 +4,19 @@ const PIXEL_FONT = "'Press Start 2P', monospace"
 
 interface StatsRowProps {
   pixels: number
-  usdt: string
+  balance: string
+  /** Stablecoin symbol shown under the balance value (USDm / USDC / USDT). */
+  balanceSymbol?: string
   rank: number
   spent?: string
   earned?: string
 }
 
-export default function StatsRow({ pixels, usdt, rank, spent, earned }: StatsRowProps) {
+export default function StatsRow({ pixels, balance, balanceSymbol, rank, spent, earned }: StatsRowProps) {
+  const balanceLabel = balanceSymbol ? `BALANCE · ${balanceSymbol.toUpperCase()}` : 'BALANCE'
   const cards = [
     { value: String(pixels), label: 'PIXELS' },
-    { value: usdt, label: 'BALANCE' },
+    { value: balance, label: balanceLabel },
     { value: rank > 0 ? `#${rank}` : '-', label: 'RANK' },
   ]
 

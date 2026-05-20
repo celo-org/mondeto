@@ -176,14 +176,16 @@ export default function SelectionDrawer({
             </button>
           </div>
 
-          {/* Balance + warnings */}
+          {/* Balance + warnings. Balance is summed across USDm + USDC + USDT
+              (all $1-pegged) so we label it as "$" rather than a single
+              symbol. The LOCK IT IN button still settles in USDT on-chain. */}
           <div style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--text-muted)', marginBottom: 4, flexShrink: 0, textAlign: 'center', letterSpacing: 1 }}>
-            balance: {formatUSDT(userBalance)} USDT
+            balance: ${formatUSDT(userBalance)}
           </div>
           {insufficient && (
             <div style={{ marginBottom: 6, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
               <div style={{ fontSize: 7, color: 'var(--error)', textAlign: 'center', letterSpacing: 1, fontFamily: "'Press Start 2P', monospace" }}>
-                need {formatUSDT(totalPrice - userBalance)} more USDT
+                need ${formatUSDT(totalPrice - userBalance)} more
               </div>
               <a
                 href={MINIPAY_DEPOSIT_URL}

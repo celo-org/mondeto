@@ -9,12 +9,12 @@ import AvatarBlock from '@/components/Profile/AvatarBlock'
 import StatsRow from '@/components/Profile/StatsRow'
 import ColorPicker from '@/components/Profile/ColorPicker'
 import { useProfile } from '@/hooks/useProfile'
-import { useUSDTBalance } from '@/hooks/useUSDTBalance'
+import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
-import { formatUSDT } from '@/lib/colorUtils'
+import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { isLand } from '@/lib/landMask'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
@@ -28,7 +28,7 @@ export default function ProfilePage() {
   const { currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
-  const walletBalance = useUSDTBalance()
+  const walletBalance = useStablecoinBalance()
   const publicClient = usePublicClient()
   const [nameError, setNameError] = useState<string | null>(null)
 
@@ -163,7 +163,8 @@ export default function ProfilePage() {
         <AvatarBlock color={color} name={name} />
         <StatsRow
           pixels={pixelCount}
-          usdt={parseFloat(walletBalance.balance) < 1 ? parseFloat(walletBalance.balance).toFixed(4) : parseFloat(walletBalance.balance) >= 100 ? Math.floor(parseFloat(walletBalance.balance)).toString() : parseFloat(walletBalance.balance).toFixed(2)}
+          balance={formatBalanceForDisplay(walletBalance.preferred?.amount ?? walletBalance.totalAmount)}
+          balanceSymbol={walletBalance.preferred?.symbol}
           rank={rank}
           spent={formatUSDT(spent)}
           earned={formatUSDT(earned)}
