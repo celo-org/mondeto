@@ -48,9 +48,8 @@ function readReferredMapId(): MapId | undefined {
 /**
  * Build the minimum MapSnapshot list the pure assignment module needs.
  *
- * The launch single-map app does not yet have per-map snapshots in scope
- * (Agent A wires that with the Postgres adapter); for now every revealed
- * map is treated as fresh/empty so referral placement works correctly.
+ * Per-map snapshots are not in scope at launch; every revealed map is
+ * treated as fresh/empty so referral placement still works correctly.
  */
 function toSnapshots(revealed: MapContract[]): MapSnapshot[] {
   return revealed.map((m) => ({

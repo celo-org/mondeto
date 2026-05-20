@@ -11,7 +11,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
     "dotenv": "^16.4.5",
-    "grammy": "^1.30.0"
+    "grammy": "^1.30.0",
+    "posthog-node": "^4.7.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.37",

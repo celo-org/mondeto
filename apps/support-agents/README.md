@@ -12,7 +12,8 @@ This package is the **phase 1** scaffold:
 - Listens on the support group
 - Classifies each message via Claude Haiku 4.5
 - Generates a specialist draft (UI/UX issue, financial ticket, campaign lead) via Claude Sonnet 4.6
-- Logs the routing + draft to `tickets.jsonl`
+- Emits each routed message as a `support_message_routed` event to PostHog (EU). Falls back to `tickets.jsonl` on disk if `POSTHOG_API_KEY` is unset.
+- Captures uncaught errors via PostHog's `captureException` so they show up in the error tracking dashboard alongside the event stream.
 - **Does NOT reply** in the group yet (observation only)
 
 Once the routing accuracy looks good in the log, flip the `AUTOREPLY` flags
@@ -72,7 +73,7 @@ The bot is a long-lived process. Two reasonable hosts:
 | Campaign agent — draft generation | ✅ done |
 | Campaign agent — Notion lead write | ⏳ TODO |
 | Auto-reply in the group | 🔒 disabled by default — flip in `src/index.ts` |
-| Dedup / multi-turn memory | ⏳ swap `log.ts` for Postgres (Neon) when ready |
+| Dedup / multi-turn memory | ✅ PostHog event stream (`$insert_id = tg-msg-<id>`, `distinct_id = tg:<user>`) — query the last N events per user when needed |
 | PII redaction in logs | ⏳ TODO |
 | Rate limiting per user | ⏳ TODO |
 

@@ -97,7 +97,7 @@ Rule of thumb: **a single world map is comfortable at <10k DAU**. Above that, fa
 
 Mitigation if it bites:
 - Add a public Celo RPC with proper SLA (Ankr, BlastAPI, etc.) and rotate
-- Add a tiny indexer service that pre-aggregates events (Postgres + a worker pulling new blocks every few seconds)
+- Add a tiny indexer service that pre-aggregates events (a worker pulling new blocks every few seconds, writing rolled-up snapshots to PostHog or a CDN cache — no relational DB needed)
 - Cache reads aggressively in the frontend (already partly done — `mondeto-analytics-cache` in sessionStorage)
 
 ### Vercel (frontend)
