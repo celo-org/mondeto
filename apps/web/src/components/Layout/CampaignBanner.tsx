@@ -18,7 +18,7 @@ export default function CampaignBanner() {
         right: 0,
         zIndex: 14,
         height: 20,
-        background: '#00ff41',
+        background: '#A7FF05',
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
@@ -43,7 +43,7 @@ export default function CampaignBanner() {
         style={{
           position: 'absolute',
           right: 4,
-          background: '#00ff41',
+          background: '#A7FF05',
           border: 'none',
           color: '#000000',
           fontSize: 8,

@@ -7,42 +7,14 @@ interface BottomNavProps {
 }
 
 const navItems = [
-  {
-    label: 'RANKS',
-    href: '/ranks',
-    icon: (
-      <svg viewBox="0 0 24 24" width={20} height={20} fill="none" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
-        <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
-        <path d="M4 22h16" />
-        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-        <path d="M18 2H6v7a6 6 0 0012 0V2z" />
-      </svg>
-    ),
-  },
-  {
-    label: 'MAP',
-    href: '/',
-    icon: (
-      <svg viewBox="0 0 24 24" width={20} height={20} fill="none" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-        <circle cx={12} cy={12} r={10} />
-        <path d="M2 12h20" />
-        <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-      </svg>
-    ),
-  },
-  {
-    label: 'PROFILE',
-    href: '/profile',
-    icon: (
-      <svg viewBox="0 0 24 24" width={20} height={20} fill="none" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-        <circle cx={12} cy={7} r={4} />
-      </svg>
-    ),
-  },
+  { label: 'RANKS',   href: '/ranks',   icon: '/brand/icons/trophy.svg' },
+  { label: 'MAP',     href: '/',        icon: '/brand/icons/globe.svg'  },
+  { label: 'PROFILE', href: '/profile', icon: '/brand/icons/users.svg'  },
 ]
+
+// SVG icons in /brand/icons are hard-filled white. The active-state lime tint
+// is applied via a CSS filter — see the comment in the JSX for the recipe.
+const ACTIVE_FILTER = 'invert(86%) sepia(75%) saturate(2000%) hue-rotate(20deg) brightness(105%)'
 
 export default function BottomNav({ activeRoute }: BottomNavProps) {
   return (
@@ -62,14 +34,11 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
     >
       {navItems.map((item) => {
         const isActive = activeRoute === item.href
-        const strokeColor = isActive ? 'var(--text)' : 'var(--text-muted)'
-        const labelColor = isActive ? 'var(--text)' : 'var(--text-muted)'
-        const barBg = 'var(--text)'
-
         return (
           <Link
             key={item.href}
             href={item.href}
+            aria-label={item.label}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -79,7 +48,17 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
               textDecoration: 'none',
             }}
           >
-            <span style={{ stroke: strokeColor, display: 'flex' }}>{item.icon}</span>
+            <img
+              src={item.icon}
+              alt=""
+              width={28}
+              height={28}
+              style={{
+                imageRendering: 'pixelated' as const,
+                filter: isActive ? ACTIVE_FILTER : 'none',
+                opacity: isActive ? 1 : 0.85,
+              }}
+            />
           </Link>
         )
       })}

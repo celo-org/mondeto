@@ -38,7 +38,7 @@ export default function OwnerMarkers({ pixelData, userAddress, isDark = true }: 
 
     if (ownedPixels.length === 0) return
 
-    const accentRGB = isDark ? [0, 255, 65] : [34, 34, 34]
+    const accentRGB = isDark ? [167, 255, 5] : [34, 34, 34]
 
     const animate = () => {
       ctx.clearRect(0, 0, WIDTH * S, HEIGHT * S)

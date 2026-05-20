@@ -22,15 +22,16 @@ describe('BottomNav', () => {
     expect(hrefs).toContain('/profile')
   })
 
-  it('active route icon uses theme stroke color', () => {
+  it('active route icon is rendered full-opacity', () => {
     render(<BottomNav activeRoute="/ranks" />)
     const links = screen.getAllByRole('link')
-    // First link is /ranks — its icon wrapper span should have stroke var(--text)
-    const ranksIconSpan = links[0].querySelector('span')
-    expect(ranksIconSpan).toHaveStyle({ stroke: 'var(--text)' })
+    // First link is /ranks — active, opacity 1.
+    const activeImg = links[0].querySelector('img')
+    expect(activeImg).not.toBeNull()
+    expect(activeImg!.style.opacity).toBe('1')
 
-    // Second link is / (MAP) — should have muted stroke
-    const mapIconSpan = links[1].querySelector('span')
-    expect(mapIconSpan).toHaveStyle({ stroke: 'var(--text-muted)' })
+    // Second link is / (MAP) — inactive, opacity dimmed.
+    const inactiveImg = links[1].querySelector('img')
+    expect(inactiveImg!.style.opacity).toBe('0.85')
   })
 })

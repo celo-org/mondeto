@@ -169,25 +169,20 @@ export default function PixelInfoPanel({
       </div>
 
       {/* Buy button */}
-      <button
-        onClick={() => onBuyThisPixel(pixelId)}
-        style={{
-          margin: '2px 14px 0',
-          background: 'var(--button-bg)',
-          color: 'var(--button-text)',
-          borderRadius: 11,
-          padding: 14,
-          fontSize: 8,
-          fontFamily: "'Press Start 2P', monospace",
-          letterSpacing: 2,
-          textAlign: 'center',
-          border: 'none',
-          cursor: 'pointer',
-          width: 'calc(100% - 28px)',
-        }}
-      >
-        [ BUY THIS PIXEL ]
-      </button>
+      <div style={{ padding: '4px 14px 0' }}>
+        <button
+          onClick={() => onBuyThisPixel(pixelId)}
+          className="pixel-btn pixel-btn-filled font-display"
+          style={{
+            width: '100%',
+            fontSize: 10,
+            letterSpacing: 2,
+            padding: 12,
+          }}
+        >
+          BUY THIS PIXEL
+        </button>
+      </div>
 
       {/* Note */}
       <div

@@ -62,21 +62,10 @@ export default function SuccessState({ pixelCount, totalPaid, txHash, onDone }: 
       {/* Done button — matches LOCK IT IN style */}
       <button
         onClick={onDone}
-        style={{
-          background: 'var(--button-bg)',
-          color: 'var(--button-text)',
-          borderRadius: 11,
-          padding: 14,
-          fontSize: 8,
-          fontFamily: PF,
-          letterSpacing: 2,
-          textAlign: 'center',
-          width: '100%',
-          border: 'none',
-          cursor: 'pointer',
-        }}
+        className="pixel-btn pixel-btn-filled font-display"
+        style={{ width: '100%', fontSize: 10, letterSpacing: 2, padding: 12 }}
       >
-        [ LET'S GO ]
+        LET'S GO
       </button>
     </div>
   )

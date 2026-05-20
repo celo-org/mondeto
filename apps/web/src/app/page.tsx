@@ -23,11 +23,12 @@ import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
-import { useTheme } from '@/lib/theme'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
 
 export default function Home() {
-  const { isDark } = useTheme()
+  // Dark is the only theme now; downstream map components still take the flag
+  // so we pin it to true at the boundary rather than threading every callsite.
+  const isDark = true
   const { address } = useAccount()
   const addrStr = address as string | undefined
   const publicClient = usePublicClient()
@@ -306,36 +307,69 @@ export default function Home() {
       }}
     >
       {/* Top bar */}
-      <TopBar title="MONDETO">
-        {(['heatmap', 'myland'] as const).map(v => (
-          <button
-            key={v}
-            onClick={() => setMapView(mapView === v ? 'normal' : v)}
-            style={{
-              fontSize: 6,
-              fontFamily: "'Press Start 2P', monospace",
-              letterSpacing: 1,
-              borderRadius: 8,
-              padding: '3px 6px',
-              background: mapView === v ? 'var(--button-bg)' : 'transparent',
-              color: mapView === v ? 'var(--button-text)' : 'var(--text)',
-              border: '1px solid var(--text-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            {v === 'myland' ? 'my land' : v}
-          </button>
-        ))}
-      </TopBar>
+      <TopBar title="MONDETO" />
 
-      {/* WorldCanvas */}
+      {/* HEATMAP / MY LAND toggle — sits under the TopBar on the lime band */}
       <div
         style={{
           position: 'absolute',
-          top: 60,
+          top: 56,
+          left: 0,
+          right: 0,
+          height: 26,
+          zIndex: 9,
+          background: 'var(--brand-lime)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          padding: '0 14px',
+          gap: 6,
+        }}
+      >
+        {(['heatmap', 'myland'] as const).map((v, i) => {
+          const active = mapView === v
+          return (
+            <React.Fragment key={v}>
+              {i > 0 && (
+                <span
+                  className="font-display"
+                  style={{ fontSize: 10, color: 'var(--brand-black)', letterSpacing: 2 }}
+                >
+                  /
+                </span>
+              )}
+              <button
+                onClick={() => setMapView(mapView === v ? 'normal' : v)}
+                className="font-display"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: 2,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--brand-black)',
+                  opacity: active ? 1 : 0.5,
+                  cursor: 'pointer',
+                  padding: 0,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {v === 'myland' ? 'MY LAND' : 'HEATMAP'}
+              </button>
+            </React.Fragment>
+          )
+        })}
+      </div>
+
+      {/* WorldCanvas — blue ocean is the wrapper background; land pixels are
+          drawn by PixelLayer on top. */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 82,
           bottom: 56,
           left: 0,
           right: 0,
+          background: 'var(--brand-blue)',
         }}
       >
         <WorldCanvas
@@ -357,7 +391,7 @@ export default function Home() {
         />
       </div>
 
-      {/* Zoom +/- buttons */}
+      {/* Zoom controls \u2014 brand pixel icons */}
       <div
         style={{
           position: 'absolute',
@@ -367,41 +401,30 @@ export default function Home() {
           zIndex: 12,
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          gap: 8,
         }}
       >
         <button
           onClick={() => canvasRef.current?.zoomIn()}
-          style={{
-            width: 40, height: 40, borderRadius: 8,
-            background: 'var(--card-bg)', border: '1px solid var(--border)',
-            fontSize: 20, fontWeight: 700, color: 'var(--text)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >+</button>
+          aria-label="Zoom in"
+          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          <img src="/brand/icons/zoom-in.svg" alt="" width={36} height={36} style={{ imageRendering: 'pixelated' }} />
+        </button>
         <button
           onClick={() => canvasRef.current?.recenter()}
-          style={{
-            width: 40, height: 40, borderRadius: 8,
-            background: 'var(--card-bg)', border: '1px solid var(--border)',
-            fontSize: 12, color: 'var(--text)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
+          aria-label="Recenter"
+          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
         >
-          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <circle cx={12} cy={12} r={3} />
-            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-          </svg>
+          <img src="/brand/icons/centre.svg" alt="" width={36} height={36} style={{ imageRendering: 'pixelated' }} />
         </button>
         <button
           onClick={() => canvasRef.current?.zoomOut()}
-          style={{
-            width: 40, height: 40, borderRadius: 8,
-            background: 'var(--card-bg)', border: '1px solid var(--border)',
-            fontSize: 20, fontWeight: 700, color: 'var(--text)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >{'\u2212'}</button>
+          aria-label="Zoom out"
+          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          <img src="/brand/icons/zoom-out.svg" alt="" width={36} height={36} style={{ imageRendering: 'pixelated' }} />
+        </button>
       </div>
 
       {/* Paint mode banner */}
@@ -423,25 +446,20 @@ export default function Home() {
       {pixelCount > 0 && activeOverlay === 'none' && (
         <button
           onClick={handleOpenDrawer}
+          className="pixel-btn pixel-btn-filled font-display"
           style={{
             position: 'absolute',
             bottom: 90,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 15,
-            background: 'var(--button-bg)',
-            color: 'var(--button-text)',
-            fontSize: 8,
-            fontFamily: "'Press Start 2P', monospace",
+            fontSize: 10,
             letterSpacing: 2,
-            padding: '14px 28px',
-            borderRadius: 11,
-            border: 'none',
-            cursor: 'pointer',
+            padding: '10px 24px',
             whiteSpace: 'nowrap',
           }}
         >
-          [ REVIEW {pixelCount} PIXELS ]
+          REVIEW {pixelCount} PIXELS
         </button>
       )}
 

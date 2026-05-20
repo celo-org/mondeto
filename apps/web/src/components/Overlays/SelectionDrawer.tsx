@@ -134,8 +134,12 @@ export default function SelectionDrawer({
           </div>
           <TxProgress step={txStep} />
           <div style={{ flex: 1 }} />
-          <button disabled style={{ background: 'var(--button-bg)', color: 'var(--button-text)', opacity: 0.5, borderRadius: 11, padding: 14, fontSize: 8, fontFamily: "'Press Start 2P', monospace", letterSpacing: 2, textAlign: 'center', width: '100%', border: 'none', pointerEvents: 'none' }}>
-            [ MAKING MOVES... ]
+          <button
+            disabled
+            className="pixel-btn pixel-btn-filled font-display"
+            style={{ width: '100%', fontSize: 10, letterSpacing: 2, padding: 12, opacity: 0.5, pointerEvents: 'none' }}
+          >
+            MAKING MOVES…
           </button>
         </div>
       )}
@@ -153,12 +157,22 @@ export default function SelectionDrawer({
               {pixelCount} spots · {ownerCount > 0 ? `${ownerCount} player${ownerCount > 1 ? 's' : ''} to outbid` : 'free real estate'}
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
             <button
               onClick={onClear}
-              style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--error)', border: '1px solid var(--error)', borderRadius: 11, padding: '8px 20px', cursor: 'pointer', background: 'transparent', letterSpacing: 2 }}
+              className="font-display"
+              style={{
+                fontSize: 9,
+                letterSpacing: 2,
+                color: 'var(--brand-orange)',
+                border: '1px solid var(--brand-orange)',
+                padding: '6px 16px',
+                cursor: 'pointer',
+                background: 'transparent',
+                textTransform: 'uppercase',
+              }}
             >
-              [ CLEAR ]
+              CLEAR
             </button>
           </div>
 
@@ -175,19 +189,10 @@ export default function SelectionDrawer({
                 href={MINIPAY_DEPOSIT_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  fontSize: 7,
-                  fontFamily: "'Press Start 2P', monospace",
-                  letterSpacing: 2,
-                  color: 'var(--accent)',
-                  border: '1px solid var(--accent)',
-                  borderRadius: 11,
-                  padding: '8px 16px',
-                  textDecoration: 'none',
-                  textAlign: 'center',
-                }}
+                className="pixel-btn pixel-btn-sm font-display"
+                style={{ fontSize: 8, letterSpacing: 2, textDecoration: 'none' }}
               >
-                [ TOP UP BALANCE ]
+                TOP UP BALANCE
               </a>
             </div>
           )}
@@ -259,24 +264,23 @@ export default function SelectionDrawer({
           {/* Buy button */}
           <button
             onClick={onBuy}
+            className="pixel-btn pixel-btn-filled font-display"
             style={{
-              background: 'var(--button-bg)',
-              color: 'var(--button-text)',
-              opacity: insufficient || priceLoading ? 0.5 : 1,
-              borderRadius: 11,
-              padding: 14,
-              fontSize: 8,
-              fontFamily: "'Press Start 2P', monospace",
-              letterSpacing: 2,
-              textAlign: 'center',
-              border: 'none',
-              cursor: insufficient || priceLoading ? 'default' : 'pointer',
               width: '100%',
+              fontSize: 10,
+              letterSpacing: 2,
+              padding: 12,
+              opacity: insufficient || priceLoading ? 0.5 : 1,
+              cursor: insufficient || priceLoading ? 'default' : 'pointer',
               pointerEvents: insufficient || priceLoading ? 'none' : 'auto',
               flexShrink: 0,
             }}
           >
-            {priceLoading ? '[ CHECKING PRICES... ]' : insufficient ? '[ NOT ENOUGH FUNDS ]' : `[ LOCK IT IN — ${formatUSDT(totalPrice)} USDT ]`}
+            {priceLoading
+              ? 'CHECKING PRICES…'
+              : insufficient
+                ? 'NOT ENOUGH FUNDS'
+                : `LOCK IT IN — ${formatUSDT(totalPrice)} USDT`}
           </button>
         </div>
       )}

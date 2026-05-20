@@ -4,9 +4,14 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useAccount } from "wagmi";
 import { useEffect, useState } from "react";
 
+function truncateAddr(addr?: string) {
+  if (!addr) return "0X…";
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`.toUpperCase();
+}
+
 export function ConnectButton() {
-  const { login, logout, authenticated, ready } = usePrivy();
-  const { chain, isConnected } = useAccount();
+  const { login, logout, authenticated, ready, user } = usePrivy();
+  const { isConnected, address } = useAccount();
   const [isMiniPay, setIsMiniPay] = useState(false);
 
   useEffect(() => {
@@ -15,71 +20,30 @@ export function ConnectButton() {
     }
   }, []);
 
-  // In MiniPay, wallet auto-connects — no button needed
   if (isMiniPay) return null;
-
   if (!ready) return null;
 
-  // If wagmi is connected (e.g. via injected) but Privy isn't authenticated,
-  // show the chain name
-  if (isConnected && !authenticated) {
-    return (
-      <button
-        onClick={login}
-        style={{
-          fontSize: 6,
-          fontFamily: "'Press Start 2P', monospace",
-          letterSpacing: 1,
-          padding: "4px 8px",
-          borderRadius: 8,
-          border: "1px solid var(--text-muted)",
-          background: "transparent",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-        }}
-      >
-        {chain?.name?.replace("Celo ", "").replace(" Testnet", "") || "connect"}
-      </button>
-    );
-  }
-
-  if (!authenticated) {
-    return (
-      <button
-        onClick={login}
-        style={{
-          fontSize: 7,
-          fontFamily: "'Press Start 2P', monospace",
-          letterSpacing: 1,
-          padding: "4px 8px",
-          borderRadius: 10,
-          border: "1px solid var(--text-muted)",
-          background: "transparent",
-          color: "var(--text)",
-          cursor: "pointer",
-        }}
-      >
-        connect
-      </button>
-    );
-  }
+  const onClick = authenticated ? logout : login;
+  const walletAddr = (user?.wallet?.address as string | undefined) ?? (address as string | undefined);
+  const label =
+    !authenticated && !isConnected
+      ? "CONNECT"
+      : authenticated || isConnected
+        ? truncateAddr(walletAddr)
+        : "CONNECT";
 
   return (
     <button
-      onClick={logout}
+      onClick={onClick}
+      className="pixel-btn pixel-btn-sm font-display"
       style={{
-        fontSize: 6,
-        fontFamily: "'Press Start 2P', monospace",
-        letterSpacing: 1,
-        padding: "4px 8px",
-        borderRadius: 8,
-        border: "1px solid var(--text-muted)",
-        background: "transparent",
-        color: "var(--text-muted)",
-        cursor: "pointer",
+        fontSize: 8,
+        letterSpacing: 1.5,
+        width: 108,
+        justifyContent: "center",
       }}
     >
-      {chain?.name?.replace("Celo ", "").replace(" Testnet", "") || "connected"}
+      {label}
     </button>
   );
 }
