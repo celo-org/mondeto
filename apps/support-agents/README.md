@@ -3,7 +3,7 @@
 Telegram bot that listens on **t.me/mondetoSupport** and routes incoming
 messages to one of three specialist agents (UI/UX, Financial, Campaign).
 
-See [`docs/SUPPORT_AGENTS_PLAN.md`](../../docs/SUPPORT_AGENTS_PLAN.md) for
+See [`docs/planning/SUPPORT_AGENTS_PLAN.md`](../../docs/planning/SUPPORT_AGENTS_PLAN.md) for
 the full architecture, phased rollout plan, and why each agent looks the
 way it does.
 

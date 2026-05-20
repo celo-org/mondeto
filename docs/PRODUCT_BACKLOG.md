@@ -118,13 +118,13 @@ Need to handle ~10,000 simultaneous users.
 ### Asks for the smart-contract developer
 - [ ] **Make `feeRate` an admin-settable function** (currently a constant; redeploy required to change). Wanted before tuning fees post-launch — tokenomics analysis may want to iterate.
 - [ ] **Sample mainnet `withdraw` tx hash** for the MiniPay submission form
-- [ ] **Repo handover** — agreed to fold the contract repo under the Mondeto org. Plan in `docs/REPO_STRATEGY.md`.
+- [ ] **Repo handover** — agreed to fold the contract repo under the Mondeto org. Plan in `docs/archive/REPO_STRATEGY.md`.
 
 ### Owner-side
-- [ ] **Check with MiniPay** on the Squid-based in-app swap timeline (drives the USDT-only-for-v1 vs go-multi-stable decision — message draft in `docs/MESSAGE_TO_MINIPAY.md`)
-- [ ] **Run the tokenomics analysis** described in `docs/TOKENOMICS_BRIEF.md` (do it in a separate branch / fresh agent context). Inputs: $15k/mo marketing budget, DAU sensitivity at 10k / 100k / 1M, halving-time and fee-rate tuning. Output: a clear recommendation table.
+- [ ] **Check with MiniPay** on the Squid-based in-app swap timeline (drives the USDT-only-for-v1 vs go-multi-stable decision)
+- [ ] **Run the tokenomics analysis** described in `docs/tokenomics/TOKENOMICS_BRIEF.md` (do it in a separate branch / fresh agent context). Inputs: $15k/mo marketing budget, DAU sensitivity at 10k / 100k / 1M, halving-time and fee-rate tuning. Output: a clear recommendation table.
 - [ ] **Find a smart-contract dev** for the secondary app (the primary contract dev is at capacity on other work)
-- [ ] **Decide on the launch campaign size** — small first ($50–500 prize pool, single country) per the `docs/SCALING_PLAN.md` recommendation
+- [ ] **Decide on the launch campaign size** — small first ($50–500 prize pool, single country) per the `docs/planning/SCALING_PLAN.md` recommendation
 
 ### Resolved (no action needed)
 - ✅ ~~Approval cap Foundry test~~ — purely frontend, shipped
@@ -138,10 +138,10 @@ Need to handle ~10,000 simultaneous users.
 ## 🔮 Strategic / longer-term
 
 ### Multi-stablecoin support (v2 contract)
-See `docs/MULTISTABLE_ROADMAP.md`. Required for MiniPay §2 "adapt to user's preferred stablecoin"; currently we ship the explainer fallback ("swap inside MiniPay first").
+See `docs/planning/MULTISTABLE_ROADMAP.md`. Required for MiniPay §2 "adapt to user's preferred stablecoin"; currently we ship the explainer fallback ("swap inside MiniPay first").
 
 ### Support agents
-See `docs/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
+See `docs/planning/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
 
 ### Partnership pipeline
 - [ ] Vietnam — World App ecosystem builder introduction in progress

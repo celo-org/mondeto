@@ -14,8 +14,6 @@ In parallel, MiniPay is shipping an **in-app Squid-based universal swap**. Once 
 
 Current plan: **stay USDT-only for v1**, with the existing "swap inside MiniPay first" explainer in the wallet section (already shipped). Pick this roadmap back up only if (a) MiniPay's swap is delayed materially, or (b) the data shows non-USDT holders churning at the funnel.
 
-Draft message to MiniPay confirming this approach lives in `docs/MESSAGE_TO_MINIPAY.md`.
-
 ---
 
 ## Why this matters
