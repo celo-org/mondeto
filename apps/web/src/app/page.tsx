@@ -19,7 +19,7 @@ import { useSelection } from '@/hooks/useSelection'
 import { usePixelPrice } from '@/hooks/usePixelPrice'
 import { useBuyPixels } from '@/hooks/useBuyPixels'
 import { useProfile } from '@/hooks/useProfile'
-import { useUSDTBalance } from '@/hooks/useUSDTBalance'
+import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { fetchLandMaskFromContract } from '@/lib/landMask'
 import { MONDETO_ABI } from '@/lib/contract'
@@ -55,7 +55,7 @@ export default function Home() {
   const buy = useBuyPixels(currentMapId)
   const profile = useProfile(addrStr, currentMapId)
 
-  const walletBalance = useUSDTBalance()
+  const walletBalance = useStablecoinBalance()
 
   const [drawerProfiles, setDrawerProfiles] = useState<Map<string, { label: string; url: string }>>(new Map())
   const [mapProfiles, setMapProfiles] = useState<Map<string, { label: string; url?: string; color?: string }>>(new Map())
@@ -178,13 +178,16 @@ export default function Home() {
     fetchProfiles()
   }, [publicClient, loadState, version])
 
-  // Use real on-chain balance when wallet connected
+  // Use real on-chain balance when wallet connected. Sum across USDm + USDC
+  // + USDT (all $1-pegged) so users holding any MiniPay stablecoin can see
+  // their spendable dollar balance — not just USDT, which most MiniPay users
+  // hold zero of. Stored in 6-decimal units to match pixel prices on-chain.
   useEffect(() => {
-    if (walletBalance.isConnected && walletBalance.balance) {
-      const parsed = Math.floor(parseFloat(walletBalance.balance) * 1_000_000)
+    if (walletBalance.isConnected) {
+      const parsed = Math.floor(walletBalance.totalAmount * 1_000_000)
       setUserBalance(BigInt(parsed))
     }
-  }, [walletBalance.isConnected, walletBalance.balance])
+  }, [walletBalance.isConnected, walletBalance.totalAmount])
 
   // Check balance when price changes
   useEffect(() => {

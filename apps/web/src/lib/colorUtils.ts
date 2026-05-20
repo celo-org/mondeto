@@ -40,3 +40,11 @@ export function formatUSDT(amount: bigint, decimals = 6): string {
 export function isValidHex(hex: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(hex)
 }
+
+/** Format a $-denominated stablecoin amount for the BALANCE stat tile. */
+export function formatBalanceForDisplay(amount: number): string {
+  if (!isFinite(amount) || amount <= 0) return '0.00'
+  if (amount >= 100) return Math.floor(amount).toString()
+  if (amount >= 1) return amount.toFixed(2)
+  return amount.toFixed(4)
+}

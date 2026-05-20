@@ -14,7 +14,7 @@ import { useMaps } from '@/hooks/useMaps'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
-import { formatUSDT } from '@/lib/colorUtils'
+import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { isLand } from '@/lib/landMask'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
@@ -163,7 +163,8 @@ export default function ProfilePage() {
         <AvatarBlock color={color} name={name} />
         <StatsRow
           pixels={pixelCount}
-          usdt={parseFloat(walletBalance.total) < 1 ? parseFloat(walletBalance.total).toFixed(4) : parseFloat(walletBalance.total) >= 100 ? Math.floor(parseFloat(walletBalance.total)).toString() : parseFloat(walletBalance.total).toFixed(2)}
+          balance={formatBalanceForDisplay(walletBalance.preferred?.amount ?? walletBalance.totalAmount)}
+          balanceSymbol={walletBalance.preferred?.symbol}
           rank={rank}
           spent={formatUSDT(spent)}
           earned={formatUSDT(earned)}
