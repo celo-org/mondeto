@@ -11,7 +11,6 @@ describe('BottomNav', () => {
     render(<BottomNav activeRoute="/" />)
     const links = screen.getAllByRole('link')
     expect(links).toHaveLength(3)
-    // No visible text labels — icons only.
     expect(screen.queryByText('RANKS')).toBeNull()
     expect(screen.queryByText('MAP')).toBeNull()
     expect(screen.queryByText('PROFILE')).toBeNull()
@@ -33,7 +32,7 @@ describe('BottomNav', () => {
     expect(hrefs).toContain('/profile')
   })
 
-  it('active route applies the lime CSS filter to its icon; inactive icons are unfiltered + dimmed', () => {
+  it('active route swaps to the *_green.svg icon variant; inactive icons keep the default white asset and dim', () => {
     render(<BottomNav activeRoute="/ranks" />)
     const links = screen.getAllByRole('link')
 
@@ -41,20 +40,19 @@ describe('BottomNav', () => {
     expect(activeLink).toHaveAttribute('aria-current', 'page')
     const activeImg = activeLink.querySelector('img')
     expect(activeImg).not.toBeNull()
-    expect(activeImg!.style.filter).toContain('invert')
+    expect(activeImg!.getAttribute('src')).toBe('/brand/icons/trophy_green.svg')
     expect(activeImg!.style.opacity).toBe('1')
 
     const inactiveLink = links[1]
     expect(inactiveLink).not.toHaveAttribute('aria-current')
     const inactiveImg = inactiveLink.querySelector('img')
-    expect(inactiveImg!.style.filter).toBe('none')
+    expect(inactiveImg!.getAttribute('src')).toBe('/brand/icons/globe.svg')
     expect(parseFloat(inactiveImg!.style.opacity)).toBeLessThan(1)
   })
 
   it('active route does not paint a background tint or border on its tile', () => {
     render(<BottomNav activeRoute="/ranks" />)
     const activeLink = screen.getAllByRole('link')[0]
-    // No chrome around the tile — the icon's lime filter is the only active cue.
     expect(activeLink.style.backgroundColor).toBe('')
     expect(activeLink.style.borderTop).toBe('')
   })

@@ -6,14 +6,13 @@ interface BottomNavProps {
   activeRoute: string
 }
 
+// Two-asset swap: white SVG for inactive, pre-colored brand-green SVG for
+// active. Both files live in /apps/web/public/brand/icons/.
 const navItems = [
-  { label: 'RANKS',   href: '/ranks',   icon: '/brand/icons/trophy.svg' },
-  { label: 'MAP',     href: '/',        icon: '/brand/icons/globe.svg'  },
-  { label: 'PROFILE', href: '/profile', icon: '/brand/icons/users.svg'  },
+  { label: 'RANKS',   href: '/ranks',   icon: '/brand/icons/trophy.svg', iconActive: '/brand/icons/trophy_green.svg' },
+  { label: 'MAP',     href: '/',        icon: '/brand/icons/globe.svg',  iconActive: '/brand/icons/globe_green.svg'  },
+  { label: 'PROFILE', href: '/profile', icon: '/brand/icons/users.svg',  iconActive: '/brand/icons/users_green.svg'  },
 ]
-
-// White SVG → brand-lime via CSS filter (icons are hard-filled white).
-const LIME_FILTER = 'invert(86%) sepia(75%) saturate(2000%) hue-rotate(20deg) brightness(105%)'
 
 export default function BottomNav({ activeRoute }: BottomNavProps) {
   return (
@@ -48,13 +47,12 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
             }}
           >
             <img
-              src={item.icon}
+              src={isActive ? item.iconActive : item.icon}
               alt={item.label}
               width={28}
               height={28}
               style={{
                 imageRendering: 'pixelated' as const,
-                filter: isActive ? LIME_FILTER : 'none',
                 opacity: isActive ? 1 : 0.7,
               }}
             />
