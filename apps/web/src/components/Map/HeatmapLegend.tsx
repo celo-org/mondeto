@@ -25,9 +25,8 @@ export default function HeatmapLegend({ visible }: HeatmapLegendProps) {
       <div
         style={{
           height: 8,
-          borderRadius: 4,
           background:
-            'linear-gradient(to right, #ffe066, #ffaa33, #ff6633, #cc0000)',
+            'linear-gradient(to right, #3A1E0A, #6B2F0E, #A14310, #D85614, #FF4C00, #FF8A4C, #FFC499, #FFFFFF)',
         }}
       />
       <div

@@ -30,6 +30,7 @@ const config = {
     extend: {
       fontFamily: {
         mono: ['IBM Plex Mono', 'Courier New', 'monospace'],
+        display: ['Retro Computer', 'Press Start 2P', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -37,9 +38,18 @@ const config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        brand: {
+          white:  '#FFFFFF',
+          black:  '#1B1B1B',
+          lime:   '#A7FF05',
+          orange: '#FF4C00',
+          purple: '#B430FF',
+          cream:  '#F0E7D6',
+          blue:   '#71BBFF',
+        },
         primary: {
-          DEFAULT: "#07955F",
-          foreground: "#FFFFFF",
+          DEFAULT: "#A7FF05",
+          foreground: "#1B1B1B",
         },
         secondary: {
           DEFAULT: "#2A2C34",

@@ -30,7 +30,7 @@ describe('SuccessState', () => {
   it('calls onDone when button clicked', () => {
     const onDone = vi.fn()
     render(<SuccessState {...defaultProps} onDone={onDone} />)
-    fireEvent.click(screen.getByText("[ LET'S GO ]"))
+    fireEvent.click(screen.getByText("LET'S GO"))
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 })

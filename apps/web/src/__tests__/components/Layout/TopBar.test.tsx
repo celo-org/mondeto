@@ -6,14 +6,10 @@ vi.mock('@/components/connect-button', () => ({
   ConnectButton: () => <button>Connect</button>,
 }))
 
-vi.mock('@/lib/theme', () => ({
-  useTheme: () => ({ theme: 'dark', toggleTheme: () => {}, isDark: true }),
-}))
-
 describe('TopBar', () => {
-  it('renders the title', () => {
+  it('renders the wordmark with the title as alt', () => {
     render(<TopBar title="MONDETO" />)
-    expect(screen.getByText('MONDETO')).toBeInTheDocument()
+    expect(screen.getByAltText('MONDETO')).toBeInTheDocument()
   })
 
   it('renders ConnectButton', () => {
@@ -28,10 +24,5 @@ describe('TopBar', () => {
       </TopBar>
     )
     expect(screen.getByText('child element')).toBeInTheDocument()
-  })
-
-  it('renders theme toggle button', () => {
-    render(<TopBar title="MONDETO" />)
-    expect(screen.getByLabelText('Toggle theme')).toBeInTheDocument()
   })
 })

@@ -140,10 +140,10 @@ export default function ProfilePage() {
   }, [publicClient, addrStr, mondetoAddress])
 
   const saveLabel =
-    saveState === 'saving' ? '[ SAVING... ]' :
-    saveState === 'confirming' ? '[ CONFIRMING... ]' :
-    saveState === 'saved' ? '[ SAVED \u2713 ]' :
-    '[ SAVE ]'
+    saveState === 'saving' ? 'SAVING\u2026' :
+    saveState === 'confirming' ? 'CONFIRMING\u2026' :
+    saveState === 'saved' ? 'SAVED \u2713' :
+    'SAVE'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
@@ -225,19 +225,15 @@ export default function ProfilePage() {
               save()
             }}
             disabled={saveState === 'saving' || saveState === 'confirming'}
+            className="pixel-btn pixel-btn-filled font-display"
             style={{
               display: 'block',
-              margin: '8px 0',
+              margin: '16px 0 8px',
               width: '100%',
-              background: (saveState === 'saving' || saveState === 'confirming') ? 'var(--text-muted)' : 'var(--button-bg)',
-              color: 'var(--button-text)',
-              borderRadius: 10,
-              padding: 12,
-              fontSize: 8,
-              fontFamily: "'Press Start 2P', monospace",
+              fontSize: 10,
               letterSpacing: 2,
-              textAlign: 'center',
-              border: 'none',
+              padding: 12,
+              opacity: (saveState === 'saving' || saveState === 'confirming') ? 0.5 : 1,
               cursor: (saveState === 'saving' || saveState === 'confirming') ? 'default' : 'pointer',
             }}
           >
@@ -281,19 +277,10 @@ export default function ProfilePage() {
               href={SUPPORT_URL}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                fontSize: 8,
-                fontFamily: "'Press Start 2P', monospace",
-                letterSpacing: 2,
-                background: 'var(--button-bg)',
-                color: 'var(--button-text)',
-                borderRadius: 8,
-                padding: '8px 18px',
-                textDecoration: 'none',
-                border: 'none',
-              }}
+              className="pixel-btn pixel-btn-filled font-display"
+              style={{ fontSize: 9, letterSpacing: 2, padding: '8px 18px', textDecoration: 'none' }}
             >
-              [ SUPPORT ]
+              SUPPORT
             </a>
             <div
               style={{

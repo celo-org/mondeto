@@ -23,7 +23,7 @@ export default function OwnershipPulse({ pixelData, userAddress, isDark = true }
     if (!ctx) return
 
     const addr = userAddress.toLowerCase()
-    const accent = isDark ? [0, 255, 65] : [26, 26, 26] // #00ff41 or #1a1a1a
+    const accent = isDark ? [167, 255, 5] : [26, 26, 26] // brand lime #A7FF05
 
     // Collect owned pixel positions
     const ownedPixels: { x: number; y: number }[] = []

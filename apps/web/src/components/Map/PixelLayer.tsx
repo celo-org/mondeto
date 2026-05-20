@@ -7,14 +7,19 @@ import type { PixelView } from '@/lib/mock'
 
 export type MapView = 'normal' | 'heatmap' | 'myland'
 
-// Warm heatmap: yellow → orange → red
+// Heatmap ramp: dark amber → brand orange → white-hot. Mirrors the legend
+// gradient and the 8 --heat-* tokens in globals.css.
 function interpolateWarmGradient(ratio: number): string {
   const t = Math.max(0, Math.min(1, ratio))
   const stops = [
-    { p: 0.0, r: 255, g: 224, b: 102 },
-    { p: 0.3, r: 255, g: 170, b: 51 },
-    { p: 0.6, r: 255, g: 102, b: 51 },
-    { p: 1.0, r: 204, g: 0, b: 0 },
+    { p: 0.00, r: 0x3A, g: 0x1E, b: 0x0A },
+    { p: 0.15, r: 0x6B, g: 0x2F, b: 0x0E },
+    { p: 0.30, r: 0xA1, g: 0x43, b: 0x10 },
+    { p: 0.45, r: 0xD8, g: 0x56, b: 0x14 },
+    { p: 0.60, r: 0xFF, g: 0x4C, b: 0x00 },
+    { p: 0.75, r: 0xFF, g: 0x8A, b: 0x4C },
+    { p: 0.90, r: 0xFF, g: 0xC4, b: 0x99 },
+    { p: 1.00, r: 0xFF, g: 0xFF, b: 0xFF },
   ]
   let lo = stops[0], hi = stops[stops.length - 1]
   for (let i = 0; i < stops.length - 1; i++) {

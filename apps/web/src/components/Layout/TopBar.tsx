@@ -3,7 +3,6 @@
 import React from 'react'
 import Link from 'next/link'
 import { ConnectButton } from '@/components/connect-button'
-import { useTheme } from '@/lib/theme'
 
 interface TopBarProps {
   title: string
@@ -11,8 +10,6 @@ interface TopBarProps {
 }
 
 export default function TopBar({ title, children }: TopBarProps) {
-  const { toggleTheme, isDark } = useTheme()
-
   return (
     <div
       className="theme-bar-top"
@@ -21,45 +18,43 @@ export default function TopBar({ title, children }: TopBarProps) {
         top: 0,
         left: 0,
         right: 0,
-        height: 60,
+        height: 56,
         zIndex: 10,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 14px',
+        gap: 8,
       }}
     >
       <Link
         href="/"
+        aria-label={title}
         style={{
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: 3,
-          fontFamily: "'Press Start 2P', monospace",
-          color: 'var(--text)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
           flexShrink: 0,
           textDecoration: 'none',
         }}
       >
-        {title}
+        <img
+          src="/brand/logo/logo.svg"
+          alt=""
+          width={28}
+          height={28}
+          style={{ imageRendering: 'pixelated' as const, display: 'block' }}
+        />
+        <img
+          src="/brand/wordmark/wordmark-white.svg"
+          alt={title}
+          height={14}
+          style={{ height: 14, display: 'block' }}
+        />
       </Link>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {children}
-        <button
-          onClick={toggleTheme}
-          style={{
-            fontSize: 12,
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '2px 4px',
-            color: 'var(--text)',
-          }}
-          aria-label="Toggle theme"
-        >
-          {isDark ? '\u263E' : '\u2600'}
-        </button>
         <ConnectButton />
       </div>
     </div>
