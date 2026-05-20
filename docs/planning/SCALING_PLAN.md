@@ -1,6 +1,6 @@
 # Mondeto — Scaling & Risk Plan
 
-> Companion to `docs/TOKENOMICS_BRIEF.md`. This doc captures the operational
+> Companion to `docs/tokenomics/TOKENOMICS_BRIEF.md`. This doc captures the operational
 > playbook for what happens when the app gets traction. The tokenomics brief
 > answers "what numbers do we pick"; this doc answers "what do we do
 > operationally as those numbers move."
@@ -59,7 +59,7 @@ At various DAU levels, with assumption of ~3 buys per user per day:
 | 100,000 | 300,000 | 25 | × 2^25 ≈ 33M× / day (instantly broken) |
 | 1,000,000 | 3,000,000 | 250 | catastrophic |
 
-These are rough — they assume uniform pixel demand, which isn't realistic (popular regions like cities will be much hotter than empty land). **Real models go in `docs/TOKENOMICS_BRIEF.md`.**
+These are rough — they assume uniform pixel demand, which isn't realistic (popular regions like cities will be much hotter than empty land). **Real models go in `docs/tokenomics/TOKENOMICS_BRIEF.md`.**
 
 ### Multi-map heuristics (back-of-envelope)
 
@@ -137,7 +137,7 @@ A simple ops dashboard reading from `/analytics` plus Vercel + Celoscan = enough
 
 The team should decide before launch:
 
-1. **First-map halving time** — keep 30 days, or change based on tokenomics model? Recommend deciding *after* the analytics work in `docs/TOKENOMICS_BRIEF.md`.
+1. **First-map halving time** — keep 30 days, or change based on tokenomics model? Recommend deciding *after* the analytics work in `docs/tokenomics/TOKENOMICS_BRIEF.md`.
 2. **Launch campaign size** — too big a launch campaign = instant pricing explosion. Recommend starting with a small ($50–500 prize pool) campaign in one country.
 3. **Second-map trigger** — DAU threshold or wait-and-see? Recommend: pre-build the multi-map UI now, deploy the second map automatically when DAU hits 8k.
 4. **Country list for region maps** — which 3 countries to ship region maps for first? Use partner-team testing feedback to pick.
