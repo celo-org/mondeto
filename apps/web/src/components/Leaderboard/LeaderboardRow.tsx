@@ -69,7 +69,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
           fontSize: tier.rankFs,
           fontWeight: 700,
           width: 44,
-          textAlign: 'right',
+          textAlign: 'center',
           color: rankColor,
           flexShrink: 0,
           fontFamily: PIXEL_FONT,
