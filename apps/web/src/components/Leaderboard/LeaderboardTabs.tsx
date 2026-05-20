@@ -7,6 +7,9 @@ interface LeaderboardTabsProps {
   onTabChange: (tab: LeaderboardTab) => void
 }
 
+const PIXEL_FONT = "'Press Start 2P', monospace"
+const BRAND_LIME = '#A7FF05'
+
 const tabConfig: { key: LeaderboardTab; label: string; description: string }[] = [
   {
     key: 'AREA',
@@ -32,9 +35,9 @@ export default function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardT
     <div>
       <div
         style={{
-          height: 34,
+          height: 38,
           background: 'var(--card-bg)',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
           display: 'flex',
         }}
       >
@@ -44,20 +47,21 @@ export default function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardT
             <button
               key={tab.key}
               onClick={() => onTabChange(tab.key)}
+              aria-current={isActive ? 'page' : undefined}
               style={{
                 flex: 1,
                 textAlign: 'center',
-                fontSize: 8,
-                fontFamily: "'Press Start 2P', monospace",
+                fontSize: 9,
+                fontFamily: PIXEL_FONT,
                 letterSpacing: 2,
-                lineHeight: '34px',
+                lineHeight: '38px',
                 cursor: 'pointer',
-                color: isActive ? 'var(--text)' : 'var(--text-muted)',
+                color: isActive ? BRAND_LIME : 'rgba(255,255,255,0.55)',
                 background: 'none',
                 border: 'none',
                 borderBottomWidth: 2,
                 borderBottomStyle: 'solid',
-                borderBottomColor: isActive ? 'var(--text)' : 'transparent',
+                borderBottomColor: isActive ? BRAND_LIME : 'transparent',
                 padding: 0,
               }}
             >
@@ -69,12 +73,12 @@ export default function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardT
       {active && (
         <div
           style={{
-            padding: '8px 12px',
+            padding: '10px 14px',
             fontSize: 7,
-            color: 'var(--text-muted)',
-            fontFamily: "'Press Start 2P', monospace",
-            letterSpacing: 1,
-            borderBottom: '1px solid var(--border)',
+            color: 'rgba(255,255,255,0.5)',
+            fontFamily: PIXEL_FONT,
+            letterSpacing: 1.5,
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
             background: 'var(--card-bg)',
           }}
         >

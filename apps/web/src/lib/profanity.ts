@@ -1,20 +1,38 @@
 // Profanity filter for user-set player names.
 //
 // User-entered names are a content-safety risk for MiniPay listing. Block
-// explicit words before writing to the contract.
+// explicit words before writing to the contract. The matcher combines
+// `obscenity`'s English dataset with curated multi-language lists in
+// `profanityLists.ts` (Swahili, Portuguese, French, Indonesian, romanized
+// Hindi). The English-recommended transformers handle casing, leetspeak,
+// and confusable Unicode characters — these work across Latin scripts.
 //
-// Uses `obscenity` — modern, well-maintained English filter with a custom
-// pattern matcher. Coverage is English-first; we can extend with regional
-// pattern lists later (Swahili, Hausa, Portuguese, etc. — see PRODUCT_BACKLOG).
+// Devanagari Hindi is not yet matched (transformers strip non-alphabetic
+// chars). See PRODUCT_BACKLOG for follow-ups.
 
 import {
   RegExpMatcher,
   englishDataset,
   englishRecommendedTransformers,
+  parseRawPattern,
+  type BlacklistedTerm,
 } from 'obscenity'
+import { PROFANITY_LISTS } from './profanityLists'
+
+const englishBuilt = englishDataset.build()
+
+let nextId = englishBuilt.blacklistedTerms.length + 1
+const customTerms: BlacklistedTerm[] = []
+
+for (const words of Object.values(PROFANITY_LISTS)) {
+  for (const word of words) {
+    customTerms.push({ id: nextId++, pattern: parseRawPattern(word) })
+  }
+}
 
 const matcher = new RegExpMatcher({
-  ...englishDataset.build(),
+  blacklistedTerms: [...englishBuilt.blacklistedTerms, ...customTerms],
+  whitelistedTerms: englishBuilt.whitelistedTerms,
   ...englishRecommendedTransformers,
 })
 

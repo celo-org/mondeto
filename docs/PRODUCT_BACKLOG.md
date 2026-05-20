@@ -18,45 +18,27 @@ The frontend now caps every `approve()` call at `APPROVAL_CAP_USDT = 10_000_000n
 
 Approval limits are enforced on the **token contract**, not on the spender contract — the cap can only live in the frontend. Logic: `apps/web/src/hooks/useBuyPixels.ts`.
 
-### Remove URL field from profile
-Unverified user-entered URLs are an injection / phishing vector. Avoid taking URL inputs until we have verification.
+### ~~Remove URL field from profile~~ — SHIPPED
+URL input removed from `profile/page.tsx`; `updateProfile` no longer carries a URL value. URL rendering is gated off in `LeaderboardRow`, `PixelInfoPanel`, and the `SelectionDrawer` (the `url` field still exists on the `OwnerGroup` type but is not rendered — safe to leave or clean up later).
 
-- [ ] Remove the URL input + display path from `apps/web/src/app/profile/page.tsx`
-- [ ] Stop calling `updateProfile` with a URL value; keep the contract field for future use but don't populate
-- [ ] Remove URL link rendering in `LeaderboardRow`, `SelectionDrawer`, `PixelInfoPanel`
+### ~~Profanity / explicit-content filter for player names~~ — SHIPPED
+`obscenity@0.4.6` is installed; `apps/web/src/lib/profanity.ts` exposes `checkProfanity()` and gates the save button at `profile/page.tsx`. The matcher extends `obscenity`'s English dataset with curated LDNOOBW-sourced lists per language at `apps/web/src/lib/profanityLists.ts` (Swahili, Portuguese, French, Indonesian, romanized Hindi/Hinglish). Devanagari Hindi is a follow-up — the English transformers strip non-alphabetic chars before matching, so non-Latin scripts need a separate matcher.
 
-### Profanity / explicit-content filter for player names
-Either custom labels via `updateProfile` or our generated nicknames. Most risk is on user-set labels.
-
-- [ ] Add `obscenity` or `bad-words` npm package
-- [ ] Validate on the profile name input before calling `updateProfile`; show a clear error
-- [ ] Audit the curated `FIGURES` list in `apps/web/src/lib/username.ts` against the filter (none should match, but verify)
-- [ ] Multi-language coverage — the audience is global. At minimum: English, Swahili, Portuguese, French, Indonesian, Hindi profanity lists
+- [ ] Native-speaker review and expansion of each language list before a wide launch
+- [ ] Devanagari Hindi support (separate matcher with a transformer set that doesn't strip non-Latin chars)
 
 ---
 
 ## 🟡 High priority UX
 
-### Auto-zoom to user's location on landing
-Land on the user's region so they can start picking pixels right away.
+### ~~Auto-zoom to user's location on landing~~ — SHIPPED
+`page.tsx` calls `navigator.geolocation.getCurrentPosition()` on first visit, maps lat/lng → pixel via `geoToPixel()`, smooth-zooms via `canvasRef.zoomToPixel(targetId)`. Permission decision is persisted in `localStorage` (`mondeto-geo-decision`) and the per-session zoom flag in `sessionStorage` so we don't re-prompt or re-zoom.
 
-- [ ] Use the browser Geolocation API (with permission prompt) on first visit
-- [ ] Map approx lat/lng → pixel (x, y) using the same Equal Earth projection the contract uses
-- [ ] Smoothly zoom to that pixel on map load
-- [ ] Persist permission state so we don't re-prompt every visit
-- [ ] Fall back to a sensible default center (e.g. Africa) if permission denied
+### ~~Onboarding / FAQ page~~ — SHIPPED
+`/faq/page.tsx` with the full Q&A set, reachable from the profile footer next to Terms / Privacy. `IntroScreen.tsx` body copy bumped to readable sizing for 360-wide screens.
 
-### Onboarding / FAQ page
-- [ ] The intro screen exists (`IntroScreen.tsx`) but the body copy is too small on real devices — bump sizing
-- [ ] Add an `/faq` route with the key questions: *what is a pixel · how does pricing work · what's the halving · how do fees work · how do I withdraw · how do I get my address recovered if I lose access*
-- [ ] Reachable from the profile footer next to Support / Terms / Privacy
-
-### Leaderboard layout — top-aligned + scrollable
-- [ ] In `apps/web/src/app/ranks/page.tsx` switch from center-aligned to top-aligned with `overflow-y: auto`
-- [ ] Confirm at 360×640 the top of the list sits right under the TopBar
-
-### Bigger intro screen font
-- [ ] Bump font sizes in `IntroScreen.tsx` for the body copy. Goal: comfortably readable on a 360-wide screen at arm's length
+### ~~Leaderboard layout — top-aligned + scrollable~~ — SHIPPED
+`ranks/page.tsx` is `flexDirection: 'column'` + `justifyContent: 'flex-start'` + `overflowY: 'auto'`. Confirm at 360×640 is part of the `MOBILE_QA.md` walkthrough (still open as a manual QA item).
 
 ---
 
@@ -96,9 +78,12 @@ Need to handle ~10,000 simultaneous users.
 - [ ] Iterate on whatever surfaces
 
 ### Onboarding flow inside MiniPay
-- [ ] Verify zero-click connect (`window.ethereum.isMiniPay`) actually fires on a real device
-- [ ] Verify the `[ TOP UP BALANCE ]` deeplink opens the MiniPay add-cash flow correctly
-- [ ] Confirm no `personal_sign` / `eth_signTypedData` prompts anywhere in real flows
+Code is in place across the board — the remaining work is real-device verification.
+
+- ✅ ~~Zero-click connect (`window.ethereum.isMiniPay`) wired~~ — `MiniPayAutoConnect` in `wallet-provider.tsx` + `connect-button.tsx` hides the button in MiniPay. (The injected connector was missing post-Privy-migration and was restored in commit `3dd0b23`.)
+- ✅ ~~TOP UP BALANCE deeplink wired~~ — `SelectionDrawer.tsx` links to `MINIPAY_DEPOSIT_URL` (`https://link.minipay.xyz/add_cash`).
+- ✅ ~~No `personal_sign` / `eth_signTypedData` anywhere~~ — grep returns zero matches.
+- [ ] Real-device verification of all three on a MiniPay device (part of the `MOBILE_QA.md` walkthrough)
 
 ---
 
@@ -118,13 +103,13 @@ Need to handle ~10,000 simultaneous users.
 ### Asks for the smart-contract developer
 - [ ] **Make `feeRate` an admin-settable function** (currently a constant; redeploy required to change). Wanted before tuning fees post-launch — tokenomics analysis may want to iterate.
 - [ ] **Sample mainnet `withdraw` tx hash** for the MiniPay submission form
-- [ ] **Repo handover** — agreed to fold the contract repo under the Mondeto org. Plan in `docs/REPO_STRATEGY.md`.
+- [ ] **Repo handover** — agreed to fold the contract repo under the Mondeto org. Plan in `docs/archive/REPO_STRATEGY.md`.
 
 ### Owner-side
-- [ ] **Check with MiniPay** on the Squid-based in-app swap timeline (drives the USDT-only-for-v1 vs go-multi-stable decision — message draft in `docs/MESSAGE_TO_MINIPAY.md`)
-- [ ] **Run the tokenomics analysis** described in `docs/TOKENOMICS_BRIEF.md` (do it in a separate branch / fresh agent context). Inputs: $15k/mo marketing budget, DAU sensitivity at 10k / 100k / 1M, halving-time and fee-rate tuning. Output: a clear recommendation table.
+- [ ] **Check with MiniPay** on the Squid-based in-app swap timeline (drives the USDT-only-for-v1 vs go-multi-stable decision)
+- [ ] **Run the tokenomics analysis** described in `docs/tokenomics/TOKENOMICS_BRIEF.md` (do it in a separate branch / fresh agent context). Inputs: $15k/mo marketing budget, DAU sensitivity at 10k / 100k / 1M, halving-time and fee-rate tuning. Output: a clear recommendation table.
 - [ ] **Find a smart-contract dev** for the secondary app (the primary contract dev is at capacity on other work)
-- [ ] **Decide on the launch campaign size** — small first ($50–500 prize pool, single country) per the `docs/SCALING_PLAN.md` recommendation
+- [ ] **Decide on the launch campaign size** — small first ($50–500 prize pool, single country) per the `docs/planning/SCALING_PLAN.md` recommendation
 
 ### Resolved (no action needed)
 - ✅ ~~Approval cap Foundry test~~ — purely frontend, shipped
@@ -137,11 +122,15 @@ Need to handle ~10,000 simultaneous users.
 
 ## 🔮 Strategic / longer-term
 
-### Multi-stablecoin support (v2 contract)
-DECIDED — accepting USDT + USDC + USDm. Required to unblock Europe (USDT not buyable in many EU jurisdictions) and to satisfy MiniPay §2. Full design lives in `docs/contract/SMART_CONTRACT_CHANGE_PROPOSAL.md`.
+### Multi-stablecoin support
+DECIDED — purchase flow will accept USDT + USDC + USDm. Required to unblock Europe (USDT not buyable in many EU jurisdictions) and to satisfy MiniPay §2. Full contract design lives in `docs/contract/SMART_CONTRACT_CHANGE_PROPOSAL.md`.
+
+**Display layer shipped** in commit `cedaa2b`: `useStablecoinBalance` reads USDm + USDC + USDT in parallel, picks the highest-balance one as the preferred currency, and the profile BALANCE card labels itself with the matching symbol. Home affordability check uses the $-pegged total across all three.
+
+**Purchase flow is still USDT-only** until the v2 contract ships. The FAQ "swap inside MiniPay first" explainer covers the gap for users who only hold USDm / USDC in the interim.
 
 ### Support agents
-See `docs/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
+See `docs/planning/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
 
 ### Partnership pipeline
 - [ ] Vietnam — World App ecosystem builder introduction in progress

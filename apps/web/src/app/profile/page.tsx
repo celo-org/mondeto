@@ -9,12 +9,12 @@ import AvatarBlock from '@/components/Profile/AvatarBlock'
 import StatsRow from '@/components/Profile/StatsRow'
 import ColorPicker from '@/components/Profile/ColorPicker'
 import { useProfile } from '@/hooks/useProfile'
-import { useUSDTBalance } from '@/hooks/useUSDTBalance'
+import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
-import { formatUSDT } from '@/lib/colorUtils'
+import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { isLand } from '@/lib/landMask'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
@@ -28,7 +28,7 @@ export default function ProfilePage() {
   const { currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
-  const walletBalance = useUSDTBalance()
+  const walletBalance = useStablecoinBalance()
   const publicClient = usePublicClient()
   const [nameError, setNameError] = useState<string | null>(null)
 
@@ -86,26 +86,113 @@ export default function ProfilePage() {
 
     fetchStats()
 
-    // Fetch P&L from PixelsPurchased events
+    // Fetch P&L from PixelsPurchased events across the full contract history.
+    //
+    // Strategy:
+    //   1. Read the contract's `deployTimestamp()` and the current block's
+    //      timestamp to back-estimate how many blocks ago the contract went
+    //      live. Celo post-L2 produces ~1 block / sec; using 1s here +
+    //      a safety buffer guarantees we never miss the first sale.
+    //   2. Chunked + parallel getLogs from estimated-deploy to head. Mirrors
+    //      the pattern in useAnalytics — Forno occasionally rejects large
+    //      windows, so we cap each chunk at 50k blocks.
+    //   3. Cache the result in sessionStorage so navigating away + back
+    //      doesn't trigger another full scan.
     async function fetchPnL() {
+      const CHUNK_BLOCKS = 50_000n
+      const MAX_PARALLEL = 4
+      const SAFETY_BUFFER_BLOCKS = 100_000n
+      const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${addrStr!.toLowerCase()}`
+      const CACHE_TTL_MS = 60_000
+
+      try {
+        const cached = sessionStorage.getItem(CACHE_KEY)
+        if (cached) {
+          const parsed = JSON.parse(cached) as { ts: number; spent: string; earned: string }
+          if (Date.now() - parsed.ts < CACHE_TTL_MS) {
+            setSpent(BigInt(parsed.spent))
+            setEarned(BigInt(parsed.earned))
+            return
+          }
+        }
+      } catch {}
+
       try {
         const { parseAbiItem } = await import('viem')
-        const currentBlock = await publicClient!.getBlockNumber()
-        // Search last 500k blocks (~1 week on Celo)
-        const fromBlock = currentBlock > 500000n ? currentBlock - 500000n : 0n
+        const event = parseAbiItem(
+          'event PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost)',
+        )
 
-        const logs = await publicClient!.getLogs({
-          address: mondetoAddress,
-          event: parseAbiItem('event PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost)'),
-          fromBlock,
-          toBlock: currentBlock,
+        const currentBlock = await publicClient!.getBlockNumber()
+
+        // Estimate the deploy block from the contract's own clock.
+        let fromBlock = 0n
+        try {
+          const [deployTs, head] = await Promise.all([
+            publicClient!.readContract({
+              address: mondetoAddress,
+              abi: MONDETO_ABI,
+              functionName: 'deployTimestamp',
+            }) as Promise<bigint>,
+            publicClient!.getBlock({ blockNumber: currentBlock }),
+          ])
+          const secondsSinceDeploy = head.timestamp - deployTs
+          // 1s/block on Celo L2 — overestimating is safe (fromBlock just
+          // ends up earlier than needed and the empty chunks are cheap).
+          const estimatedBlocks = secondsSinceDeploy + SAFETY_BUFFER_BLOCKS
+          fromBlock = currentBlock > estimatedBlocks ? currentBlock - estimatedBlocks : 0n
+        } catch (e) {
+          console.warn('Could not read deployTimestamp; scanning from block 0:', e)
+        }
+
+        // Build chunk ranges.
+        const ranges: Array<{ from: bigint; to: bigint }> = []
+        for (let start = fromBlock; start <= currentBlock; start += CHUNK_BLOCKS) {
+          const end =
+            start + CHUNK_BLOCKS - 1n > currentBlock
+              ? currentBlock
+              : start + CHUNK_BLOCKS - 1n
+          ranges.push({ from: start, to: end })
+        }
+
+        // Run in parallel batches, polite to Forno.
+        const client = publicClient!
+        type Log = Awaited<ReturnType<typeof client.getLogs<typeof event>>>[number]
+        const logs: Log[] = []
+        for (let i = 0; i < ranges.length; i += MAX_PARALLEL) {
+          const batch = ranges.slice(i, i + MAX_PARALLEL)
+          const results = await Promise.allSettled(
+            batch.map((r) =>
+              publicClient!.getLogs({
+                address: mondetoAddress,
+                event,
+                fromBlock: r.from,
+                toBlock: r.to,
+              }),
+            ),
+          )
+          for (const r of results) {
+            if (r.status === 'fulfilled') logs.push(...r.value)
+            else console.warn('P&L chunk failed:', r.reason)
+          }
+        }
+
+        // Sort chronologically so the running owner-of map reflects real
+        // purchase order — chunks return in batch order but logs within a
+        // chunk are block-ordered, and we want global block order to be
+        // safe even when chunks come back interleaved.
+        logs.sort((a, b) => {
+          const ab = a.blockNumber ?? 0n
+          const bb = b.blockNumber ?? 0n
+          if (ab !== bb) return ab < bb ? -1 : 1
+          const ai = a.logIndex ?? 0
+          const bi = b.logIndex ?? 0
+          return ai - bi
         })
 
         const addr = addrStr!.toLowerCase()
         let totalSpent = 0n
         let totalEarned = 0n
-
-        // Track pixel ownership over time to compute earnings
         const ownerOf = new Map<string, string>()
 
         for (const log of logs) {
@@ -131,6 +218,17 @@ export default function ProfilePage() {
 
         setSpent(totalSpent)
         setEarned(totalEarned)
+
+        try {
+          sessionStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({
+              ts: Date.now(),
+              spent: totalSpent.toString(),
+              earned: totalEarned.toString(),
+            }),
+          )
+        } catch {}
       } catch (e) {
         console.warn('Failed to fetch P&L:', e)
       }
@@ -163,7 +261,8 @@ export default function ProfilePage() {
         <AvatarBlock color={color} name={name} />
         <StatsRow
           pixels={pixelCount}
-          usdt={parseFloat(walletBalance.balance) < 1 ? parseFloat(walletBalance.balance).toFixed(4) : parseFloat(walletBalance.balance) >= 100 ? Math.floor(parseFloat(walletBalance.balance)).toString() : parseFloat(walletBalance.balance).toFixed(2)}
+          balance={formatBalanceForDisplay(walletBalance.preferred?.amount ?? walletBalance.totalAmount)}
+          balanceSymbol={walletBalance.preferred?.symbol}
           rank={rank}
           spent={formatUSDT(spent)}
           earned={formatUSDT(earned)}

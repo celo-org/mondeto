@@ -6,15 +6,13 @@ interface BottomNavProps {
   activeRoute: string
 }
 
+// Two-asset swap: white SVG for inactive, pre-colored brand-green SVG for
+// active. Both files live in /apps/web/public/brand/icons/.
 const navItems = [
-  { label: 'RANKS',   href: '/ranks',   icon: '/brand/icons/trophy.svg' },
-  { label: 'MAP',     href: '/',        icon: '/brand/icons/globe.svg'  },
-  { label: 'PROFILE', href: '/profile', icon: '/brand/icons/users.svg'  },
+  { label: 'RANKS',   href: '/ranks',   icon: '/brand/icons/trophy.svg', iconActive: '/brand/icons/trophy_green.svg' },
+  { label: 'MAP',     href: '/',        icon: '/brand/icons/globe.svg',  iconActive: '/brand/icons/globe_green.svg'  },
+  { label: 'PROFILE', href: '/profile', icon: '/brand/icons/users.svg',  iconActive: '/brand/icons/users_green.svg'  },
 ]
-
-// SVG icons in /brand/icons are hard-filled white. The active-state lime tint
-// is applied via a CSS filter — see the comment in the JSX for the recipe.
-const ACTIVE_FILTER = 'invert(86%) sepia(75%) saturate(2000%) hue-rotate(20deg) brightness(105%)'
 
 export default function BottomNav({ activeRoute }: BottomNavProps) {
   return (
@@ -29,7 +27,7 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
         zIndex: 40,
         display: 'flex',
         justifyContent: 'space-around',
-        alignItems: 'center',
+        alignItems: 'stretch',
       }}
     >
       {navItems.map((item) => {
@@ -39,24 +37,23 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
             key={item.href}
             href={item.href}
             aria-label={item.label}
+            aria-current={isActive ? 'page' : undefined}
             style={{
+              flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 44,
-              height: 44,
               textDecoration: 'none',
             }}
           >
             <img
-              src={item.icon}
-              alt=""
+              src={isActive ? item.iconActive : item.icon}
+              alt={item.label}
               width={28}
               height={28}
               style={{
                 imageRendering: 'pixelated' as const,
-                filter: isActive ? ACTIVE_FILTER : 'none',
-                opacity: isActive ? 1 : 0.85,
+                opacity: isActive ? 1 : 0.7,
               }}
             />
           </Link>
