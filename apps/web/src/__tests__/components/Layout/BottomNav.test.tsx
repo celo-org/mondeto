@@ -9,13 +9,21 @@ vi.mock('next/link', () => ({
 const BRAND_LIME_RGB = 'rgb(167, 255, 5)'
 
 describe('BottomNav', () => {
-  it('renders three nav links with icon + label', () => {
+  it('renders three icon-only nav links', () => {
     render(<BottomNav activeRoute="/" />)
     const links = screen.getAllByRole('link')
     expect(links).toHaveLength(3)
-    expect(screen.getByText('RANKS')).toBeInTheDocument()
-    expect(screen.getByText('MAP')).toBeInTheDocument()
-    expect(screen.getByText('PROFILE')).toBeInTheDocument()
+    // No visible text labels — icons only.
+    expect(screen.queryByText('RANKS')).toBeNull()
+    expect(screen.queryByText('MAP')).toBeNull()
+    expect(screen.queryByText('PROFILE')).toBeNull()
+  })
+
+  it('aria-labels remain so screen readers can name each route', () => {
+    render(<BottomNav activeRoute="/" />)
+    expect(screen.getByLabelText('RANKS')).toBeInTheDocument()
+    expect(screen.getByLabelText('MAP')).toBeInTheDocument()
+    expect(screen.getByLabelText('PROFILE')).toBeInTheDocument()
   })
 
   it('links point to correct routes', () => {
@@ -27,23 +35,19 @@ describe('BottomNav', () => {
     expect(hrefs).toContain('/profile')
   })
 
-  it('active route uses brand-lime label, top border, and full-opacity icon', () => {
+  it('active route has brand-lime top border + tinted background + full-opacity icon', () => {
     render(<BottomNav activeRoute="/ranks" />)
     const links = screen.getAllByRole('link')
 
-    // First link is /ranks — active.
     const activeLink = links[0]
     expect(activeLink).toHaveAttribute('aria-current', 'page')
     expect(activeLink.style.borderTop).toContain(BRAND_LIME_RGB)
+    expect(activeLink.style.backgroundColor.replace(/\s/g, '')).toMatch(/rgba\(167,255,5,/)
 
     const activeImg = activeLink.querySelector('img')
     expect(activeImg).not.toBeNull()
     expect(activeImg!.style.opacity).toBe('1')
 
-    const activeLabel = activeLink.querySelector('span')
-    expect(activeLabel!.style.color).toBe(BRAND_LIME_RGB)
-
-    // Second link is / (MAP) — inactive.
     const inactiveLink = links[1]
     expect(inactiveLink).not.toHaveAttribute('aria-current')
     const inactiveImg = inactiveLink.querySelector('img')

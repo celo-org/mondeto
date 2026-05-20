@@ -43,38 +43,25 @@ export default function BottomNav({ activeRoute }: BottomNavProps) {
             style={{
               flex: 1,
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 4,
               textDecoration: 'none',
               borderTop: `2px solid ${isActive ? BRAND_LIME : 'transparent'}`,
-              backgroundColor: isActive ? 'rgba(167, 255, 5, 0.08)' : 'transparent',
+              backgroundColor: isActive ? 'rgba(167, 255, 5, 0.28)' : 'transparent',
               transition: 'background-color 120ms ease',
             }}
           >
             <img
               src={item.icon}
-              alt=""
-              width={26}
-              height={26}
+              alt={item.label}
+              width={28}
+              height={28}
               style={{
                 imageRendering: 'pixelated' as const,
                 filter: isActive ? LIME_FILTER : 'none',
                 opacity: isActive ? 1 : 0.7,
               }}
             />
-            <span
-              style={{
-                fontFamily: "'Press Start 2P', monospace",
-                fontSize: 7,
-                letterSpacing: 2,
-                textTransform: 'uppercase',
-                color: isActive ? BRAND_LIME : 'rgba(255, 255, 255, 0.6)',
-              }}
-            >
-              {item.label}
-            </span>
           </Link>
         )
       })}
