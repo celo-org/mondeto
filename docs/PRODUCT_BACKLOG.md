@@ -21,10 +21,11 @@ Approval limits are enforced on the **token contract**, not on the spender contr
 ### ~~Remove URL field from profile~~ — SHIPPED
 URL input removed from `profile/page.tsx`; `updateProfile` no longer carries a URL value. URL rendering is gated off in `LeaderboardRow`, `PixelInfoPanel`, and the `SelectionDrawer` (the `url` field still exists on the `OwnerGroup` type but is not rendered — safe to leave or clean up later).
 
-### ~~Profanity / explicit-content filter for player names~~ — SHIPPED (English)
-`obscenity@0.4.6` is installed; `apps/web/src/lib/profanity.ts` exposes `checkProfanity()` and gates the save button at `profile/page.tsx`. Multi-language coverage (Swahili, Portuguese, French, Indonesian, Hindi) is **still open** — `obscenity` ships English-only out of the box.
+### ~~Profanity / explicit-content filter for player names~~ — SHIPPED
+`obscenity@0.4.6` is installed; `apps/web/src/lib/profanity.ts` exposes `checkProfanity()` and gates the save button at `profile/page.tsx`. The matcher extends `obscenity`'s English dataset with curated LDNOOBW-sourced lists per language at `apps/web/src/lib/profanityLists.ts` (Swahili, Portuguese, French, Indonesian, romanized Hindi/Hinglish). Devanagari Hindi is a follow-up — the English transformers strip non-alphabetic chars before matching, so non-Latin scripts need a separate matcher.
 
-- [ ] Multi-language profanity coverage — at minimum: Swahili, Portuguese, French, Indonesian, Hindi
+- [ ] Native-speaker review and expansion of each language list before a wide launch
+- [ ] Devanagari Hindi support (separate matcher with a transformer set that doesn't strip non-Latin chars)
 
 ---
 
