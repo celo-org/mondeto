@@ -15,6 +15,7 @@ import {
 } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
+import { ChainGuard } from "./ChainGuard";
 
 // Two wagmi configs.
 //
@@ -88,7 +89,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={minipayWagmiConfig}>
-          <MiniPayAutoConnect>{children}</MiniPayAutoConnect>
+          <MiniPayAutoConnect>
+            <ChainGuard />
+            {children}
+          </MiniPayAutoConnect>
         </WagmiProvider>
       </QueryClientProvider>
     );
@@ -108,6 +112,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <PrivyWagmiProvider config={privyWagmiConfig}>
+          <ChainGuard />
           {children}
         </PrivyWagmiProvider>
       </QueryClientProvider>
