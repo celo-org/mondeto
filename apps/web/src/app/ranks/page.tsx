@@ -160,19 +160,20 @@ export default function RanksPage() {
                 onClick={() => setShowAll(true)}
                 style={{
                   display: 'block',
-                  margin: '8px auto',
-                  fontSize: 7,
+                  margin: '12px auto',
+                  fontSize: 8,
                   fontFamily: PIXEL_FONT,
-                  color: 'var(--text-muted)',
+                  color: '#A7FF05',
                   background: 'none',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  padding: '5px 12px',
+                  border: '1px solid #A7FF05',
+                  borderRadius: 0,
+                  padding: '8px 16px',
                   cursor: 'pointer',
-                  letterSpacing: 0.5,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
                 }}
               >
-                show more
+                SHOW MORE
               </button>
             )}
           </>
@@ -247,12 +248,12 @@ function ScopeToggle({ scope, onScopeChange, homeMapId }: ScopeToggleProps) {
                 fontSize: 8,
                 fontFamily: PIXEL_FONT,
                 letterSpacing: 2,
-                padding: '6px 10px',
+                padding: '6px 12px',
                 cursor: 'pointer',
-                background: isActive ? 'var(--text)' : 'transparent',
-                color: isActive ? 'var(--bg)' : 'var(--text-muted)',
-                border: '1px solid var(--border)',
-                borderRadius: 999,
+                background: isActive ? '#A7FF05' : 'transparent',
+                color: isActive ? '#1B1B1B' : 'rgba(255,255,255,0.55)',
+                border: `1px solid ${isActive ? '#A7FF05' : 'rgba(255,255,255,0.2)'}`,
+                borderRadius: 0,
               }}
             >
               {s === 'local' ? 'LOCAL' : 'GLOBAL'}
