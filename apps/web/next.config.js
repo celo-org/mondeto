@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Required in Next 14 to run `instrumentation.ts` on server boot.
+  // Stable in Next 15+ (the flag becomes a no-op).
+  experimental: {
+    instrumentationHook: true,
+  },
   webpack: (config) => {
     config.externals.push('pino-pretty', 'lokijs', 'encoding')
     return config
