@@ -123,11 +123,11 @@ Code is in place across the board — the remaining work is real-device verifica
 ## 🔮 Strategic / longer-term
 
 ### Multi-stablecoin support
-Display layer **shipped** in commit `cedaa2b`: `useStablecoinBalance` reads USDm + USDC + USDT in parallel, picks the highest-balance one as the preferred currency, and the profile BALANCE card labels itself with the matching symbol. Home affordability check uses the $-pegged total across all three.
+DECIDED — purchase flow will accept USDT + USDC + USDm. Required to unblock Europe (USDT not buyable in many EU jurisdictions) and to satisfy MiniPay §2. Full contract design lives in `docs/contract/SMART_CONTRACT_CHANGE_PROPOSAL.md`.
 
-**Purchase flow is still USDT-only** because the deployed contract is hardcoded to a single ERC-20 in `initialize(_usdt, ...)`. The FAQ "swap inside MiniPay first" explainer covers the gap for users who only hold USDm / USDC.
+**Display layer shipped** in commit `cedaa2b`: `useStablecoinBalance` reads USDm + USDC + USDT in parallel, picks the highest-balance one as the preferred currency, and the profile BALANCE card labels itself with the matching symbol. Home affordability check uses the $-pegged total across all three.
 
-Full multi-stable purchases are paused — see `docs/planning/MULTISTABLE_ROADMAP.md` for the v2 contract path and the rationale (waiting on MiniPay's in-app Squid swap, which makes the contract-side problem disappear).
+**Purchase flow is still USDT-only** until the v2 contract ships. The FAQ "swap inside MiniPay first" explainer covers the gap for users who only hold USDm / USDC in the interim.
 
 ### Support agents
 See `docs/planning/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
