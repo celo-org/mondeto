@@ -144,7 +144,7 @@ The analytics output should answer concretely:
 - `apps/web/src/hooks/useAnalytics.ts` — chunked event fetching from Celo mainnet
 - `apps/web/src/app/analytics/page.tsx` — live dashboard reading these numbers
 - `docs/PRODUCT_BACKLOG.md` — confirmed product direction (campaigns, country maps, halving as-is)
-- `docs/MULTISTABLE_ROADMAP.md` — multi-stable v2 plan (currently on hold pending MiniPay swap timeline)
+- `docs/contract/SMART_CONTRACT_CHANGE_PROPOSAL.md` — contract changes including multi-currency (USDT/USDC/USDm) and multi-sig ownership
 
 ---
 

@@ -138,7 +138,7 @@ Need to handle ~10,000 simultaneous users.
 ## 🔮 Strategic / longer-term
 
 ### Multi-stablecoin support (v2 contract)
-See `docs/MULTISTABLE_ROADMAP.md`. Required for MiniPay §2 "adapt to user's preferred stablecoin"; currently we ship the explainer fallback ("swap inside MiniPay first").
+DECIDED — accepting USDT + USDC + USDm. Required to unblock Europe (USDT not buyable in many EU jurisdictions) and to satisfy MiniPay §2. Full design lives in `docs/contract/SMART_CONTRACT_CHANGE_PROPOSAL.md`.
 
 ### Support agents
 See `docs/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
