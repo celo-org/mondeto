@@ -59,8 +59,12 @@ export default function PaintModeBanner({
   return (
     <div
       style={{
+        // Stacked directly under the HEATMAP / MY LAND lime band (which
+        // occupies y=56..82 — TopBar 56px + toggle 26px). Banner height 30,
+        // so it ends at y=112. Anything map-overlay-related (e.g. selection
+        // pill) should clear y=112 if it shows simultaneously.
         position: 'absolute',
-        top: 60,
+        top: 82,
         left: 0,
         right: 0,
         height: 30,
