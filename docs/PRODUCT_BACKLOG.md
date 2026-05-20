@@ -18,45 +18,26 @@ The frontend now caps every `approve()` call at `APPROVAL_CAP_USDT = 10_000_000n
 
 Approval limits are enforced on the **token contract**, not on the spender contract — the cap can only live in the frontend. Logic: `apps/web/src/hooks/useBuyPixels.ts`.
 
-### Remove URL field from profile
-Unverified user-entered URLs are an injection / phishing vector. Avoid taking URL inputs until we have verification.
+### ~~Remove URL field from profile~~ — SHIPPED
+URL input removed from `profile/page.tsx`; `updateProfile` no longer carries a URL value. URL rendering is gated off in `LeaderboardRow`, `PixelInfoPanel`, and the `SelectionDrawer` (the `url` field still exists on the `OwnerGroup` type but is not rendered — safe to leave or clean up later).
 
-- [ ] Remove the URL input + display path from `apps/web/src/app/profile/page.tsx`
-- [ ] Stop calling `updateProfile` with a URL value; keep the contract field for future use but don't populate
-- [ ] Remove URL link rendering in `LeaderboardRow`, `SelectionDrawer`, `PixelInfoPanel`
+### ~~Profanity / explicit-content filter for player names~~ — SHIPPED (English)
+`obscenity@0.4.6` is installed; `apps/web/src/lib/profanity.ts` exposes `checkProfanity()` and gates the save button at `profile/page.tsx`. Multi-language coverage (Swahili, Portuguese, French, Indonesian, Hindi) is **still open** — `obscenity` ships English-only out of the box.
 
-### Profanity / explicit-content filter for player names
-Either custom labels via `updateProfile` or our generated nicknames. Most risk is on user-set labels.
-
-- [ ] Add `obscenity` or `bad-words` npm package
-- [ ] Validate on the profile name input before calling `updateProfile`; show a clear error
-- [ ] Audit the curated `FIGURES` list in `apps/web/src/lib/username.ts` against the filter (none should match, but verify)
-- [ ] Multi-language coverage — the audience is global. At minimum: English, Swahili, Portuguese, French, Indonesian, Hindi profanity lists
+- [ ] Multi-language profanity coverage — at minimum: Swahili, Portuguese, French, Indonesian, Hindi
 
 ---
 
 ## 🟡 High priority UX
 
-### Auto-zoom to user's location on landing
-Land on the user's region so they can start picking pixels right away.
+### ~~Auto-zoom to user's location on landing~~ — SHIPPED
+`page.tsx` calls `navigator.geolocation.getCurrentPosition()` on first visit, maps lat/lng → pixel via `geoToPixel()`, smooth-zooms via `canvasRef.zoomToPixel(targetId)`. Permission decision is persisted in `localStorage` (`mondeto-geo-decision`) and the per-session zoom flag in `sessionStorage` so we don't re-prompt or re-zoom.
 
-- [ ] Use the browser Geolocation API (with permission prompt) on first visit
-- [ ] Map approx lat/lng → pixel (x, y) using the same Equal Earth projection the contract uses
-- [ ] Smoothly zoom to that pixel on map load
-- [ ] Persist permission state so we don't re-prompt every visit
-- [ ] Fall back to a sensible default center (e.g. Africa) if permission denied
+### ~~Onboarding / FAQ page~~ — SHIPPED
+`/faq/page.tsx` with the full Q&A set, reachable from the profile footer next to Terms / Privacy. `IntroScreen.tsx` body copy bumped to readable sizing for 360-wide screens.
 
-### Onboarding / FAQ page
-- [ ] The intro screen exists (`IntroScreen.tsx`) but the body copy is too small on real devices — bump sizing
-- [ ] Add an `/faq` route with the key questions: *what is a pixel · how does pricing work · what's the halving · how do fees work · how do I withdraw · how do I get my address recovered if I lose access*
-- [ ] Reachable from the profile footer next to Support / Terms / Privacy
-
-### Leaderboard layout — top-aligned + scrollable
-- [ ] In `apps/web/src/app/ranks/page.tsx` switch from center-aligned to top-aligned with `overflow-y: auto`
-- [ ] Confirm at 360×640 the top of the list sits right under the TopBar
-
-### Bigger intro screen font
-- [ ] Bump font sizes in `IntroScreen.tsx` for the body copy. Goal: comfortably readable on a 360-wide screen at arm's length
+### ~~Leaderboard layout — top-aligned + scrollable~~ — SHIPPED
+`ranks/page.tsx` is `flexDirection: 'column'` + `justifyContent: 'flex-start'` + `overflowY: 'auto'`. Confirm at 360×640 is part of the `MOBILE_QA.md` walkthrough (still open as a manual QA item).
 
 ---
 
@@ -96,9 +77,12 @@ Need to handle ~10,000 simultaneous users.
 - [ ] Iterate on whatever surfaces
 
 ### Onboarding flow inside MiniPay
-- [ ] Verify zero-click connect (`window.ethereum.isMiniPay`) actually fires on a real device
-- [ ] Verify the `[ TOP UP BALANCE ]` deeplink opens the MiniPay add-cash flow correctly
-- [ ] Confirm no `personal_sign` / `eth_signTypedData` prompts anywhere in real flows
+Code is in place across the board — the remaining work is real-device verification.
+
+- ✅ ~~Zero-click connect (`window.ethereum.isMiniPay`) wired~~ — `MiniPayAutoConnect` in `wallet-provider.tsx` + `connect-button.tsx` hides the button in MiniPay. (The injected connector was missing post-Privy-migration and was restored in commit `3dd0b23`.)
+- ✅ ~~TOP UP BALANCE deeplink wired~~ — `SelectionDrawer.tsx` links to `MINIPAY_DEPOSIT_URL` (`https://link.minipay.xyz/add_cash`).
+- ✅ ~~No `personal_sign` / `eth_signTypedData` anywhere~~ — grep returns zero matches.
+- [ ] Real-device verification of all three on a MiniPay device (part of the `MOBILE_QA.md` walkthrough)
 
 ---
 
@@ -137,8 +121,12 @@ Need to handle ~10,000 simultaneous users.
 
 ## 🔮 Strategic / longer-term
 
-### Multi-stablecoin support (v2 contract)
-See `docs/planning/MULTISTABLE_ROADMAP.md`. Required for MiniPay §2 "adapt to user's preferred stablecoin"; currently we ship the explainer fallback ("swap inside MiniPay first").
+### Multi-stablecoin support
+Display layer **shipped** in commit `cedaa2b`: `useStablecoinBalance` reads USDm + USDC + USDT in parallel, picks the highest-balance one as the preferred currency, and the profile BALANCE card labels itself with the matching symbol. Home affordability check uses the $-pegged total across all three.
+
+**Purchase flow is still USDT-only** because the deployed contract is hardcoded to a single ERC-20 in `initialize(_usdt, ...)`. The FAQ "swap inside MiniPay first" explainer covers the gap for users who only hold USDm / USDC.
+
+Full multi-stable purchases are paused — see `docs/planning/MULTISTABLE_ROADMAP.md` for the v2 contract path and the rationale (waiting on MiniPay's in-app Squid swap, which makes the contract-side problem disappear).
 
 ### Support agents
 See `docs/planning/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
