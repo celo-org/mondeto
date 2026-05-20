@@ -5,6 +5,8 @@ import { createPublicClient, http } from 'viem'
 import { celo } from 'viem/chains'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
+import { getContractByMapId } from '@/lib/maps/contracts'
+import type { MapId } from '@/lib/maps/types'
 
 export type LoadState = 'loading' | 'ready' | 'error'
 
@@ -16,8 +18,16 @@ const fallbackClient = createPublicClient({
   transport: http(),
 })
 
-export function usePixelMap() {
+/**
+ * Pixel map state for a single map.
+ *
+ * Pass a `mapId` to read from a specific deployed contract. Omitting it
+ * (the single-map launch state) keeps the existing behavior — reads route
+ * to the first revealed map.
+ */
+export function usePixelMap(mapId?: MapId) {
   const wagmiClient = usePublicClient()
+  const contractAddress = getContractByMapId(mapId ?? 0)
   const pixelDataRef = useRef<PixelView[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [version, setVersion] = useState(0)
@@ -30,9 +40,10 @@ export function usePixelMap() {
   const fetchData = useCallback(async (): Promise<PixelView[]> => {
     const client = getClient()
     return await fetchAllPixelsFromContract(
-      client.readContract.bind(client) as Parameters<typeof fetchAllPixelsFromContract>[0]
+      client.readContract.bind(client) as Parameters<typeof fetchAllPixelsFromContract>[0],
+      contractAddress,
     )
-  }, [getClient])
+  }, [getClient, contractAddress])
 
   const load = useCallback(async () => {
     try {

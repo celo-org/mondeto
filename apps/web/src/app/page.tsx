@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useAccount, usePublicClient } from 'wagmi'
 import WorldCanvas, { type WorldCanvasRef } from '@/components/Map/WorldCanvas'
 import TopBar from '@/components/Layout/TopBar'
+import MapSwitcher from '@/components/Layout/MapSwitcher'
+import AwayFromHomeIndicator from '@/components/Layout/AwayFromHomeIndicator'
 import PaintModeBanner from '@/components/Map/PaintModeBanner'
 import HeatmapLegend from '@/components/Map/HeatmapLegend'
 import ZoomHintToast from '@/components/Layout/ZoomHintToast'
@@ -18,8 +20,10 @@ import { usePixelPrice } from '@/hooks/usePixelPrice'
 import { useBuyPixels } from '@/hooks/useBuyPixels'
 import { useProfile } from '@/hooks/useProfile'
 import { useUSDTBalance } from '@/hooks/useUSDTBalance'
+import { useMaps } from '@/hooks/useMaps'
 import { fetchLandMaskFromContract } from '@/lib/landMask'
-import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
+import { MONDETO_ABI } from '@/lib/contract'
+import { getContractByMapId } from '@/lib/maps/contracts'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
@@ -32,7 +36,10 @@ export default function Home() {
   const addrStr = address as string | undefined
   const publicClient = usePublicClient()
 
-  const { pixelDataRef, loadState, load, refresh, version, changedIds } = usePixelMap()
+  const { currentMapId } = useMaps()
+  const mondetoAddress = getContractByMapId(currentMapId)
+
+  const { pixelDataRef, loadState, load, refresh, version, changedIds } = usePixelMap(currentMapId)
   const {
     selectedIds,
     togglePixel,
@@ -43,9 +50,9 @@ export default function Home() {
     limitBump,
   } = useSelection()
 
-  const { totalPrice, isLoading: priceLoading } = usePixelPrice(selectedIds)
-  const buy = useBuyPixels()
-  const profile = useProfile(addrStr)
+  const { totalPrice, isLoading: priceLoading } = usePixelPrice(selectedIds, currentMapId)
+  const buy = useBuyPixels(currentMapId)
+  const profile = useProfile(addrStr, currentMapId)
 
   const walletBalance = useUSDTBalance()
 
@@ -63,17 +70,17 @@ export default function Home() {
 
   const isPaintMode = currentScale >= PAINT_SCALE
 
-  // Fetch land mask and reload when chain changes
+  // Fetch land mask and reload when chain or current map changes
   useEffect(() => {
     clearSelection()
     if (publicClient) {
       fetchLandMaskFromContract(
         publicClient.readContract.bind(publicClient) as Parameters<typeof fetchLandMaskFromContract>[0],
-        MONDETO_ADDRESS,
+        mondetoAddress,
         MONDETO_ABI,
       ).then(() => load())
     }
-  }, [publicClient, load])
+  }, [publicClient, load, mondetoAddress])
 
   // Geolocation auto-zoom on first visit. Lands the user on their region
   // so they can start picking pixels right away. We ask once, remember the
@@ -146,7 +153,7 @@ export default function Home() {
         const results = await Promise.allSettled(
           batch.map(addr =>
             publicClient!.readContract({
-              address: MONDETO_ADDRESS,
+              address: mondetoAddress,
               abi: MONDETO_ABI,
               functionName: 'profiles',
               args: [addr as `0x${string}`],
@@ -269,7 +276,7 @@ export default function Home() {
       const results = await Promise.allSettled(
         [...owners].map(addr =>
           publicClient.readContract({
-            address: MONDETO_ADDRESS,
+            address: mondetoAddress,
             abi: MONDETO_ABI,
             functionName: 'profiles',
             args: [addr as `0x${string}`],
@@ -307,6 +314,7 @@ export default function Home() {
     >
       {/* Top bar */}
       <TopBar title="MONDETO">
+        <MapSwitcher currentMapPixels={pixelDataRef.current} />
         {(['heatmap', 'myland'] as const).map(v => (
           <button
             key={v}
@@ -327,6 +335,8 @@ export default function Home() {
           </button>
         ))}
       </TopBar>
+
+      <AwayFromHomeIndicator />
 
       {/* WorldCanvas */}
       <div

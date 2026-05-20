@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { usePublicClient } from 'wagmi'
-import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
+import { MONDETO_ABI } from '@/lib/contract'
+import { getContractByMapId } from '@/lib/maps/contracts'
+import type { MapId } from '@/lib/maps/types'
 
-export function usePixelPrice(selectedIds: Set<number>) {
+export function usePixelPrice(selectedIds: Set<number>, mapId?: MapId) {
+  const contractAddress = getContractByMapId(mapId ?? 0)
   const [totalPrice, setTotalPrice] = useState<bigint>(0n)
   const [isLoading, setIsLoading] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -28,7 +31,7 @@ export function usePixelPrice(selectedIds: Set<number>) {
       try {
         if (publicClient) {
           const price = await publicClient.readContract({
-            address: MONDETO_ADDRESS,
+            address: contractAddress,
             abi: MONDETO_ABI,
             functionName: 'selectionPrice',
             args: [ids.map(id => BigInt(id))],
@@ -49,7 +52,7 @@ export function usePixelPrice(selectedIds: Set<number>) {
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [selectedIds, publicClient])
+  }, [selectedIds, publicClient, contractAddress])
 
   return { totalPrice, isLoading }
 }

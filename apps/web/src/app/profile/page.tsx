@@ -10,7 +10,9 @@ import StatsRow from '@/components/Profile/StatsRow'
 import ColorPicker from '@/components/Profile/ColorPicker'
 import { useProfile } from '@/hooks/useProfile'
 import { useUSDTBalance } from '@/hooks/useUSDTBalance'
-import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
+import { useMaps } from '@/hooks/useMaps'
+import { MONDETO_ABI } from '@/lib/contract'
+import { getContractByMapId } from '@/lib/maps/contracts'
 import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
 import { formatUSDT } from '@/lib/colorUtils'
 import { isLand } from '@/lib/landMask'
@@ -23,7 +25,9 @@ export default function ProfilePage() {
   // URL input removed — unverified user URLs are an injection vector.
   // setUrl is left wired but unused so existing useProfile callers keep
   // their shape; updateProfile is called below with an empty string for url.
-  const { name, setName, color, setColor, saveState, save } = useProfile(addrStr)
+  const { currentMapId } = useMaps()
+  const mondetoAddress = getContractByMapId(currentMapId)
+  const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useUSDTBalance()
   const publicClient = usePublicClient()
   const [nameError, setNameError] = useState<string | null>(null)
@@ -41,7 +45,7 @@ export default function ProfilePage() {
       try {
         // Fetch pixel batch for the full map
         const batchData = await publicClient!.readContract({
-          address: MONDETO_ADDRESS,
+          address: mondetoAddress,
           abi: MONDETO_ABI,
           functionName: 'getPixelBatch',
           args: [0, 0, WIDTH, HEIGHT],
@@ -91,7 +95,7 @@ export default function ProfilePage() {
         const fromBlock = currentBlock > 500000n ? currentBlock - 500000n : 0n
 
         const logs = await publicClient!.getLogs({
-          address: MONDETO_ADDRESS,
+          address: mondetoAddress,
           event: parseAbiItem('event PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost)'),
           fromBlock,
           toBlock: currentBlock,
@@ -133,7 +137,7 @@ export default function ProfilePage() {
     }
 
     fetchPnL()
-  }, [publicClient, addrStr])
+  }, [publicClient, addrStr, mondetoAddress])
 
   const saveLabel =
     saveState === 'saving' ? '[ SAVING... ]' :
