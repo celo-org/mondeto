@@ -104,9 +104,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       config={{
         defaultChain: celo,
         supportedChains: [celo, celoSepolia],
+        loginMethods: ["wallet"],
+        embeddedWallets: { ethereum: { createOnLogin: "off" } },
         appearance: {
           theme: "dark",
           accentColor: "#00ff41",
+          walletList: ["metamask", "wallet_connect"],
         },
       }}
     >
