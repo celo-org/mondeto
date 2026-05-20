@@ -217,11 +217,11 @@ export function useLeaderboard(
           // will need to accept the per-map address. The shape returned
           // here doesn't change.
           const data = await fetchAllPixelsFromContract(read)
-          return pixelViewToMapSnapshot(data, m.id, m.open)
+          return pixelViewToMapSnapshot(data, m.id, m.revealed)
         } catch (e) {
           console.warn(`Failed to load map ${m.id} for global board:`, e)
           // Empty snapshot so one bad map doesn't kill the whole board.
-          return pixelViewToMapSnapshot([], m.id, m.open)
+          return pixelViewToMapSnapshot([], m.id, m.revealed)
         }
       }),
     ).then((snapshots) => {
