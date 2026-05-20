@@ -5,10 +5,12 @@ import { WagmiProvider, createConfig } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { http, useConnect } from "wagmi";
+import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
 
 const wagmiConfig = createConfig({
   chains: [celo, celoSepolia],
+  connectors: [injected()],
   transports: {
     [celo.id]: http(),
     [celoSepolia.id]: http(),
