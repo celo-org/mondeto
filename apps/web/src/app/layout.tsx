@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 import { WalletProvider } from "@/components/wallet-provider"
+import { PostHogProvider } from "@/components/posthog-provider"
 
 export const metadata: Metadata = {
   title: 'Mondeto',
@@ -49,13 +50,15 @@ export default function RootLayout({
         className="font-mono antialiased"
         style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}
       >
-        <div className="relative flex min-h-screen flex-col">
-          <WalletProvider>
-            <main className="flex-1">
-              {children}
-            </main>
-          </WalletProvider>
-        </div>
+        <PostHogProvider>
+          <div className="relative flex min-h-screen flex-col">
+            <WalletProvider>
+                <main className="flex-1">
+                  {children}
+                </main>
+            </WalletProvider>
+          </div>
+        </PostHogProvider>
         <SpeedInsights />
       </body>
     </html>

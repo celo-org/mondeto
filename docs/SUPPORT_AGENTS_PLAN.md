@@ -34,7 +34,7 @@ Issues      Sheets DB       Sheets DB
 - **Telegram interface**: Telegram Bot API (BotFather → bot, added to the support group with admin rights).
 - **Orchestration**: a single Node/Bun service deployed on **Vercel** (cron + edge functions) or **Railway**.
 - **Agent runtime**: Anthropic SDK (Claude Sonnet 4.6 for the specialists, Haiku 4.5 for the router — Haiku is cheap and fast for pure classification).
-- **Long-term memory / dedupe**: a small Postgres (Neon) or SQLite with a `tickets` table — primary key = Telegram message id, columns for classification, status, link to issue.
+- **Long-term memory / dedupe**: **PostHog event stream** — each Telegram message is captured as an event with `distinct_id = telegram_user_id` and `$insert_id = telegram_message_id` (PostHog's native idempotency key). Classification, severity, status, and the GitHub issue URL ride along as event properties. Dedupe is "have we seen this `$insert_id`?", and multi-turn memory is "last N events for this `distinct_id`" — both one-call lookups via the PostHog query API. No schema, no migrations.
 - **Outputs**:
   - UI/UX → **GitHub Issues** in `mondeto-fe` repo, labeled `ui-ux`, `from-support`.
   - Financial → **Notion DB "Financial requests"** + Slack/Telegram ping to the founder.
@@ -199,7 +199,7 @@ Only `critical-*` tickets start the 24h clock.
 ┌──────────────────────────────────────────────┐
 │ if severity == critical-* :                   │
 │   1. ping the on-call human (Telegram DM)     │
-│   2. start the 24h SLA timer (Postgres row)   │
+│   2. start the 24h SLA timer (PostHog event) │
 │   3. acknowledge the user in the support      │
 │      group: "filed as #123, fix incoming"     │
 └────────────┬──────────────────────────────────┘
@@ -225,7 +225,7 @@ Only `critical-*` tickets start the 24h clock.
 ### New tooling the UI/UX agent needs
 - `create_github_issue(title, body, labels)` → `mondeto-fe` repo
 - `ping_oncall(message, severity)` → Telegram DM to the on-call rotation
-- `start_sla_timer(issue_url, deadline)` → Postgres row + cron worker checks every 15 min
+- `start_sla_timer(issue_url, deadline)` → emit `sla_started` PostHog event with `deadline` property; a 15-minute cron queries PostHog for any `sla_started` events whose deadline is approaching and whose matching GitHub issue is still open
 - `notify_user_resolved(issue_url, telegram_message_id)` → bot posts in the original thread when the issue closes
 
 ### Who's on-call

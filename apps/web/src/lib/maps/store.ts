@@ -1,10 +1,7 @@
 /**
- * In-memory AssignmentStore.
- *
- * Placeholder for the launch Postgres-backed store. The map module's pure
- * logic is unchanged — the partner team wires the Postgres adapter behind
- * this same interface later. For now, "home map" is recomputed client-side
- * from a deterministic hash, so a missing record never blocks a user.
+ * In-memory AssignmentStore — this is the launch store. "Home map" is
+ * recomputed client-side from a deterministic hash, so a missing record
+ * never blocks a user and we ship no backend at launch.
  */
 
 import type { Address, AssignmentStore, MapId } from './types'
