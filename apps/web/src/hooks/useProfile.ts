@@ -7,6 +7,7 @@ import { uint24ToHex, hexToUint24 } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { getBuilderCodeSuffix } from '@/lib/builderCode'
 import { getContractByMapId } from '@/lib/maps/contracts'
+import { generateUsername } from '@/lib/username'
 import type { MapId } from '@/lib/maps/types'
 
 export type ProfileSaveState = 'idle' | 'saving' | 'confirming' | 'saved' | 'error'
@@ -27,7 +28,9 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
     query: { enabled: !!address },
   })
 
-  // Load profile data when it arrives
+  // Load profile data when it arrives. When the on-chain label is empty
+  // we fall back to a deterministic generated username so the user always
+  // has something to display (and to save) without seeing a raw 0x… first.
   useEffect(() => {
     if (!profileData) return
     const [contractColor, labelBytes, urlBytes] = profileData as [number, unknown, unknown]
@@ -35,8 +38,9 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
     const label = decodeBytes(labelBytes)
     const url = decodeBytes(urlBytes)
     if (label) setName(label)
+    else if (address) setName(generateUsername(address))
     if (url) setUrl(url)
-  }, [profileData])
+  }, [profileData, address])
 
   // Write profile to contract
   const { writeContract, data: txHash, isPending } = useWriteContract()
