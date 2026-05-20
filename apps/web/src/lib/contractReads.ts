@@ -1,6 +1,9 @@
 import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
 import { MONDETO_ADDRESS, MONDETO_ABI } from './contract'
 import { isLand } from './landMask'
+
+// Re-exported for backward compatibility with callers that imported through
+// this module; live multi-map callers should use getContractByMapId().
 import { uint24ToHex } from './colorUtils'
 import { pixelPrice } from './priceCalc'
 import type { PixelView } from './mock'
@@ -66,12 +69,17 @@ export function decodePixelBatch(
 
 /**
  * Fetch all pixel data from the contract in one call.
+ *
+ * `contractAddress` defaults to the legacy single-map address so existing
+ * callers keep working. Multi-map callers should pass the address resolved
+ * via `getContractByMapId(currentMapId)`.
  */
 export async function fetchAllPixelsFromContract(
   readContract: (args: { address: `0x${string}`; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }) => Promise<unknown>,
+  contractAddress: `0x${string}` = MONDETO_ADDRESS,
 ): Promise<PixelView[]> {
   const batchData = await readContract({
-    address: MONDETO_ADDRESS,
+    address: contractAddress,
     abi: MONDETO_ABI,
     functionName: 'getPixelBatch',
     args: [0, 0, WIDTH, HEIGHT],
@@ -85,7 +93,7 @@ export async function fetchAllPixelsFromContract(
   //   [width, height, halvingTime, initialPrice, minPrice, deployTimestamp, feeRate]
   try {
     const cfg = (await readContract({
-      address: MONDETO_ADDRESS,
+      address: contractAddress,
       abi: MONDETO_ABI,
       functionName: 'config',
       args: [],

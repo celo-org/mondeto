@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { usePublicClient } from 'wagmi'
 import { parseAbiItem } from 'viem'
-import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
+import { MONDETO_ABI } from '@/lib/contract'
+import { getContractByMapId } from '@/lib/maps/contracts'
+import type { MapId } from '@/lib/maps/types'
 
 // Celo mainnet block time is ~1s post-L2 migration. These are upper bounds —
 // we filter by event timestamp anyway, so a small drift is fine.
@@ -66,7 +68,8 @@ function parseWithBigInts(str: string): AnalyticsData {
   ) as AnalyticsData
 }
 
-export function useAnalytics(): AnalyticsData {
+export function useAnalytics(mapId?: MapId): AnalyticsData {
+  const contractAddress = getContractByMapId(mapId ?? 0)
   const publicClient = usePublicClient()
   const [data, setData] = useState<AnalyticsData>({
     loading: true,
@@ -131,7 +134,7 @@ export function useAnalytics(): AnalyticsData {
           const results = await Promise.all(
             batch.map((r) =>
               publicClient!.getLogs({
-                address: MONDETO_ADDRESS,
+                address: contractAddress,
                 event: EVENT_PURCHASED,
                 fromBlock: r.from,
                 toBlock: r.to,
@@ -145,7 +148,7 @@ export function useAnalytics(): AnalyticsData {
         let feeRateBps = 0
         try {
           const rate = (await publicClient!.readContract({
-            address: MONDETO_ADDRESS,
+            address: contractAddress,
             abi: MONDETO_ABI,
             functionName: 'feeRate',
           })) as bigint
@@ -237,7 +240,7 @@ export function useAnalytics(): AnalyticsData {
     return () => {
       cancelled = true
     }
-  }, [publicClient])
+  }, [publicClient, contractAddress])
 
   return data
 }
