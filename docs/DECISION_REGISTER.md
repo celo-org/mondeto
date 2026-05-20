@@ -13,8 +13,8 @@ Purpose: every decision made, split into what must ship day one versus what is d
 - Natural demand cap ~$7 (hard ~$10): a planning assumption, not coded.
 - One **home map** per wallet, auto-assigned, sticky. Leaderboards derived from on-chain ownership.
 - Connectivity never crosses maps (global "biggest area" = best single block on one map).
-- Storage: **Option A** — one Postgres DB via Vercel Marketplace (Neon). Holds assignments + settings. Operator edits via the Vercel dashboard data editor — no custom admin UI for launch.
-- **No custom admin panel for launch.** Operator runs ops from the Vercel dashboard.
+- Storage: **no database at launch.** Wallet → home map is derived deterministically from `hash(address) % revealedMaps`, so a missing record never blocks a user. Map reveal flags live in app config (env / a small JSON committed to the repo). Analytics, error tracking, feature flags, surveys, session replay, and the support-agents event stream are all handled by **PostHog**.
+- **No custom admin panel for launch.** Operator toggles map reveals via config commit + redeploy; everything else (user analytics, funnels, error triage, A/B flags) runs from the PostHog dashboard.
 
 ## Contract-touching items
 
@@ -31,8 +31,8 @@ Status at a glance:
 - Auto-assign wallet → home map, sticky, hash-balanced.
 - Play on your home map. Per-map leaderboards: most pixels, biggest connected area, most expensive pixel.
 - Global leaderboards (same three). Shows *who* is on top — never *where* they are.
-- Postgres adapter for the assignment store (~20 lines) + a settings row (threshold, which maps revealed).
-- Map reveal + threshold edited via the Vercel dashboard data editor.
+- Assignment store stays in-memory + deterministic-hash fallback (no DB). Revealed-map list lives in app config.
+- Map reveal toggled via config commit; "open next map" threshold is derived from on-chain price data, surfaced through PostHog dashboards.
 - `shouldOpenNextMap` advisory wired to the $2 average-price signal, surfaced to the operator (manual reveal).
 - Referral / invite links (trivial; a launch is when viral referral pays off).
 

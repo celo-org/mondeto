@@ -36,8 +36,8 @@ export interface MapSnapshot {
 }
 
 /**
- * Sticky assignment store. Injectable so tests use an in-memory impl and
- * production can back it with Airtable / Postgres / KV — the module does not care.
+ * Sticky assignment store. Injectable; both tests and production use the
+ * in-memory impl, with a deterministic-hash fallback when no record exists.
  */
 export interface AssignmentStore {
   get(address: Address): MapId | null;

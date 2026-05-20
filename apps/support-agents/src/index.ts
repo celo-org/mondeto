@@ -16,7 +16,7 @@ import { routeMessage } from './router.js'
 import { draftUiUxIssue } from './agents/ui-ux.js'
 import { draftFinancialTicket } from './agents/financial.js'
 import { draftCampaignTicket } from './agents/campaign.js'
-import { logEntry } from './log.js'
+import { logEntry, captureError, shutdown } from './log.js'
 
 const AUTOREPLY = {
   ui_ux: false,
@@ -88,12 +88,28 @@ bot.on('message:text', async (ctx) => {
     }
   } catch (err) {
     console.error('[error]', userTag, err)
+    captureError(err, { telegram_user_id: userId, telegram_message_id: messageId })
   }
 })
 
 bot.catch((err) => {
   console.error('[bot error]', err)
+  captureError(err)
 })
+
+// Flush PostHog buffers on a clean shutdown so we don't lose the last few
+// events when the container/process exits.
+const onExit = async (signal: string) => {
+  console.log(`[bot] received ${signal}, shutting down…`)
+  try {
+    await bot.stop()
+  } finally {
+    await shutdown()
+    process.exit(0)
+  }
+}
+process.on('SIGINT', () => void onExit('SIGINT'))
+process.on('SIGTERM', () => void onExit('SIGTERM'))
 
 console.log('Mondeto support bot starting…')
 bot.start({

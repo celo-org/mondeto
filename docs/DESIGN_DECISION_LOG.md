@@ -54,11 +54,11 @@ Each entry: the decision, why, status, and consequences.
 **Status:** Decided and implemented (code + tests).
 **Consequences:** Boards extend to campaign-scoped boards later by passing a filtered pixel subset — no new code needed.
 
-### ADR-5 — Storage Option A; no custom admin panel for launch
-**Decision:** One Postgres database via the Vercel Marketplace (Neon) holds wallet→map assignments and admin settings. No custom admin panel is built for launch; the operator uses the Vercel dashboard's built-in data editor.
-**Why:** One store, fewest moving parts, and the operator can view/edit data with nothing custom built — directly serving the "one person runs everything, no developer in the loop" goal. (Note: Vercel's old first-party KV/Postgres were sunset; storage is now provisioned through the Marketplace with unified billing.)
+### ADR-5 — No database at launch; PostHog for analytics + ops
+**Decision:** No application database at launch. Wallet → home map is derived deterministically from `hash(address) % revealedMaps`, so the `AssignmentStore` interface stays in-memory and a missing record never blocks a user. The revealed-map list lives in app config (committed JSON / env). **PostHog** is the single source of truth for everything we'd otherwise have built backend infrastructure for: product analytics, web analytics, session replay, error tracking, feature flags, experiments, surveys, and the support-agents event stream / dedupe.
+**Why:** The earlier "Postgres via Vercel Marketplace" proposal existed to (a) store assignments and (b) give the operator a place to view/edit data. Both go away: assignments are derivable, and PostHog's dashboard is a strictly better operator surface than a generic DB editor — funnels, replay, error grouping, and flag rollout are out-of-the-box. One vendor, no schemas, no migrations, no cron workers.
 **Status:** Decided.
-**Consequences:** A ~20-line adapter implements the existing `AssignmentStore` interface against Postgres; the pure logic and tests are untouched. A custom admin panel is later polish.
+**Consequences:** Zero backend code at launch — the web app remains a static + on-chain reads + PostHog client. Feature flags ship through PostHog rather than env vars. The support-agents service writes events into PostHog instead of a JSONL/Postgres log. If a future feature genuinely needs relational data, we revisit — but nothing on the launch roadmap does.
 
 ### ADR-6 — Contract parameters and their mutability
 **Decision:** Halving = 14 days and initial price = $0.003 are values frozen per deployment. `feeRate` becomes admin-settable (launch 5%). Halving and initial price are proposed to be settable *only until a map's first sale*, then permanently frozen.
@@ -112,7 +112,7 @@ The maps module is dependency-free TypeScript, strict-typecheck clean, 35 tests 
 
 ## 6. Launch scope (minimal)
 
-Batch-deploy N identical maps (company-owned, one-time). Reveal 6 at launch. Auto-assign wallet→home map, sticky and hash-balanced. Play on the home map with the three per-map leaderboards and the global boards (shows who is on top, never where). A Postgres adapter for assignments plus a settings row (threshold, which maps revealed), edited via the Vercel dashboard. The average-price ($2) "open next map" signal, surfaced to the operator for manual reveal. Referral/invite links (trivial, and a launch is exactly when viral referral pays off).
+Batch-deploy N identical maps (company-owned, one-time). Reveal 6 at launch. Auto-assign wallet→home map, sticky and hash-balanced — no DB, derived deterministically from the address. Play on the home map with the three per-map leaderboards and the global boards (shows who is on top, never where). The revealed-map list lives in app config; the average-price ($2) "open next map" signal is surfaced via the PostHog dashboard for manual reveal. Referral/invite links (trivial, and a launch is exactly when viral referral pays off). PostHog covers all product/web/error analytics and feature flags — no separate backend.
 
 ## 7. Roadmap (explicitly not day one)
 
