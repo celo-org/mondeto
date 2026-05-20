@@ -9,6 +9,7 @@ import PaintModeBanner from '@/components/Map/PaintModeBanner'
 import HeatmapLegend from '@/components/Map/HeatmapLegend'
 import ZoomHintToast from '@/components/Layout/ZoomHintToast'
 import CampaignBanner from '@/components/Layout/CampaignBanner'
+import BridgeBanner from '@/components/Layout/BridgeBanner'
 import BottomNav from '@/components/Layout/BottomNav'
 import DimLayer from '@/components/Overlays/DimLayer'
 import SelectionDrawer from '@/components/Overlays/SelectionDrawer'
@@ -451,6 +452,7 @@ export default function Home() {
       {/* Zoom hint toast */}
       <ZoomHintToast hasZoomedPast4x={hasZoomedPast4xRef.current} />
       {/* <CampaignBanner /> */}
+      <BridgeBanner />
 
       {/* Selection review pill — user taps this to open drawer */}
       {pixelCount > 0 && activeOverlay === 'none' && (
