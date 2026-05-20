@@ -8,22 +8,23 @@
  * the edge bundle and the browser.
  *
  * Env vars (see .env.template):
+ *   NEXT_PUBLIC_POSTHOG_KEY     — same key the browser SDK uses. PostHog
+ *                                  project keys are public by design (they
+ *                                  already ship inside the client bundle),
+ *                                  so there's no security benefit to a
+ *                                  separate server-only copy.
  *   POSTHOG_OTEL_LOGS_ENDPOINT — full URL, defaults to the EU cloud
- *                                 (`https://eu.i.posthog.com/i/v0/otel/v1/logs`).
- *   POSTHOG_PROJECT_API_KEY    — same project key as NEXT_PUBLIC_POSTHOG_KEY;
- *                                 kept server-only so the bearer token never
- *                                 ships in the client bundle.
+ *                                  (`https://eu.i.posthog.com/i/v0/otel/v1/logs`).
  *
- * If either of those is missing we fall back to no-op (logs still print
- * to stdout via the default console). That way local dev without secrets
- * isn't broken.
+ * If the key is missing we fall back to no-op so local dev without
+ * secrets isn't broken.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
-  const apiKey = process.env.POSTHOG_PROJECT_API_KEY
+  const apiKey = process.env.NEXT_PUBLIC_POSTHOG_KEY
   if (!apiKey) {
-    console.warn('[otel] POSTHOG_PROJECT_API_KEY not set — server logs will not ship to PostHog')
+    console.warn('[otel] NEXT_PUBLIC_POSTHOG_KEY not set — server logs will not ship to PostHog')
     return
   }
 
