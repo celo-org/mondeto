@@ -6,8 +6,6 @@ vi.mock('next/link', () => ({
   default: ({ children, href, ...rest }: any) => <a href={href} {...rest}>{children}</a>,
 }))
 
-const BRAND_LIME_RGB = 'rgb(167, 255, 5)'
-
 describe('BottomNav', () => {
   it('renders three icon-only nav links', () => {
     render(<BottomNav activeRoute="/" />)
@@ -35,22 +33,29 @@ describe('BottomNav', () => {
     expect(hrefs).toContain('/profile')
   })
 
-  it('active route has brand-lime top border + tinted background + full-opacity icon', () => {
+  it('active route applies the lime CSS filter to its icon; inactive icons are unfiltered + dimmed', () => {
     render(<BottomNav activeRoute="/ranks" />)
     const links = screen.getAllByRole('link')
 
     const activeLink = links[0]
     expect(activeLink).toHaveAttribute('aria-current', 'page')
-    expect(activeLink.style.borderTop).toContain(BRAND_LIME_RGB)
-    expect(activeLink.style.backgroundColor.replace(/\s/g, '')).toMatch(/rgba\(167,255,5,/)
-
     const activeImg = activeLink.querySelector('img')
     expect(activeImg).not.toBeNull()
+    expect(activeImg!.style.filter).toContain('invert')
     expect(activeImg!.style.opacity).toBe('1')
 
     const inactiveLink = links[1]
     expect(inactiveLink).not.toHaveAttribute('aria-current')
     const inactiveImg = inactiveLink.querySelector('img')
+    expect(inactiveImg!.style.filter).toBe('none')
     expect(parseFloat(inactiveImg!.style.opacity)).toBeLessThan(1)
+  })
+
+  it('active route does not paint a background tint or border on its tile', () => {
+    render(<BottomNav activeRoute="/ranks" />)
+    const activeLink = screen.getAllByRole('link')[0]
+    // No chrome around the tile — the icon's lime filter is the only active cue.
+    expect(activeLink.style.backgroundColor).toBe('')
+    expect(activeLink.style.borderTop).toBe('')
   })
 })
