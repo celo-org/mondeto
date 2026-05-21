@@ -143,12 +143,12 @@ export default function RanksPage() {
         }}
       >
         {isLoading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '40%', gap: 12 }}>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <img
               src="/brand/watermark.svg"
               alt=""
-              width={96}
-              height={96}
+              width={48}
+              height={48}
               style={{ animation: 'spin 2.4s linear infinite', display: 'block' }}
             />
           </div>

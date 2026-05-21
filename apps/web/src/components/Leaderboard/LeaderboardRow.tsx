@@ -17,39 +17,25 @@ function rankSuffix(rank: number): string {
   return `${rank}TH`
 }
 
-// Visual hierarchy steps from 1st → 5th, then everyone else lands on the
-// default tier. Each step shrinks the rank/name/score type sizes and the
-// row padding so the top of the board reads as a clear ladder.
-interface RowTier {
-  rankFs: number
-  nameFs: number
-  scoreFs: number
-  padY: number
-  rankWidth: number
-}
-
-const DEFAULT_TIER: RowTier = { rankFs: 9, nameFs: 9, scoreFs: 10, padY: 10, rankWidth: 44 }
-
-const RANK_TIERS: readonly RowTier[] = [
-  { rankFs: 18, nameFs: 14, scoreFs: 18, padY: 24, rankWidth: 64 }, // 1st
-  { rankFs: 12, nameFs: 10, scoreFs: 12, padY: 14, rankWidth: 44 }, // 2nd
-  { rankFs: 11, nameFs: 10, scoreFs: 11, padY: 13, rankWidth: 44 }, // 3rd
-  { rankFs: 10, nameFs: 9, scoreFs: 11, padY: 12, rankWidth: 44 }, // 4th
-  DEFAULT_TIER, // 5th — same dimensions as default, ends the visual ladder
-]
-
-function tierFor(rank: number): RowTier {
-  return rank >= 1 && rank <= RANK_TIERS.length
-    ? RANK_TIERS[rank - 1]
-    : DEFAULT_TIER
-}
+// Every row uses the same name/score/padding. Only the rank label on the
+// #1 row is bumped up so the leader visibly pops without making the whole
+// row taller than the rest.
+const ROW_NAME_FS = 9
+const ROW_SCORE_FS = 10
+const ROW_PAD_Y = 10
+const DEFAULT_RANK_FS = 9
+const DEFAULT_RANK_WIDTH = 44
+const FIRST_RANK_FS = 16
+const FIRST_RANK_WIDTH = 60
 
 export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
   // URL field hidden — unverified user-entered URLs are an injection /
   // phishing vector. Re-enable once URL verification is in place.
-  const tier = tierFor(entry.rank)
+  const isFirst = entry.rank === 1
   const isPodium = entry.rank <= 3
   const rankColor = isPodium ? BRAND_LIME : 'rgba(255,255,255,0.55)'
+  const rankFs = isFirst ? FIRST_RANK_FS : DEFAULT_RANK_FS
+  const rankWidth = isFirst ? FIRST_RANK_WIDTH : DEFAULT_RANK_WIDTH
 
   return (
     <div
@@ -57,7 +43,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        padding: `${tier.padY}px 16px`,
+        padding: `${ROW_PAD_Y}px 16px`,
         borderBottom: '1px solid rgba(255,255,255,0.08)',
         maxWidth: 500,
         margin: '0 auto',
@@ -67,9 +53,9 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
       {/* Rank */}
       <span
         style={{
-          fontSize: tier.rankFs,
+          fontSize: rankFs,
           fontWeight: 700,
-          width: tier.rankWidth,
+          width: rankWidth,
           textAlign: 'right',
           color: rankColor,
           flexShrink: 0,
@@ -84,7 +70,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: tier.nameFs,
+            fontSize: ROW_NAME_FS,
             fontFamily: PIXEL_FONT,
             letterSpacing: 2,
             color: '#FFFFFF',
@@ -100,7 +86,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
       {/* Score */}
       <span
         style={{
-          fontSize: tier.scoreFs,
+          fontSize: ROW_SCORE_FS,
           letterSpacing: 2,
           color: isPodium ? BRAND_LIME : '#FFFFFF',
           whiteSpace: 'nowrap',
