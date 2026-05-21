@@ -25,15 +25,16 @@ interface RowTier {
   nameFs: number
   scoreFs: number
   padY: number
+  rankWidth: number
 }
 
-const DEFAULT_TIER: RowTier = { rankFs: 9, nameFs: 9, scoreFs: 10, padY: 10 }
+const DEFAULT_TIER: RowTier = { rankFs: 9, nameFs: 9, scoreFs: 10, padY: 10, rankWidth: 44 }
 
 const RANK_TIERS: readonly RowTier[] = [
-  { rankFs: 13, nameFs: 11, scoreFs: 13, padY: 16 }, // 1st
-  { rankFs: 12, nameFs: 10, scoreFs: 12, padY: 14 }, // 2nd
-  { rankFs: 11, nameFs: 10, scoreFs: 11, padY: 13 }, // 3rd
-  { rankFs: 10, nameFs: 9, scoreFs: 11, padY: 12 }, // 4th
+  { rankFs: 18, nameFs: 14, scoreFs: 18, padY: 24, rankWidth: 64 }, // 1st
+  { rankFs: 12, nameFs: 10, scoreFs: 12, padY: 14, rankWidth: 44 }, // 2nd
+  { rankFs: 11, nameFs: 10, scoreFs: 11, padY: 13, rankWidth: 44 }, // 3rd
+  { rankFs: 10, nameFs: 9, scoreFs: 11, padY: 12, rankWidth: 44 }, // 4th
   DEFAULT_TIER, // 5th — same dimensions as default, ends the visual ladder
 ]
 
@@ -68,7 +69,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
         style={{
           fontSize: tier.rankFs,
           fontWeight: 700,
-          width: 44,
+          width: tier.rankWidth,
           textAlign: 'right',
           color: rankColor,
           flexShrink: 0,
