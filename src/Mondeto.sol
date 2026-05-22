@@ -12,7 +12,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     // --- Constants ---
     uint256 public constant HALVING_TIME = 30 days;
-    uint256 public constant DEFAULT_FEE_RATE = 300; // 3% in basis points
+    uint256 public constant DEFAULT_FEE_RATE = 500; // 5% in basis points
 
     // --- Immutables (set in constructor, baked into implementation bytecode) ---
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
@@ -377,6 +377,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         initialPrice = _initialPrice;
     }
 
+    /// @param _feeRate Fee rate in basis points (10000 = 100%, 100 = 1%).
     function setFeeRate(uint256 _feeRate) external onlyOwner {
         if (_feeRate > 10000) revert InvalidFeeRate();
         feeRate = _feeRate;
