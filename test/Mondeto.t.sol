@@ -25,6 +25,8 @@ contract MondetoTest is Test {
     address public alice = address(0xA11CE);
     address public bob = address(0xB0B);
 
+    event FeeRateUpdated(uint256 feeRate);
+
     uint256 public constant INITIAL_PRICE = 100_000; // 0.10 USDT
     uint256 public constant MIN_PRICE = 1; // 0.000001 USDT
     uint256 public constant INITIAL_FEE_RATE = 500; // 5% in basis points
@@ -347,7 +349,9 @@ contract MondetoTest is Test {
     }
 
     function test_setFeeRate() public {
-        // Owner sets to 500 (5%)
+        // Owner sets to 500 (5%) and the change is logged
+        vm.expectEmit(false, false, false, true);
+        emit FeeRateUpdated(500);
         mondeto.setFeeRate(500);
         assertEq(mondeto.feeRate(), 500);
 

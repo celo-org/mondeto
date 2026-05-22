@@ -66,6 +66,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     event ProfileUpdated(address indexed user, uint24 color, bytes label, bytes url);
     event AcceptedTokenAdded(address indexed token, uint8 decimals);
     event AcceptedTokenRemoved(address indexed token);
+    event FeeRateUpdated(uint256 feeRate);
 
     // --- Errors ---
     error InvalidPixelId(uint256 id);
@@ -453,6 +454,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     function setFeeRate(uint256 _feeRate) external onlyOwner {
         if (_feeRate > 10000) revert InvalidFeeRate();
         feeRate = _feeRate;
+        emit FeeRateUpdated(_feeRate);
     }
 
     // --- Internal ---
