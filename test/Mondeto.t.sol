@@ -346,20 +346,6 @@ contract MondetoTest is Test {
         mondeto.withdraw(address(usdt), alice, 1_000e6);
     }
 
-    function test_setInitialPrice() public {
-        mondeto.setInitialPrice(200_000);
-        assertEq(mondeto.initialPrice(), 200_000);
-
-        // Price of unowned pixel should now reflect new initial price
-        assertEq(mondeto.priceOf(0, 0), 200_000);
-    }
-
-    function test_setInitialPriceRevertsForNonOwner() public {
-        vm.prank(alice);
-        vm.expectRevert();
-        mondeto.setInitialPrice(200_000);
-    }
-
     function test_setFeeRate() public {
         // Owner sets to 500 (5%)
         mondeto.setFeeRate(500);

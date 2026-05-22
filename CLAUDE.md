@@ -42,7 +42,7 @@ The actual price linearly interpolates between adjacent discrete price levels wi
 
 **What this means economically**: Each sale doubles the price. Over each `HALVING_TIME` (currently 182 days) without a sale, the price gradually halves. A pixel bought once (saleCount=1) returns to `initialPrice` after one epoch, then keeps decaying. This creates a natural "use it or lose it" pressure — land you buy will decay in value toward `minPrice` if nobody re-buys it.
 
-**`setInitialPrice` is retroactive**: Changing `initialPrice` changes the price of ALL pixels instantly, since it's the base of every price calculation. This is intentional but dangerous — use with care.
+**`initialPrice` is fixed at deployment**: Set once in `initialize()` and never changeable afterward — there is deliberately no setter. Since `initialPrice` is the base of every pixel's price, a setter would retroactively reprice the entire map out from under existing owners. To change pricing, deploy a fresh contract.
 
 **saleCount is uint8**: Saturates at 255. This is fine economically — at saleCount 128 with epoch 0, the price would be `initialPrice * 2^128`, an astronomically large number that nobody would pay.
 

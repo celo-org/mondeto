@@ -449,10 +449,6 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         emit AcceptedTokenRemoved(token);
     }
 
-    function setInitialPrice(uint256 _initialPrice) external onlyOwner {
-        initialPrice = _initialPrice;
-    }
-
     /// @param _feeRate Fee rate in basis points (10000 = 100%, 100 = 1%).
     function setFeeRate(uint256 _feeRate) external onlyOwner {
         if (_feeRate > 10000) revert InvalidFeeRate();
