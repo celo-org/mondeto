@@ -15,6 +15,7 @@ contract GasBench is Test {
 
     uint256 constant INITIAL_PRICE = 100_000;
     uint256 constant MIN_PRICE = 1;
+    uint256 constant INITIAL_FEE_RATE = 500;
 
     function setUp() public {
         usdt = new MockUSDT();
@@ -23,8 +24,8 @@ contract GasBench is Test {
         uint256[] memory mask = new uint256[](235);
         for (uint256 i; i < 235; ++i) mask[i] = type(uint256).max;
 
-        Mondeto impl = new Mondeto(300, 200);
-        bytes memory initData = abi.encodeCall(Mondeto.initialize, (address(usdt), INITIAL_PRICE, MIN_PRICE, mask));
+        Mondeto impl = new Mondeto(300, 200, 14 days);
+        bytes memory initData = abi.encodeCall(Mondeto.initialize, (address(usdt), INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, mask));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         mondeto = Mondeto(address(proxy));
 

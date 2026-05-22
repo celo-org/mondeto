@@ -10,10 +10,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    // --- Constants ---
-    uint256 public constant HALVING_TIME = 30 days;
-    uint256 public constant DEFAULT_FEE_RATE = 500; // 5% in basis points
-
     // --- Immutables (set in constructor, baked into implementation bytecode) ---
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     uint16 public immutable WIDTH;
@@ -23,6 +19,8 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     uint256 public immutable TOTAL_PIXELS;
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     uint256 public immutable LAND_MASK_LENGTH;
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    uint256 public immutable HALVING_TIME;
 
     // --- Structs ---
     struct PixelData {
@@ -62,11 +60,12 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     error InvalidFeeRate();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(uint16 _width, uint16 _height) {
+    constructor(uint16 _width, uint16 _height, uint256 _halvingTime) {
         WIDTH = _width;
         HEIGHT = _height;
         TOTAL_PIXELS = uint256(_width) * _height;
         LAND_MASK_LENGTH = (TOTAL_PIXELS + 255) / 256;
+        HALVING_TIME = _halvingTime;
         _disableInitializers();
     }
 
@@ -74,17 +73,19 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         address _usdt,
         uint256 _initialPrice,
         uint256 _minPrice,
+        uint256 _feeRate,
         uint256[] calldata _landMask
     ) external initializer {
         __Ownable_init(msg.sender);
 
         if (_landMask.length != LAND_MASK_LENGTH) revert InvalidMaskLength();
+        if (_feeRate > 10000) revert InvalidFeeRate();
 
         usdt = IERC20(_usdt);
         deployTimestamp = block.timestamp;
         initialPrice = _initialPrice;
         minPrice = _minPrice;
-        feeRate = DEFAULT_FEE_RATE;
+        feeRate = _feeRate;
 
         landMask = _landMask;
     }
@@ -385,7 +386,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     // --- Internal ---
 
-    function _price(uint8 saleCount, uint256 elapsed, uint256 _initialPrice, uint256 _minPrice) internal pure returns (uint256) {
+    function _price(uint8 saleCount, uint256 elapsed, uint256 _initialPrice, uint256 _minPrice) internal view returns (uint256) {
         uint256 epochStart = elapsed / HALVING_TIME;
         uint256 remainder = elapsed - epochStart * HALVING_TIME;
 

@@ -18,7 +18,7 @@ contract UpgradeScript is Script {
         vm.startBroadcast();
 
         // Deploy new implementation with same constructor args
-        Mondeto newImpl = new Mondeto(current.WIDTH(), current.HEIGHT());
+        Mondeto newImpl = new Mondeto(current.WIDTH(), current.HEIGHT(), current.HALVING_TIME());
         console.log("New implementation deployed at:", address(newImpl));
 
         // Upgrade proxy to new implementation
