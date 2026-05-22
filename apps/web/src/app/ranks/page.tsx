@@ -143,12 +143,14 @@ export default function RanksPage() {
         }}
       >
         {isLoading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '40%', gap: 8 }}>
-            <svg viewBox="0 0 24 24" width={28} height={28} fill="none" stroke="var(--text-muted)" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 2s linear infinite' }}>
-              <circle cx={12} cy={12} r={10} />
-              <path d="M2 12h20" />
-              <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-            </svg>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img
+              src="/brand/watermark.svg"
+              alt=""
+              width={48}
+              height={48}
+              style={{ animation: 'spin 2.4s linear infinite', display: 'block' }}
+            />
           </div>
         ) : hasOwned ? (
           <>
