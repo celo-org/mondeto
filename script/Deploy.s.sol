@@ -7,7 +7,7 @@ import {Mondeto} from "../src/Mondeto.sol";
 
 contract DeployScript is Script {
     function run() external {
-        address usdt = vm.envAddress("USDT_ADDRESS");
+        address[] memory tokens = vm.envAddress("ACCEPTED_TOKENS", ",");
         uint256 initialPrice = vm.envUint("INITIAL_PRICE");
         uint256 minPrice = vm.envUint("MIN_PRICE");
         uint256 halvingTime = vm.envUint("HALVING_TIME_DAYS") * 1 days;
@@ -28,7 +28,7 @@ contract DeployScript is Script {
         // Deploy proxy with land mask included in initialization
         bytes memory initData = abi.encodeCall(
             Mondeto.initialize,
-            (usdt, initialPrice, minPrice, feeRate, landMask)
+            (tokens, initialPrice, minPrice, feeRate, landMask)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         console.log("Proxy deployed at:", address(proxy));

@@ -25,7 +25,9 @@ contract GasBench is Test {
         for (uint256 i; i < 235; ++i) mask[i] = type(uint256).max;
 
         Mondeto impl = new Mondeto(300, 200, 14 days);
-        bytes memory initData = abi.encodeCall(Mondeto.initialize, (address(usdt), INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, mask));
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(usdt);
+        bytes memory initData = abi.encodeCall(Mondeto.initialize, (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, mask));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         mondeto = Mondeto(address(proxy));
 
@@ -43,7 +45,7 @@ contract GasBench is Test {
         uint256[] memory ids = new uint256[](n);
         for (uint256 i; i < n; ++i) ids[i] = i;
         vm.prank(alice);
-        mondeto.buyPixels(ids);
+        mondeto.buyPixels(ids, address(usdt));
     }
 
     function test_buyPixels_1() public { _buyN(1); }
@@ -58,7 +60,7 @@ contract GasBench is Test {
         uint256[] memory ids = new uint256[](100);
         for (uint256 i; i < 100; ++i) ids[i] = i;
         vm.prank(bob);
-        mondeto.buyPixels(ids);
+        mondeto.buyPixels(ids, address(usdt));
     }
 
     // ========== getPixelBatch ==========

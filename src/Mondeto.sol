@@ -5,6 +5,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
@@ -22,6 +23,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     uint256 public immutable HALVING_TIME;
 
+    /// @notice Decimal base in which initialPrice/minPrice and every _price() result are
+    ///         denominated. Each accepted token's transfer amount is scaled from this base
+    ///         to the token's own decimals, treating all accepted coins as 1:1.
+    uint8 public constant PRICE_DECIMALS = 6;
+
     // --- Structs ---
     struct PixelData {
         address owner;
@@ -34,8 +40,12 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         bytes url;
     }
 
+    struct TokenConfig {
+        bool accepted;
+        uint8 decimals;
+    }
+
     // --- State ---
-    IERC20 public usdt;
     uint256 public deployTimestamp;
     uint256 public initialPrice;
     uint256 public minPrice;
@@ -45,9 +55,17 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     uint256[] public landMask;
     uint256 public feeRate; // basis points (e.g. 300 = 3%); fee goes to contract treasury
 
+    // Accepted dollar stablecoins, all treated as 1:1. `tokenConfig` gives O(1) acceptance
+    // + decimals lookup; `acceptedTokens` enumerates the set for views/frontend.
+    mapping(address => TokenConfig) public tokenConfig;
+    address[] public acceptedTokens;
+
     // --- Events ---
-    event PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost);
+    /// @param totalCost paid amount in base PRICE_DECIMALS units (scale per-token by decimals)
+    event PixelsPurchased(address indexed buyer, address indexed token, uint256[] ids, uint256 totalCost);
     event ProfileUpdated(address indexed user, uint24 color, bytes label, bytes url);
+    event AcceptedTokenAdded(address indexed token, uint8 decimals);
+    event AcceptedTokenRemoved(address indexed token);
 
     // --- Errors ---
     error InvalidPixelId(uint256 id);
@@ -58,6 +76,10 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     error UrlTooLong();
     error InvalidMaskLength();
     error InvalidFeeRate();
+    error InvalidToken();
+    error NoTokens();
+    error TokenNotAccepted(address token);
+    error TokenAlreadyAccepted(address token);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint16 _width, uint16 _height, uint256 _halvingTime) {
@@ -70,7 +92,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     }
 
     function initialize(
-        address _usdt,
+        address[] calldata _tokens,
         uint256 _initialPrice,
         uint256 _minPrice,
         uint256 _feeRate,
@@ -80,19 +102,26 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
         if (_landMask.length != LAND_MASK_LENGTH) revert InvalidMaskLength();
         if (_feeRate > 10000) revert InvalidFeeRate();
+        if (_tokens.length == 0) revert NoTokens();
 
-        usdt = IERC20(_usdt);
         deployTimestamp = block.timestamp;
         initialPrice = _initialPrice;
         minPrice = _minPrice;
         feeRate = _feeRate;
 
         landMask = _landMask;
+
+        for (uint256 i; i < _tokens.length; ++i) {
+            _addAcceptedToken(_tokens[i]);
+        }
     }
 
     // --- Core ---
 
-    function buyPixels(uint256[] calldata ids) external nonReentrant {
+    function buyPixels(uint256[] calldata ids, address token) external nonReentrant {
+        TokenConfig memory tc = tokenConfig[token];
+        if (!tc.accepted) revert TokenNotAccepted(token);
+
         uint256 elapsed = block.timestamp - deployTimestamp;
         uint256 _feeRate = feeRate;
         uint256 totalCost;
@@ -161,15 +190,17 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
             unchecked { ++i; }
         }
 
-        // Execute transfers
+        // Execute transfers, scaling each aggregated (base-unit) amount to the chosen
+        // token's decimals. Scaling is linear, so per-recipient scaling == scaling the sum.
+        IERC20 t = IERC20(token);
         for (uint256 i; i < recipientCount;) {
             if (amounts[i] > 0) {
-                usdt.safeTransferFrom(msg.sender, recipients[i], amounts[i]);
+                t.safeTransferFrom(msg.sender, recipients[i], _scaleToToken(amounts[i], tc.decimals));
             }
             unchecked { ++i; }
         }
 
-        emit PixelsPurchased(msg.sender, ids, totalCost);
+        emit PixelsPurchased(msg.sender, token, ids, totalCost);
     }
 
     function updateProfile(uint24 color, string calldata label, string calldata url) external {
@@ -190,6 +221,12 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     /// @notice Returns the full land mask. Pixel ID `n` is land if bit `n % 256` of word `n / 256` is set.
     function getLandMask() external view returns (uint256[] memory) {
         return landMask;
+    }
+
+    /// @notice Returns the list of accepted stablecoins. All are treated as 1:1; read each
+    ///         token's own decimals()/symbol() client-side.
+    function getAcceptedTokens() external view returns (address[] memory) {
+        return acceptedTokens;
     }
 
     function currentEpoch() public view returns (uint256) {
@@ -370,8 +407,28 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     // --- Admin ---
 
-    function withdraw(address to, uint256 amount) external onlyOwner {
-        usdt.safeTransfer(to, amount);
+    /// @param amount in the token's own native units (not PRICE_DECIMALS base units).
+    function withdraw(address token, address to, uint256 amount) external onlyOwner {
+        IERC20(token).safeTransfer(to, amount);
+    }
+
+    function addAcceptedToken(address token) external onlyOwner {
+        _addAcceptedToken(token);
+    }
+
+    function removeAcceptedToken(address token) external onlyOwner {
+        if (!tokenConfig[token].accepted) revert TokenNotAccepted(token);
+        delete tokenConfig[token];
+
+        uint256 len = acceptedTokens.length;
+        for (uint256 i; i < len; ++i) {
+            if (acceptedTokens[i] == token) {
+                acceptedTokens[i] = acceptedTokens[len - 1];
+                acceptedTokens.pop();
+                break;
+            }
+        }
+        emit AcceptedTokenRemoved(token);
     }
 
     function setInitialPrice(uint256 _initialPrice) external onlyOwner {
@@ -411,6 +468,22 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
             uint256 p = _initialPrice >> shift;
             return p < _minPrice ? _minPrice : p;
         }
+    }
+
+    function _addAcceptedToken(address token) internal {
+        if (token == address(0)) revert InvalidToken();
+        if (tokenConfig[token].accepted) revert TokenAlreadyAccepted(token);
+        uint8 dec = IERC20Metadata(token).decimals(); // reverts if token lacks decimals()
+        tokenConfig[token] = TokenConfig({accepted: true, decimals: dec});
+        acceptedTokens.push(token);
+        emit AcceptedTokenAdded(token, dec);
+    }
+
+    /// @notice Scales a base PRICE_DECIMALS amount to a token's own decimals (1:1 value).
+    ///         Scale-up is exact; scale-down (sub-PRICE_DECIMALS tokens) truncates dust.
+    function _scaleToToken(uint256 baseAmount, uint8 dec) internal pure returns (uint256) {
+        if (dec >= PRICE_DECIMALS) return baseAmount * (10 ** (uint256(dec) - PRICE_DECIMALS));
+        return baseAmount / (10 ** (PRICE_DECIMALS - uint256(dec)));
     }
 
     function _isLand(uint256 id) internal view returns (bool) {
