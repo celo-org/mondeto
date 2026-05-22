@@ -17,14 +17,14 @@
 
 ## Sample transactions (mainnet)
 
-For the "Transaction Samples" submission field. Per MiniPay: *"for every user-facing method your app uses, provide a sample transaction link on Celoscan."* `withdraw` is owner-only and not user-facing, so it's **not required**.
+For the "Transaction Samples" submission field. Per MiniPay: *"for every user-facing method your app uses, provide a sample transaction link on Celoscan."* `withdraw` is owner-only and not user-facing, so it's **not required** — included anyway for completeness.
 
 | Method | User-facing? | Tx Hash |
 |--------|---|---------|
 | `approve` (USDT → Mondeto) | yes | https://celoscan.io/tx/0xc47b7f8db12b33482b5de0129fc1da66f7b6cb45e56d1d16954ba7e0532bf4d5 |
 | `buyPixels` | yes | https://celoscan.io/tx/0xbf65cbfbc2635e80087654688a8a3c5d4da763502a548e6cdf55d9df833cba96 |
 | `updateProfile` | yes | https://celoscan.io/tx/0x7084222577f1b681612f047d4a4a4384738b9d0bff92a787b69cd6c0dd2836b2 |
-| `withdraw` | no (owner-only) | not required by MiniPay |
+| `withdraw` | no (owner-only) | https://celoscan.io/tx/0xc5174892db368404997ad1b58093d6f68dbccd9a975f4ffd674ca8dbc8897f40 |
 
 ## URL / origin manifest
 
@@ -55,7 +55,7 @@ submitting):
 - [x] Profanity filter on user-entered names (obscenity package)
 - [x] Custom on-theme 404 with a way back home (no dead ends in the WebView)
 - [x] All contracts verified on Celoscan
-- [x] Sample tx hashes for every user-facing method (3 of 3; `withdraw` is owner-only and not required)
+- [x] Sample tx hashes for every user-facing method (3 of 3; `withdraw` owner-only sample included for completeness)
 - [x] Redirects to Top up (MiniPay deposit deeplink) on insufficient balance
 - [x] In-app support link (t.me/mondetoSupport)
 - [x] ToS + Privacy linked in-app
