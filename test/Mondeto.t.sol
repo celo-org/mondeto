@@ -633,6 +633,40 @@ contract MondetoTest is Test {
         assertEq(cusd.balanceOf(owner) - balBefore, amount);
     }
 
+    function test_withdrawAll() public {
+        // Treasury accrues balances across two different accepted tokens.
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt)); // INITIAL_PRICE of USDT (6 dec)
+        uint256[] memory ids2 = new uint256[](1);
+        ids2[0] = 1;
+        vm.prank(alice);
+        mondeto.buyPixels(ids2, address(cusd)); // INITIAL_PRICE * 1e12 of cUSD (18 dec)
+
+        uint256 usdtExpected = INITIAL_PRICE;
+        uint256 cusdExpected = INITIAL_PRICE * 1e12;
+        assertEq(usdt.balanceOf(address(mondeto)), usdtExpected);
+        assertEq(cusd.balanceOf(address(mondeto)), cusdExpected);
+
+        uint256 usdtBefore = usdt.balanceOf(owner);
+        uint256 cusdBefore = cusd.balanceOf(owner);
+        mondeto.withdrawAll(owner);
+
+        // Every accepted token's full balance moved to owner; contract is drained.
+        assertEq(usdt.balanceOf(owner) - usdtBefore, usdtExpected);
+        assertEq(cusd.balanceOf(owner) - cusdBefore, cusdExpected);
+        assertEq(usdt.balanceOf(address(mondeto)), 0);
+        assertEq(usdc.balanceOf(address(mondeto)), 0);
+        assertEq(cusd.balanceOf(address(mondeto)), 0);
+    }
+
+    function test_withdrawAllOnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        mondeto.withdrawAll(alice);
+    }
+
     // ========== Fuzz ==========
 
     function testFuzz_priceNeverReverts(uint8 saleCount, uint64 timeElapsed) public {

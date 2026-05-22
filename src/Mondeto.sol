@@ -412,6 +412,18 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         IERC20(token).safeTransfer(to, amount);
     }
 
+    /// @notice Sweeps the full contract balance of every accepted token to `to`.
+    ///         Note: only sweeps currently-accepted tokens — a removed token's leftover
+    ///         balance must be pulled with withdraw().
+    function withdrawAll(address to) external onlyOwner {
+        uint256 len = acceptedTokens.length;
+        for (uint256 i; i < len; ++i) {
+            IERC20 token = IERC20(acceptedTokens[i]);
+            uint256 bal = token.balanceOf(address(this));
+            if (bal > 0) token.safeTransfer(to, bal);
+        }
+    }
+
     function addAcceptedToken(address token) external onlyOwner {
         _addAcceptedToken(token);
     }
