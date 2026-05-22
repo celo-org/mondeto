@@ -124,6 +124,8 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
         uint256 elapsed = block.timestamp - deployTimestamp;
         uint256 _feeRate = feeRate;
+        uint256 _initialPrice = initialPrice;
+        uint256 _minPrice = minPrice;
         uint256 totalCost;
 
         // Index 0 is reserved for address(this) (unowned pixel proceeds + fees).
@@ -154,7 +156,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
             PixelData storage px = pixels[id];
             address prevOwner = px.owner;
             uint8 sc = px.saleCount;
-            uint256 price = _price(sc, elapsed, initialPrice, minPrice);
+            uint256 price = _price(sc, elapsed, _initialPrice, _minPrice);
             totalCost += price;
 
             if (prevOwner == address(0)) {
@@ -181,10 +183,12 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                 }
             }
 
-            // Update pixel state
-            px.owner = msg.sender;
+            // Update pixel state. owner and saleCount share one slot, so write the whole
+            // struct at once (single SSTORE) rather than two read-modify-write field stores.
             if (sc < 255) {
-                px.saleCount = sc + 1;
+                pixels[id] = PixelData({owner: msg.sender, saleCount: sc + 1});
+            } else {
+                px.owner = msg.sender;
             }
 
             unchecked { ++i; }
@@ -294,8 +298,10 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     function getPixelBatch(uint16 x, uint16 y, uint16 w, uint16 h) external view returns (bytes memory) {
         if (x + w > WIDTH || y + h > HEIGHT) revert OutOfBounds();
 
-        // Over-allocate for max possible pixels, trim after filling
-        bytes memory result = new bytes(uint256(w) * h * 24);
+        // Over-allocate for max possible pixels, plus 32 bytes of slack: each record is
+        // written with a 32-byte mstore (8 bytes wider than the 24-byte record), so the
+        // final write must stay within the buffer. Trimmed to the real length after filling.
+        bytes memory result = new bytes(uint256(w) * h * 24 + 32);
         uint256 offset;
         address cachedOwner;
         uint24 cachedColor;
@@ -334,7 +340,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                         }
                         clr = cachedColor;
                     }
-                    assembly {
+                    assembly ("memory-safe") {
                         let ptr := add(add(result, 32), offset)
                         mstore(ptr, or(or(shl(96, owner), shl(88, sc)), shl(64, clr)))
                     }
@@ -346,7 +352,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         }
 
         // Trim to actual size
-        assembly { mstore(result, offset) }
+        assembly ("memory-safe") { mstore(result, offset) }
         return result;
     }
 
