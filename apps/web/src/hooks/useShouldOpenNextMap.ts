@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { usePublicClient } from 'wagmi'
 import type { PublicClient } from 'viem'
-import { MONDETO_ADDRESS, MONDETO_ABI } from '@/lib/contract'
+import { MONDETO_ABI } from '@/lib/contract'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
+import { getRevealedMaps } from '@/lib/maps/contracts'
 import { shouldOpenNextMap } from '@/lib/maps/assignment'
 import type {
   MapId,
@@ -78,8 +79,7 @@ interface RevealedMapAddr {
 }
 
 function getRevealedMapsFallback(): RevealedMapAddr[] {
-  // when #32 lands, this reads from getRevealedMaps()
-  return [{ id: 0, address: MONDETO_ADDRESS }]
+  return getRevealedMaps().map((m) => ({ id: m.id, address: m.address }))
 }
 
 /**
@@ -151,27 +151,12 @@ async function fetchSnapshotForMap(
   publicClient: PublicClient,
   address: `0x${string}`,
 ): Promise<Array<{ owner: string; currentPrice: bigint }>> {
-  // fetchAllPixelsFromContract is hardwired to MONDETO_ADDRESS today, so we
-  // only use it when address === MONDETO_ADDRESS. When PR #32 lands and
-  // contractReads is parameterized by address, this branch goes away.
+  // contractReads is now parameterized by address, so multi-map works
+  // through the same call path.
   const readContract = publicClient.readContract.bind(publicClient) as Parameters<
     typeof fetchAllPixelsFromContract
   >[0]
-  if (address.toLowerCase() === MONDETO_ADDRESS.toLowerCase()) {
-    return fetchAllPixelsFromContract(readContract)
-  }
-  // Generic fallback path (used when address != MONDETO_ADDRESS, i.e. after
-  // PR #32 makes multiple maps real). Replicate fetchAllPixelsFromContract.
-  const batch = (await publicClient.readContract({
-    address,
-    abi: MONDETO_ABI,
-    functionName: 'getPixelBatch',
-    args: [0, 0, WIDTH, 100],
-  })) as `0x${string}`
-  // Best-effort decode: when more maps exist we expect a shared adapter.
-  // For now return a stub so the type checker is happy.
-  void batch
-  return []
+  return fetchAllPixelsFromContract(readContract, address)
 }
 
 export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
