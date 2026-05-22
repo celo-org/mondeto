@@ -2,7 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import { useAccount, useSwitchChain } from "wagmi";
-import { celo } from "viem/chains";
+import { celoSepolia } from "viem/chains";
+
+// Test build: the contract v2 test deployment lives on Celo Sepolia.
+// Swap this back to `celo` once the v2 contract is redeployed on
+// Celo mainnet (and update the address in `lib/maps/contracts.ts`).
+const TARGET_CHAIN = celoSepolia;
 
 /**
  * Forces every connected wallet onto Celo mainnet.
@@ -24,7 +29,7 @@ export function ChainGuard() {
 
   useEffect(() => {
     if (!isConnected || chainId === undefined) return;
-    if (chainId === celo.id) {
+    if (chainId === TARGET_CHAIN.id) {
       lastPromptedChain.current = null;
       return;
     }
@@ -32,7 +37,7 @@ export function ChainGuard() {
     if (lastPromptedChain.current === chainId) return;
 
     lastPromptedChain.current = chainId;
-    switchChain({ chainId: celo.id });
+    switchChain({ chainId: TARGET_CHAIN.id });
   }, [isConnected, chainId, isPending, switchChain]);
 
   return null;
