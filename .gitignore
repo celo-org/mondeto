@@ -12,5 +12,7 @@ lib/
 docs/
 !docs/api.md
 
-# Dotenv file
+# Dotenv files (use deploy.env.example as a template)
 .env
+*.env
+!*.env.example
