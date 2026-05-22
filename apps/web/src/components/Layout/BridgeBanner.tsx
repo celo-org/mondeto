@@ -55,13 +55,12 @@ export default function BridgeBanner() {
         color: '#000000',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '4px 10px',
-        gap: 8,
+        justifyContent: 'center',
+        padding: '4px 32px',
         fontFamily: "'Press Start 2P', monospace",
       }}
     >
-      <span style={{ fontSize: 7, letterSpacing: 1 }}>
+      <span style={{ fontSize: 7, letterSpacing: 1, textAlign: 'center' }}>
         no stables on celo yet —{' '}
         <a
           href={SQUID_URL}
@@ -76,6 +75,10 @@ export default function BridgeBanner() {
         onClick={onDismiss}
         aria-label="dismiss"
         style={{
+          position: 'absolute',
+          right: 4,
+          top: '50%',
+          transform: 'translateY(-50%)',
           background: 'transparent',
           border: 'none',
           color: '#000',

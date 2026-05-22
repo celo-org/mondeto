@@ -20,6 +20,10 @@ vi.mock('wagmi', () => ({
     waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: 'success' }),
     simulateContract: vi.fn(),
   }),
+  // useStablecoinBalance internally calls useBalance — return a benign shape
+  // so the hook returns a preferred=null state. We only test idle-state
+  // helpers below; the execute() path is exercised via integration.
+  useBalance: () => ({ data: undefined, isLoading: false }),
 }))
 
 describe('useBuyPixels', () => {
