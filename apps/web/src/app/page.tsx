@@ -428,7 +428,6 @@ export default function Home() {
           ref={canvasRef}
           pixelData={pixelDataRef.current}
           mapView={mapView}
-          isDark={isDark}
           selectedIds={selectedIds}
           onTogglePixel={handleTogglePixel}
           onAddPixel={handleAddPixel}

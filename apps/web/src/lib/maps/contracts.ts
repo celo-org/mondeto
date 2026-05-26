@@ -1,68 +1,115 @@
 /**
  * Multi-map contract registry.
  *
- * Mondeto launches with one live map (id 0). The other slots are pre-deployed
- * but hidden until ops flips `revealed` (eventually via the Vercel dashboard
- * data editor — see ADR-2). Until then, only revealed maps surface in the UI.
+ * Mondeto runs N identical 170×100 map contracts. The "active map" — the one
+ * new wallets get assigned to — auto-advances when the current active map's
+ * average pixel price crosses NEXT_PUBLIC_MAP_THRESHOLD_USD (default $2). See
+ * `useShouldOpenNextMap` for the threshold read and `activeMapId()` in
+ * `assignment.ts` for the pointer logic. Existing wallets keep their sticky
+ * home (persisted to localStorage); only new wallets follow the pointer.
  *
- * The single-map flow is preserved: when only one map is revealed, the UI
- * shell hides the map switcher entirely and behaves exactly as before.
+ * Per-environment split:
+ *  - production (default): the live Celo mainnet contracts new users get.
+ *  - staging: a separate registry that points to the previous mainnet contract
+ *    (for testing on mainnet without polluting prod) and the Celo Sepolia
+ *    contract (for testnet runs). Staging picks per-chain based on the
+ *    wallet's connected chain; ChainGuard is relaxed there to allow both.
+ *
+ * The `revealed: false` flag is intentionally kept even though every current
+ * entry is `revealed: true`. It's the kill switch for future paid-access maps
+ * and for emergency takedowns; cheap to retain.
  */
 
+import { celo, celoSepolia } from 'viem/chains'
 import type { MapId } from './types'
+
+export type ChainId = typeof celo.id | typeof celoSepolia.id
 
 export interface MapContract {
   id: MapId
   address: `0x${string}`
-  /** When false, this map is hidden from the UI even if pre-deployed. */
+  chainId: ChainId
+  /** When false, hidden from the UI even if pre-deployed. Reserved for
+   *  future paid-access maps / emergency takedowns. All current entries
+   *  ship with `true`. */
   revealed: boolean
 }
 
-/**
- * Source of truth for which map id maps to which deployed contract.
- *
- * Add new entries here as the smart-contract developer deploys more maps;
- * flip `revealed` to true when ops opens them to players. Map ids must be
- * dense (0, 1, 2, ...) so hash-balanced assignment lands on a valid slot.
- */
-// Map 0 currently points at the v2 multi-token test deployment on
-// Celo Sepolia. The contract surface is the new MONDETO_ABI in
-// `lib/contract.ts` — `buyPixels(ids, token)`, multi-stable accepted
-// tokens, the indexed `token` field on `PixelsPurchased`, etc. Swap
-// this address to the mainnet deployment once the v2 contract is
-// redeployed to Celo mainnet.
-export const MAP_CONTRACTS: readonly MapContract[] = [
-  { id: 0, address: '0xc71e444c5339749c1c3067B62AacbfeE7840c934', revealed: true },
-  // { id: 1, address: '0x...', revealed: false },
-  // { id: 2, address: '0x...', revealed: false },
-  // { id: 3, address: '0x...', revealed: false },
-  // { id: 4, address: '0x...', revealed: false },
-  // { id: 5, address: '0x...', revealed: false },
+// Production: three v2 mainnet deployments on Celo. Add new entries
+// here as the SC dev deploys them — the active-pointer mechanism routes
+// new wallets to the next un-filled map automatically; no other code
+// change is required per add.
+const PRODUCTION_MAPS: readonly MapContract[] = [
+  { id: 0, address: '0xf825914Fa66F82f603310a1a7146C0F64A382298', chainId: celo.id, revealed: true },
+  { id: 1, address: '0xB58dA361F816af8F7C996864a66cd1e12C35D0f1', chainId: celo.id, revealed: true },
+  { id: 2, address: '0x198c60A8515cdA74Ae82c8D3D56d3683e2713599', chainId: celo.id, revealed: true },
 ] as const
 
-/** Currently revealed maps, in stable id order. */
-export function getRevealedMaps(): MapContract[] {
-  return MAP_CONTRACTS.filter((m) => m.revealed).sort((a, b) => a.id - b.id)
+const STAGING_MAPS: readonly MapContract[] = [
+  // Previous mainnet deployment — kept on staging so we can exercise the app
+  // against real on-chain state without affecting production users.
+  { id: 0, address: '0x7e68c4c7458895ec8ded5a44299e05d0a6d54780', chainId: celo.id, revealed: true },
+  // Celo Sepolia for testnet work.
+  { id: 0, address: '0xc71e444c5339749c1c3067B62AacbfeE7840c934', chainId: celoSepolia.id, revealed: true },
+] as const
+
+function isStaging(): boolean {
+  return (
+    typeof process !== 'undefined' &&
+    process.env.NEXT_PUBLIC_ENV === 'staging'
+  )
 }
 
 /**
- * Resolve a map id to its deployed contract address.
+ * Resolve the active registry for the current environment.
  *
- * Falls back to map 0 if the id is unknown or unrevealed — the single-map
- * flow then keeps working and we never accidentally send reads/writes to a
- * map players cannot see.
+ * Exported so tests can assert per-env behavior; runtime callers should use
+ * the chain-aware helpers below.
  */
-export function getContractByMapId(id: MapId): `0x${string}` {
-  const entry = MAP_CONTRACTS.find((m) => m.id === id && m.revealed)
-  if (entry) return entry.address
-  const fallback = MAP_CONTRACTS.find((m) => m.revealed)
-  if (!fallback) {
-    throw new Error('getContractByMapId: no revealed maps configured')
-  }
-  return fallback.address
+export function getRegistry(): readonly MapContract[] {
+  return isStaging() ? STAGING_MAPS : PRODUCTION_MAPS
 }
 
-/** Is this map id one of the currently revealed maps? */
-export function isRevealedMapId(id: MapId): boolean {
-  return MAP_CONTRACTS.some((m) => m.id === id && m.revealed)
+/**
+ * Maps visible on the given chain, in stable id order. Pass the wallet's
+ * connected chainId. Production users are forced to celo mainnet by
+ * ChainGuard, so this is just `chainId === celo.id` there.
+ */
+export function getMapsForChain(chainId: ChainId | undefined): MapContract[] {
+  const effective = chainId ?? celo.id
+  return getRegistry()
+    .filter((m) => m.chainId === effective && m.revealed)
+    .sort((a, b) => a.id - b.id)
+}
+
+/**
+ * Resolve a (mapId, chainId) pair to its deployed contract address.
+ *
+ * Falls back to the first revealed map for the chain if the id is unknown,
+ * keeping the single-map flow working when the registry is sparse.
+ */
+export function getContractByMapId(
+  id: MapId,
+  chainId?: ChainId,
+): `0x${string}` {
+  const list = getMapsForChain(chainId)
+  const entry = list.find((m) => m.id === id)
+  if (entry) return entry.address
+  if (list.length === 0) {
+    throw new Error('getContractByMapId: no revealed maps configured for chain')
+  }
+  return list[0].address
+}
+
+/** Is this (id, chainId) one of the currently revealed maps? */
+export function isRevealedMapId(id: MapId, chainId?: ChainId): boolean {
+  return getMapsForChain(chainId).some((m) => m.id === id)
+}
+
+/**
+ * Legacy alias for callers that haven't been chain-ified yet. Returns the
+ * mainnet list (or the active env's mainnet list). Prefer `getMapsForChain`.
+ */
+export function getRevealedMaps(): MapContract[] {
+  return getMapsForChain(celo.id)
 }

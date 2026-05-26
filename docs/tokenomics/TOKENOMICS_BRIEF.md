@@ -9,7 +9,7 @@
 ## Read this first — the contract mechanics
 
 **Repo**: `apps/contracts/` (subtree of the canonical Mondeto contract repo).
-**Live address**: `0x7e68c4c7458895ec8ded5a44299e05d0a6d54780` on Celo mainnet.
+**Live addresses**: see the [Deployments](../../README.md#deployments) section in the root README. Multiple identical map contracts on Celo mainnet.
 
 ### How pricing works
 
@@ -90,7 +90,7 @@ Model:
 ## Data sources
 
 ### On-chain (Celo mainnet)
-- Contract: `0x7e68c4c7458895ec8ded5a44299e05d0a6d54780`
+- Contracts: see [Deployments](../../README.md#deployments) in the root README. Iterate over all addresses in `MAP_CONTRACTS` for aggregate metrics.
 - Event: `PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost)` — has buyer, pixel ids, total in raw USDT (6 decimals)
 - View functions: `config()`, `feeRate()`, `priceOf(x,y)`, `pixels(id)` (returns owner + saleCount)
 - RPC: `https://forno.celo.org` (chunked queries — see `apps/web/src/hooks/useAnalytics.ts` for the working pattern)

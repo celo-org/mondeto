@@ -7,8 +7,11 @@ vi.mock('wagmi', () => ({
 }))
 
 vi.mock('@/lib/contract', () => ({
-  MONDETO_ADDRESS: '0x0000000000000000000000000000000000000000',
   MONDETO_ABI: [],
+}))
+
+vi.mock('@/lib/maps/contracts', () => ({
+  getContractByMapId: () => '0x0000000000000000000000000000000000000000',
 }))
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))

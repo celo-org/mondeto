@@ -71,7 +71,7 @@ export function decodePixelBatch(
  * Fetch all pixel data from the contract in one call.
  *
  * Callers MUST pass an explicit contract address — resolve it via
- * `getContractByMapId(currentMapId)` from `lib/maps/contracts`.
+ * `getContractByMapId(currentMapId)` from `@/lib/maps/contracts`.
  */
 export async function fetchAllPixelsFromContract(
   readContract: (args: { address: `0x${string}`; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }) => Promise<unknown>,

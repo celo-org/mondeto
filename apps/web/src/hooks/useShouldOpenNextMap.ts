@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePublicClient } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
 import type { PublicClient } from 'viem'
-import { MONDETO_ABI } from '@/lib/contract'
+import { celo } from 'viem/chains'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
-import { getRevealedMaps } from '@/lib/maps/contracts'
+import { getMapsForChain, type ChainId } from '@/lib/maps/contracts'
 import { shouldOpenNextMap } from '@/lib/maps/assignment'
 import type {
   MapId,
@@ -52,9 +52,10 @@ interface CachedShape {
  * Read the average-price-to-open-next-map threshold.
  *
  * Priority order:
- *   1. Agent A's settings store (when merged) — TODO: read from there.
- *   2. NEXT_PUBLIC_MAP_THRESHOLD_USD env override.
- *   3. Hardcoded $2 default per the launch plan.
+ *   1. NEXT_PUBLIC_MAP_THRESHOLD_USD env override (per-environment in Vercel).
+ *   2. Hardcoded $2 default per the launch plan.
+ *
+ * See `project_map_threshold_knob.md` in agent memory for tuning notes.
  */
 function readThresholdUsd(): number {
   const raw =
@@ -69,23 +70,7 @@ function readThresholdUsd(): number {
 }
 
 /**
- * Resolve the list of revealed maps. When PR #32 lands this should call
- * getRevealedMaps() from lib/maps/contracts.ts and return their addresses.
- * Until then we fall back to the single live address as map 0.
- */
-interface RevealedMapAddr {
-  id: MapId
-  address: `0x${string}`
-}
-
-function getRevealedMapsFallback(): RevealedMapAddr[] {
-  return getRevealedMaps().map((m) => ({ id: m.id, address: m.address }))
-}
-
-/**
  * Adapter: PixelView[] (row-major over the WIDTH×HEIGHT grid) -> PixelState[].
- * When Agent C's adapter PR lands we should import their shared adapter.
- * For now this small inline conversion does the job.
  */
 export function pixelViewsToStates(
   views: Array<{ owner: string; currentPrice: bigint }>,
@@ -104,8 +89,6 @@ export function pixelViewsToStates(
         v.owner && v.owner !== '0x0000000000000000000000000000000000000000'
           ? v.owner.toLowerCase()
           : null,
-      // contract returns USDT 6-decimals; assignment.ts averages currentPrice
-      // directly. We feed it the USD value so the threshold (also USD) matches.
       currentPrice: Number(v.currentPrice) / PIXEL_PRICE_USDT_DIVISOR,
       isLand: land,
     })
@@ -113,10 +96,6 @@ export function pixelViewsToStates(
   return out
 }
 
-/**
- * Compute per-map summary from a single map's pixel array.
- * Exposed for unit tests.
- */
 export function summarizeMap(
   mapId: MapId,
   pixels: PixelState[],
@@ -151,8 +130,6 @@ async function fetchSnapshotForMap(
   publicClient: PublicClient,
   address: `0x${string}`,
 ): Promise<Array<{ owner: string; currentPrice: bigint }>> {
-  // contractReads is now parameterized by address, so multi-map works
-  // through the same call path.
   const readContract = publicClient.readContract.bind(publicClient) as Parameters<
     typeof fetchAllPixelsFromContract
   >[0]
@@ -161,6 +138,7 @@ async function fetchSnapshotForMap(
 
 export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
   const publicClient = usePublicClient()
+  const { chainId } = useAccount()
   const [state, setState] = useState<ShouldOpenNextMapResult>({
     loading: true,
     error: null,
@@ -176,9 +154,11 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
 
     async function run() {
       const thresholdUsd = readThresholdUsd()
-      // Session cache.
+      const effectiveChain = (chainId ?? celo.id) as ChainId
+      const cacheKey = `${CACHE_KEY}:${effectiveChain}`
+
       try {
-        const cached = parseCache(sessionStorage.getItem(CACHE_KEY))
+        const cached = parseCache(sessionStorage.getItem(cacheKey))
         if (cached && cached.thresholdUsd === thresholdUsd) {
           if (!cancelled) {
             setState({
@@ -195,7 +175,7 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
       } catch {}
 
       try {
-        const maps = getRevealedMapsFallback()
+        const maps = getMapsForChain(effectiveChain)
         const snapshots: MapSnapshot[] = []
         const summaries: MapFillSummary[] = []
 
@@ -223,7 +203,7 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
           perMap: summaries,
         }
         try {
-          sessionStorage.setItem(CACHE_KEY, JSON.stringify(cached))
+          sessionStorage.setItem(cacheKey, JSON.stringify(cached))
         } catch {}
 
         if (cancelled) return
@@ -249,7 +229,7 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
     return () => {
       cancelled = true
     }
-  }, [publicClient])
+  }, [publicClient, chainId])
 
   return state
 }
