@@ -9,9 +9,7 @@ import {
   type ChainId,
   type MapContract,
 } from '@/lib/maps/contracts'
-import { activeMapId } from '@/lib/maps/assignment'
 import { memoryAssignmentStore } from '@/lib/maps/store'
-import { useShouldOpenNextMap } from '@/hooks/useShouldOpenNextMap'
 import type { MapId } from '@/lib/maps/types'
 
 const STORAGE_KEY = 'mondeto-current-map-id'
@@ -65,13 +63,20 @@ export interface UseMapsResult {
 /**
  * Multi-map state hook.
  *
- * - `homeMapId` is the user's permanent home. Read from localStorage first.
- *   On a first-ever visit it's computed via the active-pointer mechanism
- *   (`activeMapId(perMapPrices, threshold)`) so new wallets all land on the
- *   current frontier map. Once stored, it never moves on its own.
- * - `?ref=<map-id>` overrides on first visit (referral placement).
- * - `currentMapId` (the view, distinct from home) persists in localStorage so
- *   a browse-anywhere user returns to their last view.
+ * - `homeMapId` is the user's permanent home, persisted via
+ *   `memoryAssignmentStore` (localStorage). On a first-ever visit a wallet
+ *   gets placed on the lowest-id revealed map (or the `?ref=<id>` map if
+ *   that query param is present and valid). Once stored, it never moves.
+ * - `currentMapId` (the view, distinct from home) persists in localStorage
+ *   so a browse-anywhere user returns to their last view.
+ *
+ * Note: the price-threshold "active pointer" logic lives in
+ * `lib/maps/assignment.ts::activeMapId` and `useShouldOpenNextMap`. It is
+ * intentionally NOT wired up here yet — those hooks call into wagmi/Privy
+ * during render, which breaks static prerender for every page that mounts
+ * `ConnectButton` via `TopBar`. Bring it back when multi-map testing /
+ * sequential rollover lands and gate it behind a route that's already
+ * dynamic (e.g. /analytics).
  */
 export function useMaps(): UseMapsResult {
   const { address, chainId } = useAccount()
@@ -80,9 +85,6 @@ export function useMaps(): UseMapsResult {
     () => getMapsForChain(effectiveChain),
     [effectiveChain],
   )
-
-  // Per-map prices drive the active pointer for first-visit assignment.
-  const { perMap, thresholdUsd } = useShouldOpenNextMap()
 
   const homeMapId = useMemo<MapId | null>(() => {
     if (!address || revealedMaps.length === 0) return null
@@ -103,25 +105,11 @@ export function useMaps(): UseMapsResult {
       return existing
     }
 
-    // First visit: pick the active-pointer map. Fall back to the lowest id
-    // if per-map prices haven't loaded yet (avoids a flash of null/undefined).
-    let pick: MapId
-    if (perMap.length > 0) {
-      const visibleIds = new Set(revealedMaps.map((m) => m.id))
-      const known = perMap.filter((p) => visibleIds.has(p.mapId))
-      pick = known.length > 0
-        ? activeMapId(
-            known.map((p) => ({ id: p.mapId, avgPriceUsd: p.avgPriceUsd })),
-            thresholdUsd,
-          )
-        : revealedMaps[0].id
-    } else {
-      pick = revealedMaps[0].id
-    }
-
+    // First visit: drop new wallets on the lowest revealed map id.
+    const pick = revealedMaps[0].id
     memoryAssignmentStore.set(address, pick)
     return pick
-  }, [address, revealedMaps, perMap, thresholdUsd, effectiveChain])
+  }, [address, revealedMaps, effectiveChain])
 
   const [currentMapId, setCurrentMapIdState] = useState<MapId>(() => {
     const stored = readStoredMapId()
