@@ -1,4 +1,4 @@
-import { celo } from 'viem/chains'
+import { celoSepolia } from 'viem/chains'
 
 /**
  * The chain we read from for public (no-wallet) on-chain calls.
@@ -9,9 +9,10 @@ import { celo } from 'viem/chains'
  * — which keeps the map, leaderboard, and analytics queries working
  * for anonymous visitors.
  *
- * Flip the chain here in lockstep with the contract address and the
- * `ChainGuard` target whenever we move between mainnet and a testnet
- * test build.
+ * Test build: pinned to Celo Sepolia to match the v2 contract deployment
+ * at `0xc71e444c5339749c1c3067B62AacbfeE7840c934`. Flip this back to
+ * `celo` in lockstep with the contract address and the `ChainGuard`
+ * target once v2 redeploys to mainnet.
  */
-export const READ_CHAIN = celo
+export const READ_CHAIN = celoSepolia
 export const READ_CHAIN_ID = READ_CHAIN.id
