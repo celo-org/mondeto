@@ -4,19 +4,46 @@ export function pixelId(x: number, y: number): number {
   return y * WIDTH + x
 }
 
-// Approximate (lat, lng) → grid (x, y).
+// (lat, lng) → grid (x, y) on the Equal Earth projected world map.
 //
-// The on-chain land mask is Equal Earth projected (Šavrič et al. 2018), but
-// implementing the full inverse here would be overkill for "zoom roughly to
-// the player's location". Simple equirectangular gets within a few pixels
-// at temperate latitudes — close enough that a 4× zoom lands on the user's
-// continent / country. If precision becomes important later, swap this for
-// the full Equal Earth inverse.
+// The on-chain land mask is generated with the Equal Earth projection
+// (Šavrič et al. 2018), so a naive equirectangular mapping lands several
+// pixels off true land at temperate latitudes — about 7 rows south for a
+// Portugal-latitude point on the 170×100 grid, dropping the geo auto-zoom
+// into the ocean. Use the published forward formula so the projection
+// matches what the contract uses.
+//
+// Polynomial coefficients + auxiliary scalar from the original paper.
+const EE_A1 = 1.340264
+const EE_A2 = -0.081106
+const EE_A3 = 0.000893
+const EE_A4 = 0.003796
+const EE_M = Math.sqrt(3) / 2
+// Half-extents of the projection at the world bounds: ey peaks at
+// (±90°, 0), ex peaks at (0°, ±180°). Computed once from the formula.
+const EE_EY_MAX = 1.3169339780812332
+const EE_EX_MAX = 2.7062853725620867
+
 export function geoToPixel(latDeg: number, lngDeg: number): { x: number; y: number } {
   const lat = Math.max(-90, Math.min(90, latDeg))
   const lng = Math.max(-180, Math.min(180, lngDeg))
-  const x = Math.round(((lng + 180) / 360) * WIDTH)
-  const y = Math.round(((90 - lat) / 180) * HEIGHT)
+  const phi = (lat * Math.PI) / 180
+  const lambda = (lng * Math.PI) / 180
+
+  const theta = Math.asin(EE_M * Math.sin(phi))
+  const t2 = theta * theta
+  const t6 = t2 * t2 * t2
+  const ey = theta * (EE_A1 + EE_A2 * t2 + t6 * (EE_A3 + EE_A4 * t2))
+  const ex =
+    (lambda * Math.cos(theta)) /
+    (EE_M * (EE_A1 + 3 * EE_A2 * t2 + t6 * (7 * EE_A3 + 9 * EE_A4 * t2)))
+
+  // Map projection coords into the WIDTH×HEIGHT pixel grid. y is flipped
+  // because pixel-y=0 is the top of the grid (north pole) and ey is
+  // positive going north.
+  const x = Math.round(((ex + EE_EX_MAX) / (2 * EE_EX_MAX)) * (WIDTH - 1))
+  const y = Math.round(((EE_EY_MAX - ey) / (2 * EE_EY_MAX)) * (HEIGHT - 1))
+
   return {
     x: Math.max(0, Math.min(WIDTH - 1, x)),
     y: Math.max(0, Math.min(HEIGHT - 1, y)),
