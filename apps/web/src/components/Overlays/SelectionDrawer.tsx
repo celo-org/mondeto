@@ -250,7 +250,7 @@ export default function SelectionDrawer({
                       const prof = profilesMap?.get(group.owner.toLowerCase())
                       const name = prof?.label || group.label || (isUnowned ? 'unowned' : generateUsername(group.owner))
                       return (
-                        <div style={{ fontSize: 8, color: isUnowned ? 'var(--text-muted)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: 8, color: isUnowned ? 'var(--text-muted)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase' }}>
                           {name}
                         </div>
                       )
@@ -258,7 +258,7 @@ export default function SelectionDrawer({
                   </div>
 
                   {/* Count + price */}
-                  <span style={{ fontSize: 7, color: 'var(--text-muted)', flexShrink: 0 }}>{group.count} px</span>
+                  <span style={{ fontSize: 7, color: 'var(--text-muted)', flexShrink: 0, textTransform: 'uppercase' }}>{group.count} px</span>
                   <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text)', flexShrink: 0 }}>{formatUSDT(group.price)}</span>
 
                   {/* Remove button */}
