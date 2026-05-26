@@ -49,11 +49,7 @@ function MiniPayAutoConnect({ children }: { children: React.ReactNode }) {
   const { connect, connectors } = useConnect();
 
   useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      window.ethereum &&
-      (window.ethereum as any).isMiniPay
-    ) {
+    if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
       const injectedConnector = connectors.find((c) => c.id === "injected");
       if (injectedConnector) {
         connect({ connector: injectedConnector });
@@ -70,10 +66,7 @@ function useIsMiniPay(): boolean | null {
   // (we default to "browser / Privy" before the check finishes).
   const [state, setState] = useState<boolean | null>(null);
   useEffect(() => {
-    setState(
-      typeof window !== "undefined" &&
-        !!(window.ethereum as any)?.isMiniPay,
-    );
+    setState(typeof window !== "undefined" && !!window.ethereum?.isMiniPay);
   }, []);
   return state;
 }

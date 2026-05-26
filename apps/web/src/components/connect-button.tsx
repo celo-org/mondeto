@@ -13,17 +13,13 @@ export function ConnectButton() {
   const { disconnect } = useDisconnect();
   const { isConnected, address } = useAccount();
   const { currentMapId } = useMaps();
-  const { name: onChainName } = useProfile(address as string | undefined, currentMapId);
+  const { name: onChainName } = useProfile(address, currentMapId);
   const [isMiniPay, setIsMiniPay] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      window.ethereum &&
-      (window.ethereum as { isMiniPay?: boolean }).isMiniPay
-    ) {
+    if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
       setIsMiniPay(true);
     }
   }, []);
