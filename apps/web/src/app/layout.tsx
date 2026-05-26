@@ -23,6 +23,17 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+// Force every route to render on demand. The app's root client tree
+// includes `WalletProvider` -> `PrivyProvider` -> `PrivyWagmiProvider`,
+// and Privy's runtime check (`useWallets was called outside the
+// PrivyProvider component`) intermittently crashes static prerender in
+// Vercel's CI (with the failure jumping between /faq, /privacy, /analytics
+// depending on which client page Next renders first). Local builds pass
+// every time. Opting the whole tree out of static generation costs us
+// the prerender of three tiny static pages — fine — and prevents
+// whack-a-mole on this every time we touch a wallet-aware hook.
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
   children,
 }: {
