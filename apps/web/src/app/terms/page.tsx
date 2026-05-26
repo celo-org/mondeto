@@ -35,9 +35,9 @@ export default function TermsPage() {
         <h2 style={{ fontSize: 16, marginBottom: 8 }}>1. About Mondeto</h2>
         <p style={{ fontSize: 13 }}>
           Mondeto is an on-chain pixel-buying game on the Celo network. Players claim pixels on a
-          shared world map by paying USDT to the Mondeto smart contract at{' '}
-          <code>0x7e68c4c7458895ec8ded5a44299e05d0a6d54780</code>. The map, ownership, and pricing
-          are determined entirely by the contract — Mondeto operates the frontend, not the chain.
+          shared world map by paying in supported dollar stablecoins to the Mondeto smart contracts
+          on Celo mainnet. The map, ownership, and pricing are determined entirely by the
+          contracts — Mondeto operates the frontend, not the chain.
         </p>
       </section>
 
@@ -79,9 +79,9 @@ export default function TermsPage() {
       <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, marginBottom: 8 }}>6. Network fees and stablecoins</h2>
         <p style={{ fontSize: 13 }}>
-          Pixel prices are charged in USDT. Network fees on Celo are paid by MiniPay automatically
-          through fee abstraction. Prices are determined by the on-chain pricing curve and may
-          change between transactions.
+          Pixel prices are charged in supported dollar stablecoins on Celo (treated 1:1). Network
+          fees on Celo are paid by MiniPay automatically through fee abstraction. Prices are
+          determined by the on-chain pricing curve and may change between transactions.
         </p>
       </section>
 
