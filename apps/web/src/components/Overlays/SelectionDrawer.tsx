@@ -7,6 +7,7 @@ import { ZERO_ADDRESS } from '@/constants/map'
 import { formatUSDT } from '@/lib/colorUtils'
 import { generateUsername } from '@/lib/username'
 import { MINIPAY_DEPOSIT_URL } from '@/lib/deeplinks'
+import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import TxProgress from './TxProgress'
 import SuccessState from './SuccessState'
 
@@ -30,6 +31,10 @@ interface SelectionDrawerProps {
   userBalance: bigint
   txStep: TxStep
   txHash: string | null
+  /** Last error from the buy flow, if any. Surfaced verbatim under the
+   *  pixel list so the user (and we) can see what actually failed instead
+   *  of a generic "try again" string. */
+  txError: string | null
   userAddress?: string
   profilesMap?: Map<string, { label: string; url: string }>
   onRemovePixels: (ids: number[]) => void
@@ -48,6 +53,7 @@ export default function SelectionDrawer({
   userBalance,
   txStep,
   txHash,
+  txError,
   userAddress,
   profilesMap,
   onRemovePixels,
@@ -57,6 +63,12 @@ export default function SelectionDrawer({
 }: SelectionDrawerProps) {
   const isTxActive = txStep === 'approving' || txStep === 'buying' || txStep === 'confirming'
   const pixelCount = selectedIds.size
+
+  // Each buy is settled in a single stablecoin — the user's highest-balance
+  // one. We surface that symbol in copy so the rule reads as obvious instead
+  // of needing explanation.
+  const { preferred } = useStablecoinBalance()
+  const payToken = preferred?.symbol ?? 'USDC'
 
   // Compute insufficient locally from the values we already render. The
   // parent also derives this through useBuyPixels.checkBalance, but that path
@@ -121,7 +133,7 @@ export default function SelectionDrawer({
       {/* Success state */}
       {txStep === 'success' && txHash && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <SuccessState pixelCount={pixelCount} totalPaid={`${formatUSDT(totalPrice)} USDT`} txHash={txHash} onDone={onDone} />
+          <SuccessState pixelCount={pixelCount} totalPaid={`${formatUSDT(totalPrice)} ${payToken}`} txHash={txHash} onDone={onDone} />
         </div>
       )}
 
@@ -130,7 +142,7 @@ export default function SelectionDrawer({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0 20px', maxWidth: 500, margin: '0 auto', width: '100%' }}>
           <div style={{ textAlign: 'center', marginBottom: 8 }}>
             <div style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--text-muted)', letterSpacing: 2, marginBottom: 6 }}>THE DAMAGE</div>
-            <div style={{ fontSize: 18, fontFamily: "'Press Start 2P', monospace", color: 'var(--text)' }}>{formatUSDT(totalPrice)} <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>USDT</span></div>
+            <div style={{ fontSize: 18, fontFamily: "'Press Start 2P', monospace", color: 'var(--text)' }}>{formatUSDT(totalPrice)} <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{payToken}</span></div>
           </div>
           <TxProgress step={txStep} />
           <div style={{ flex: 1 }} />
@@ -151,7 +163,7 @@ export default function SelectionDrawer({
           <div style={{ textAlign: 'center', marginBottom: 8, flexShrink: 0 }}>
             <div style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--text-muted)', letterSpacing: 2, marginBottom: 6 }}>THE DAMAGE</div>
             <div style={{ fontSize: 18, fontFamily: "'Press Start 2P', monospace", color: 'var(--text)' }}>
-              {priceLoading ? '...' : `${formatUSDT(totalPrice)}`} <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>USDT</span>
+              {priceLoading ? '...' : `${formatUSDT(totalPrice)}`} <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{payToken}</span>
             </div>
             <div style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--text-muted)', marginTop: 6, letterSpacing: 1 }}>
               {pixelCount} spots · {ownerCount > 0 ? `${ownerCount} player${ownerCount > 1 ? 's' : ''} to outbid` : 'free real estate'}
@@ -176,16 +188,21 @@ export default function SelectionDrawer({
             </button>
           </div>
 
-          {/* Balance + warnings. Balance is summed across USDm + USDC + USDT
-              (all $1-pegged) so we label it as "$" rather than a single
-              symbol. The LOCK IT IN button still settles in USDT on-chain. */}
+          {/* Balance + warnings. Each buy is settled in a single stablecoin —
+              the user's preferred (highest-balance) one — so the balance and
+              the deficit are reported in THAT currency. The one-currency
+              rule is stated inline so the user understands why they can't
+              just spend their other balances. */}
           <div style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--text-muted)', marginBottom: 4, flexShrink: 0, textAlign: 'center', letterSpacing: 1 }}>
-            balance: ${formatUSDT(userBalance)}
+            balance: {formatUSDT(userBalance)} {payToken}
           </div>
           {insufficient && (
             <div style={{ marginBottom: 6, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
               <div style={{ fontSize: 7, color: 'var(--error)', textAlign: 'center', letterSpacing: 1, fontFamily: "'Press Start 2P', monospace" }}>
-                need ${formatUSDT(totalPrice - userBalance)} more
+                need {formatUSDT(totalPrice - userBalance)} more {payToken}
+              </div>
+              <div style={{ fontSize: 6, color: 'var(--text-muted)', textAlign: 'center', letterSpacing: 1, fontFamily: "'Press Start 2P', monospace", maxWidth: 260, lineHeight: 1.5 }}>
+                one currency per buy — top up {payToken.toLowerCase()} or pick fewer pixels
               </div>
               <a
                 href={MINIPAY_DEPOSIT_URL}
@@ -256,10 +273,12 @@ export default function SelectionDrawer({
             })}
           </div>
 
-          {/* Error */}
+          {/* Error — show the real reason from the buy flow verbatim so
+              the user (and we) can see what actually failed. Fall back to
+              a generic line only when the error string is empty. */}
           {txStep === 'error' && (
-            <div style={{ fontSize: 7, color: 'var(--error)', marginBottom: 4, flexShrink: 0 }}>
-              That didn't work. Try again?
+            <div style={{ fontSize: 7, color: 'var(--error)', marginBottom: 4, flexShrink: 0, lineHeight: 1.5, wordBreak: 'break-word' }}>
+              {txError && txError.trim().length > 0 ? txError : "That didn't work. Try again?"}
             </div>
           )}
 
@@ -282,7 +301,7 @@ export default function SelectionDrawer({
               ? 'CHECKING PRICES…'
               : insufficient
                 ? 'NOT ENOUGH FUNDS'
-                : `LOCK IT IN — ${formatUSDT(totalPrice)} USDT`}
+                : `LOCK IT IN — ${formatUSDT(totalPrice)} ${payToken}`}
           </button>
         </div>
       )}

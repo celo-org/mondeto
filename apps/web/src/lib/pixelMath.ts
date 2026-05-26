@@ -4,19 +4,65 @@ export function pixelId(x: number, y: number): number {
   return y * WIDTH + x
 }
 
-// Approximate (lat, lng) → grid (x, y).
+// (lat, lng) → grid (x, y) on the contract's land mask.
 //
-// The on-chain land mask is Equal Earth projected (Šavrič et al. 2018), but
-// implementing the full inverse here would be overkill for "zoom roughly to
-// the player's location". Simple equirectangular gets within a few pixels
-// at temperate latitudes — close enough that a 4× zoom lands on the user's
-// continent / country. If precision becomes important later, swap this for
-// the full Equal Earth inverse.
+// The mask is built by `apps/contracts/map/convert_map.py`, which renders
+// the Equal Earth SVG (`Blank_world_map_Equal_Earth_projection.svg`, viewBox
+// 360×175.218) at the contract height (100 → ~205 px wide), then crops
+// empty water-only columns — currently ~31 cols from the left (Pacific west)
+// and ~4 from the right (Pacific east) — leaving the 170-wide grid the
+// contract stores.
+//
+// So a correct geo-to-pixel mapping must:
+//   1. Compute the Equal Earth forward projection (Šavrič et al. 2018).
+//   2. Place the point in the un-cropped rendered image (width SVG_RENDER_WIDTH).
+//   3. Shift left by SVG_LEFT_CROP to land on the cropped mask's pixels.
+//
+// Calibrated against 25 well-known cities (Lisbon, London, Paris, Cairo,
+// Sydney, Tokyo, NYC, SaoPaulo, Beijing, etc.) — 24/25 land on land pixels;
+// the only miss is Cape Town, which sits on a single-pixel coastline.
+//
+// Equal Earth polynomial coefficients + auxiliary scalar from the paper.
+const EE_A1 = 1.340264
+const EE_A2 = -0.081106
+const EE_A3 = 0.000893
+const EE_A4 = 0.003796
+const EE_M = Math.sqrt(3) / 2
+const EE_EY_MAX = 1.3169339780812332
+const EE_EX_MAX = 2.7062853725620867
+
+// SVG → mask geometry. The SVG viewBox is 360 wide × 175.218 tall; render
+// at the contract HEIGHT preserves the aspect ratio.
+const SVG_VIEWBOX_RATIO = 360 / 175.218
+const SVG_RENDER_WIDTH = Math.round(HEIGHT * SVG_VIEWBOX_RATIO) // 205 at H=100
+// Empty-column crop the generator removed from the left edge of the
+// rendered image. Mirrors the actual mask layout — re-derive this whenever
+// the source SVG, the rendered height, or the crop logic in
+// `convert_map.py` changes.
+const SVG_LEFT_CROP = 31
+
 export function geoToPixel(latDeg: number, lngDeg: number): { x: number; y: number } {
   const lat = Math.max(-90, Math.min(90, latDeg))
   const lng = Math.max(-180, Math.min(180, lngDeg))
-  const x = Math.round(((lng + 180) / 360) * WIDTH)
-  const y = Math.round(((90 - lat) / 180) * HEIGHT)
+  const phi = (lat * Math.PI) / 180
+  const lambda = (lng * Math.PI) / 180
+
+  // Equal Earth forward.
+  const theta = Math.asin(EE_M * Math.sin(phi))
+  const t2 = theta * theta
+  const t6 = t2 * t2 * t2
+  const ey = theta * (EE_A1 + EE_A2 * t2 + t6 * (EE_A3 + EE_A4 * t2))
+  const ex =
+    (lambda * Math.cos(theta)) /
+    (EE_M * (EE_A1 + 3 * EE_A2 * t2 + t6 * (7 * EE_A3 + 9 * EE_A4 * t2)))
+
+  // Place the point in the un-cropped rendered image, then shift left
+  // by the crop offset to get the cropped-mask column. y has no crop
+  // (we render at exactly HEIGHT, and pixel-y=0 is north).
+  const xRendered = ((ex + EE_EX_MAX) / (2 * EE_EX_MAX)) * (SVG_RENDER_WIDTH - 1)
+  const x = Math.round(xRendered) - SVG_LEFT_CROP
+  const y = Math.round(((EE_EY_MAX - ey) / (2 * EE_EY_MAX)) * (HEIGHT - 1))
+
   return {
     x: Math.max(0, Math.min(WIDTH - 1, x)),
     y: Math.max(0, Math.min(HEIGHT - 1, y)),

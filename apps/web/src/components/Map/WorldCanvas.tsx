@@ -26,7 +26,7 @@ export interface WorldCanvasRef {
   clearInspectRing: () => void
   zoomIn: () => void
   zoomOut: () => void
-  zoomToPixel: (pixelId: number) => void
+  zoomToPixel: (pixelId: number, scale?: number) => void
   recenter: () => void
 }
 
@@ -144,18 +144,28 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
     useImperativeHandle(ref, () => ({
       zoomIn() { zoomControlsRef.current?.zoomIn() },
       zoomOut() { zoomControlsRef.current?.zoomOut() },
-      zoomToPixel(pid: number) {
+      zoomToPixel(pid: number, scale?: number) {
         // Retry until both the zoom controls and the wrapper element are
         // ready. The geo-auto-zoom path calls this right after the map's
         // loadState flips to 'ready', which can be a few frames before
-        // <ZoomCapture>'s useEffect attaches zoomControlsRef.
+        // <ZoomCapture>'s useEffect attaches zoomControlsRef. Default
+        // scale lands the user just inside paint mode; the geo path
+        // passes a smaller value so first-load shows the broader region.
         const tryNow = (): boolean => {
           const ctrl = zoomControlsRef.current
           if (!ctrl) return false
-          const wrapper = pixelCanvasRef.current?.parentElement?.parentElement
+          // IMPORTANT: read clientWidth/Height from the .react-transform-wrapper
+          // (the OUTER element that has the viewport's dimensions), NOT from
+          // the inner transformed element. `parentElement.parentElement` lands
+          // on the latter — which is the canvas's own size — so dividing by it
+          // for the center math snaps the target to the canvas's top-left
+          // instead of the viewport center.
+          const canvas = pixelCanvasRef.current
+          if (!canvas) return false
+          const wrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
           if (!wrapper) return false
           const { x, y } = idToXY(pid)
-          const s = PAINT_SCALE + 1
+          const s = scale ?? PAINT_SCALE + 1
           const tx = -x * s + wrapper.clientWidth / 2
           const ty = -y * s + wrapper.clientHeight / 2
           ctrl.setTransform(tx, ty, s, 300)
