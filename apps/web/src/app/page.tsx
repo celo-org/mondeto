@@ -22,7 +22,7 @@ import { useBuyPixels } from '@/hooks/useBuyPixels'
 import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
-import { fetchLandMaskFromContract } from '@/lib/landMask'
+import { fetchLandMaskFromContract, isLandXY } from '@/lib/landMask'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { decodeBytes } from '@/lib/decodeBytes'
@@ -70,6 +70,15 @@ export default function Home() {
   const [activeOverlay, setActiveOverlay] = useState<'none' | 'drawer' | 'info'>('none')
   const [tappedPixelId, setTappedPixelId] = useState<number | null>(null)
   const [userBalance, setUserBalance] = useState(0n)
+  const [geoDebug, setGeoDebug] = useState<{
+    status: 'idle' | 'requesting' | 'granted' | 'denied' | 'skipped' | 'no-api'
+    lat?: number
+    lng?: number
+    x?: number
+    y?: number
+    isLand?: boolean
+    error?: string
+  }>({ status: 'idle' })
 
   const canvasRef = useRef<WorldCanvasRef | null>(null)
   const hasZoomedPast4xRef = useRef(false)
@@ -93,19 +102,34 @@ export default function Home() {
   // decision, and skip on subsequent visits.
   useEffect(() => {
     if (loadState !== 'ready') return
-    if (typeof window === 'undefined' || !navigator.geolocation) return
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGeoDebug({ status: 'no-api' })
+      return
+    }
 
     try {
       const decided = localStorage.getItem('mondeto-geo-decision')
-      if (decided === 'declined') return
+      if (decided === 'declined') {
+        setGeoDebug({ status: 'denied', error: 'previously declined' })
+        return
+      }
       const alreadyZoomed = sessionStorage.getItem('mondeto-geo-zoomed')
-      if (alreadyZoomed) return
+      if (alreadyZoomed) {
+        setGeoDebug({ status: 'skipped', error: 'already zoomed this session' })
+        return
+      }
     } catch {}
+
+    setGeoDebug({ status: 'requesting' })
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { x, y } = geoToPixel(pos.coords.latitude, pos.coords.longitude)
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        const { x, y } = geoToPixel(lat, lng)
         const targetId = pixelIdFn(x, y)
+        const landed = isLandXY(x, y)
+        setGeoDebug({ status: 'granted', lat, lng, x, y, isLand: landed })
         try {
           localStorage.setItem('mondeto-geo-decision', 'granted')
         } catch {}
@@ -127,7 +151,7 @@ export default function Home() {
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
-            console.log(`[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${pos.coords.latitude.toFixed(2)},${pos.coords.longitude.toFixed(2)}`)
+            console.log(`[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${lat.toFixed(2)},${lng.toFixed(2)} — land=${landed}`)
             return
           }
           if (Date.now() - start > 2000) {
@@ -140,6 +164,7 @@ export default function Home() {
       },
       (err) => {
         console.warn('[geo] permission denied or error:', err.message)
+        setGeoDebug({ status: 'denied', error: err.message })
         try {
           localStorage.setItem('mondeto-geo-decision', 'declined')
         } catch {}
@@ -334,6 +359,71 @@ export default function Home() {
     >
       {/* Top bar */}
       <TopBar title="MONDETO" />
+
+      {/* Geo debug overlay — shows the resolved lat/lng and the pixel the
+          geoToPixel math sent the auto-zoom to. Visible so the user can
+          report mis-targeting without having to open DevTools. Click
+          "reset" to re-run the geolocation flow this session. */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 60,
+          left: 8,
+          zIndex: 25,
+          background: 'rgba(0, 0, 0, 0.78)',
+          color: '#fff',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: 6,
+          letterSpacing: 1,
+          lineHeight: 1.6,
+          padding: '6px 8px',
+          border: '1px solid rgba(255, 255, 255, 0.25)',
+          maxWidth: 220,
+          pointerEvents: 'auto',
+        }}
+      >
+        <div style={{ color: '#A7FF05', marginBottom: 4 }}>[GEO]</div>
+        <div>status: {geoDebug.status}</div>
+        {geoDebug.lat !== undefined && (
+          <div>lat: {geoDebug.lat.toFixed(4)}</div>
+        )}
+        {geoDebug.lng !== undefined && (
+          <div>lng: {geoDebug.lng.toFixed(4)}</div>
+        )}
+        {geoDebug.x !== undefined && (
+          <div>pixel: ({geoDebug.x}, {geoDebug.y})</div>
+        )}
+        {geoDebug.isLand !== undefined && (
+          <div style={{ color: geoDebug.isLand ? '#A7FF05' : 'var(--error)' }}>
+            {geoDebug.isLand ? 'LAND' : 'WATER'}
+          </div>
+        )}
+        {geoDebug.error && (
+          <div style={{ color: 'var(--error)' }}>err: {geoDebug.error}</div>
+        )}
+        <button
+          onClick={() => {
+            try {
+              localStorage.removeItem('mondeto-geo-decision')
+              sessionStorage.removeItem('mondeto-geo-zoomed')
+            } catch {}
+            window.location.reload()
+          }}
+          style={{
+            marginTop: 4,
+            background: 'transparent',
+            color: 'var(--brand-orange)',
+            border: '1px solid var(--brand-orange)',
+            fontFamily: "'Press Start 2P', monospace",
+            fontSize: 6,
+            padding: '3px 6px',
+            cursor: 'pointer',
+            letterSpacing: 1,
+          }}
+        >
+          RESET
+        </button>
+      </div>
 
       {/* HEATMAP / MY LAND toggle — sits under the TopBar on the lime band */}
       <div
