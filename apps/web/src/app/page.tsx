@@ -70,22 +70,6 @@ export default function Home() {
   const [activeOverlay, setActiveOverlay] = useState<'none' | 'drawer' | 'info'>('none')
   const [tappedPixelId, setTappedPixelId] = useState<number | null>(null)
   const [userBalance, setUserBalance] = useState(0n)
-  const [geoDebug, setGeoDebug] = useState<{
-    status:
-      | 'idle'
-      | 'requesting'
-      | 'granted'
-      | 'denied'
-      | 'skipped'
-      | 'no-api'
-      | 'timed-out'
-    lat?: number
-    lng?: number
-    x?: number
-    y?: number
-    isLand?: boolean
-    error?: string
-  }>({ status: 'idle' })
 
   const canvasRef = useRef<WorldCanvasRef | null>(null)
   const hasZoomedPast4xRef = useRef(false)
@@ -116,18 +100,15 @@ export default function Home() {
     try {
       const alreadyZoomed = sessionStorage.getItem('mondeto-geo-zoomed')
       if (alreadyZoomed) {
-        setGeoDebug({ status: 'skipped', error: 'already zoomed this session' })
         return
       }
     } catch {}
-
-    setGeoDebug({ status: 'requesting' })
 
     const ctrl = new AbortController()
     const HARD_TIMEOUT_MS = 8_000
     const hardTimeout = setTimeout(() => {
       ctrl.abort()
-      setGeoDebug({ status: 'timed-out', error: `no response after ${HARD_TIMEOUT_MS / 1000}s` })
+      console.warn('[geo] /api/geo timed out after', HARD_TIMEOUT_MS, 'ms')
     }, HARD_TIMEOUT_MS)
 
     fetch('/api/geo', { signal: ctrl.signal })
@@ -141,14 +122,13 @@ export default function Home() {
           country: string | null
         }
         if (data.lat === null || data.lng === null) {
-          setGeoDebug({ status: 'denied', error: 'no IP geo headers (local dev?)' })
+          console.warn('[geo] no IP geo headers (local dev?)')
           return
         }
         const { lat, lng } = data
         const { x, y } = geoToPixel(lat, lng)
         const targetId = pixelIdFn(x, y)
         const landed = isLandXY(x, y)
-        setGeoDebug({ status: 'granted', lat, lng, x, y, isLand: landed })
 
         // The canvas ref + its internal TransformWrapper need a few
         // frames to be ready after loadState flips to 'ready'. Retry
@@ -186,7 +166,6 @@ export default function Home() {
         if ((err as { name?: string } | undefined)?.name === 'AbortError') return
         const message = err instanceof Error ? err.message : 'unknown error'
         console.warn('[geo] /api/geo failed:', message)
-        setGeoDebug({ status: 'denied', error: message })
       })
 
     return () => {
@@ -381,71 +360,6 @@ export default function Home() {
     >
       {/* Top bar */}
       <TopBar title="MONDETO" />
-
-      {/* Geo debug overlay — shows the resolved lat/lng and the pixel the
-          geoToPixel math sent the auto-zoom to. Visible so the user can
-          report mis-targeting without having to open DevTools. Click
-          "reset" to re-run the geolocation flow this session. */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 60,
-          left: 8,
-          zIndex: 25,
-          background: 'rgba(0, 0, 0, 0.78)',
-          color: '#fff',
-          fontFamily: "'Press Start 2P', monospace",
-          fontSize: 6,
-          letterSpacing: 1,
-          lineHeight: 1.6,
-          padding: '6px 8px',
-          border: '1px solid rgba(255, 255, 255, 0.25)',
-          maxWidth: 220,
-          pointerEvents: 'auto',
-        }}
-      >
-        <div style={{ color: '#A7FF05', marginBottom: 4 }}>[GEO]</div>
-        <div>status: {geoDebug.status}</div>
-        {geoDebug.lat !== undefined && (
-          <div>lat: {geoDebug.lat.toFixed(4)}</div>
-        )}
-        {geoDebug.lng !== undefined && (
-          <div>lng: {geoDebug.lng.toFixed(4)}</div>
-        )}
-        {geoDebug.x !== undefined && (
-          <div>pixel: ({geoDebug.x}, {geoDebug.y})</div>
-        )}
-        {geoDebug.isLand !== undefined && (
-          <div style={{ color: geoDebug.isLand ? '#A7FF05' : 'var(--error)' }}>
-            {geoDebug.isLand ? 'LAND' : 'WATER'}
-          </div>
-        )}
-        {geoDebug.error && (
-          <div style={{ color: 'var(--error)' }}>err: {geoDebug.error}</div>
-        )}
-        <button
-          onClick={() => {
-            try {
-              localStorage.removeItem('mondeto-geo-decision')
-              sessionStorage.removeItem('mondeto-geo-zoomed')
-            } catch {}
-            window.location.reload()
-          }}
-          style={{
-            marginTop: 4,
-            background: 'transparent',
-            color: 'var(--brand-orange)',
-            border: '1px solid var(--brand-orange)',
-            fontFamily: "'Press Start 2P', monospace",
-            fontSize: 6,
-            padding: '3px 6px',
-            cursor: 'pointer',
-            letterSpacing: 1,
-          }}
-        >
-          RESET
-        </button>
-      </div>
 
       {/* HEATMAP / MY LAND toggle — sits under the TopBar on the lime band */}
       <div
