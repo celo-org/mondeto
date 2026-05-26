@@ -32,8 +32,8 @@ variables and the land mask in `map/land_mask.json` (which also supplies `WIDTH`
    | `INITIAL_FEE_RATE` | Treasury fee on resales, in basis points (`500` = 5%).               |
    | `ETH_RPC_URL`      | RPC endpoint (used by default when `--rpc-url` is omitted).          |
 
-   `USDT_ADDRESS` and `PROXY_ADDRESS` are only used by `script/export-abi.py`, not the
-   Solidity deploy.
+   `PROXY_ADDRESS` is not used by the Solidity deploy — it's read by the operational
+   scripts (`script/pay_leaders.py`, `script/player_pnl.py`), so set it after the first deploy.
 
 2. Source the env file (it uses `export`, so `forge` picks the values up) and run the
    script with a signer:
