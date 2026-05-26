@@ -145,12 +145,15 @@ export default function Home() {
         const tryZoom = () => {
           const ref = canvasRef.current
           if (ref) {
-            // Scale 10 lands the user well inside paint mode (PAINT_SCALE
-            // is 4) and zooms close enough that their region fills the
-            // viewport — not the whole world. Picked over a smaller value
-            // because at PAINT_SCALE + 1 the player still sees the entire
-            // map and has to manually zoom in before picking.
-            ref.zoomToPixel(targetId, 10)
+            // Scale picked so the player's region fills the viewport. The
+            // canvas is 170 source-pixels wide and renders at SCALE × 170
+            // CSS px; viewport_width / SCALE = how many source pixels the
+            // player sees horizontally. On desktop ~150 source pixels feels
+            // right; on mobile the screen is much narrower, so we need a
+            // higher scale to land at a similar country-sized view.
+            const isMobile =
+              typeof window !== 'undefined' && window.innerWidth < 600
+            ref.zoomToPixel(targetId, isMobile ? 18 : 10)
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
