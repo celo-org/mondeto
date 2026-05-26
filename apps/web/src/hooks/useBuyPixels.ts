@@ -49,7 +49,6 @@ export function useBuyPixels(mapId?: MapId) {
           args: [bigIds],
         }) as bigint
         realPrice = onChainPrice
-        console.log('On-chain price:', realPrice.toString())
       } catch (e) {
         console.warn('Failed to read on-chain price, using hint:', e)
       }
@@ -86,8 +85,6 @@ export function useBuyPixels(mapId?: MapId) {
 
         // Wait for nonce to propagate on sequencer
         await new Promise(r => setTimeout(r, 3000))
-      } else {
-        console.log('Allowance sufficient, skipping approve')
       }
 
       // Step 2: Buy pixels

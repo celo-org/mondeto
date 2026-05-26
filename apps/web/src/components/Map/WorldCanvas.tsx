@@ -33,7 +33,6 @@ export interface WorldCanvasRef {
 interface WorldCanvasProps {
   pixelData: PixelView[]
   mapView: 'normal' | 'heatmap' | 'myland'
-  isDark: boolean
   selectedIds: Set<number>
   onTogglePixel: (id: number) => void
   onAddPixel: (id: number) => void
@@ -55,7 +54,6 @@ interface InnerCanvasProps extends WorldCanvasProps {
 function InnerCanvas({
   pixelData,
   mapView,
-  isDark,
   selectedIds,
   onTogglePixel,
   onAddPixel,
@@ -92,17 +90,12 @@ function InnerCanvas({
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    drawPixels(ctx, pixelData, mapView, isDark, userAddress)
-  }, [pixelData, mapView, isDark, pixelCanvasRef, version, userAddress])
+    drawPixels(ctx, pixelData, mapView, userAddress)
+  }, [pixelData, mapView, pixelCanvasRef, version, userAddress])
 
   return (
     <div style={{ position: 'relative', width: WIDTH, height: HEIGHT }}>
-      <PixelLayer
-        pixelData={pixelData}
-        mapView={mapView}
-        isDark={isDark}
-        canvasRef={pixelCanvasRef}
-      />
+      <PixelLayer canvasRef={pixelCanvasRef} />
       <FlashLayer changedIds={changedIds ?? []} pixelData={pixelData} />
       {mapView === 'normal' && (
         <TerritoryLabels pixelData={pixelData} scale={scale} profilesMap={profilesMap} />

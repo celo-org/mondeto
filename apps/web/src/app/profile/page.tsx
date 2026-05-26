@@ -21,13 +21,9 @@ import { checkProfanity } from '@/lib/profanity'
 
 export default function ProfilePage() {
   const { address } = useAccount()
-  const addrStr = address as string | undefined
-  // URL input removed — unverified user URLs are an injection vector.
-  // setUrl is left wired but unused so existing useProfile callers keep
-  // their shape; updateProfile is called below with an empty string for url.
   const { currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
-  const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
+  const { name, setName, color, setColor, saveState, save } = useProfile(address, currentMapId)
   const walletBalance = useStablecoinBalance()
   const publicClient = usePublicClient()
   const [nameError, setNameError] = useState<string | null>(null)
@@ -39,7 +35,7 @@ export default function ProfilePage() {
 
   // Fetch owned pixel count from contract
   useEffect(() => {
-    if (!publicClient || !addrStr) return
+    if (!publicClient || !address) return
 
     async function fetchStats() {
       try {
@@ -68,7 +64,7 @@ export default function ProfilePage() {
           const count = (ownerCounts.get(ownerHex.toLowerCase()) ?? 0) + 1
           ownerCounts.set(ownerHex.toLowerCase(), count)
 
-          if (ownerHex.toLowerCase() === addrStr!.toLowerCase()) {
+          if (ownerHex.toLowerCase() === address!.toLowerCase()) {
             myCount++
           }
         }
@@ -77,7 +73,7 @@ export default function ProfilePage() {
 
         // Compute rank
         const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
-        const rankIdx = sorted.findIndex(([owner]) => owner === addrStr!.toLowerCase())
+        const rankIdx = sorted.findIndex(([owner]) => owner === address!.toLowerCase())
         setRank(rankIdx >= 0 ? rankIdx + 1 : 0)
       } catch (e) {
         console.warn('Failed to fetch pixel stats from contract:', e)
@@ -102,7 +98,7 @@ export default function ProfilePage() {
       const CHUNK_BLOCKS = 50_000n
       const MAX_PARALLEL = 4
       const SAFETY_BUFFER_BLOCKS = 100_000n
-      const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${addrStr!.toLowerCase()}`
+      const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${address!.toLowerCase()}`
       const CACHE_TTL_MS = 60_000
 
       try {
@@ -190,7 +186,7 @@ export default function ProfilePage() {
           return ai - bi
         })
 
-        const addr = addrStr!.toLowerCase()
+        const addr = address!.toLowerCase()
         let totalSpent = 0n
         let totalEarned = 0n
         const ownerOf = new Map<string, string>()
@@ -235,7 +231,7 @@ export default function ProfilePage() {
     }
 
     fetchPnL()
-  }, [publicClient, addrStr, mondetoAddress])
+  }, [publicClient, address, mondetoAddress])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :
@@ -339,7 +335,7 @@ export default function ProfilePage() {
             {saveLabel}
           </button>
 
-          {!addrStr && (
+          {!address && (
             <div style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--text-muted)', textAlign: 'center', marginTop: 8, letterSpacing: 1 }}>
               connect wallet to save on-chain
             </div>

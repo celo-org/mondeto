@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: 'Mondeto',
   description: 'Own the world, one pixel at a time',
   icons: {
-    icon: '/brand/logo/logo-256.png',
+    icon: '/brand/logo/Mondeto_Globe_Green.svg',
     apple: '/brand/logo/logo-256.png',
   },
   other: {

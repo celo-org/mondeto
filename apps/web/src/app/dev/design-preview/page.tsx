@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 /* Static mockup gallery — every screen + overlay in the new brand.
-   Open at /design-preview. Nothing here imports real app components, so
+   Open at /dev/design-preview. Nothing here imports real app components, so
    we can iterate on visuals without touching the live flow. */
 
 import Link from 'next/link';

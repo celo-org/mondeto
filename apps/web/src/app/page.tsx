@@ -19,7 +19,6 @@ import { usePixelMap } from '@/hooks/usePixelMap'
 import { useSelection } from '@/hooks/useSelection'
 import { usePixelPrice } from '@/hooks/usePixelPrice'
 import { useBuyPixels } from '@/hooks/useBuyPixels'
-import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { fetchLandMaskFromContract } from '@/lib/landMask'
@@ -31,11 +30,7 @@ import { PAINT_SCALE } from '@/constants/map'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
 
 export default function Home() {
-  // Dark is the only theme now; downstream map components still take the flag
-  // so we pin it to true at the boundary rather than threading every callsite.
-  const isDark = true
   const { address } = useAccount()
-  const addrStr = address as string | undefined
   const publicClient = usePublicClient()
 
   const { currentMapId } = useMaps()
@@ -54,7 +49,6 @@ export default function Home() {
 
   const { totalPrice, isLoading: priceLoading } = usePixelPrice(selectedIds, currentMapId)
   const buy = useBuyPixels(currentMapId)
-  const profile = useProfile(addrStr, currentMapId)
 
   const walletBalance = useStablecoinBalance()
 
@@ -115,7 +109,6 @@ export default function Home() {
           const ref = canvasRef.current
           if (ref) {
             ref.zoomToPixel(targetId)
-            console.log(`[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${pos.coords.latitude.toFixed(2)},${pos.coords.longitude.toFixed(2)}`)
             return
           }
           if (Date.now() - start > 2000) {
@@ -206,7 +199,7 @@ export default function Home() {
     try { sessionStorage.setItem('mondeto-zoom', String(scale)) } catch {}
   }, [])
 
-  const effectiveAddr = addrStr || '0xYOUR000000000000000000000000000000000001'
+  const effectiveAddr = address || '0xYOUR000000000000000000000000000000000001'
 
   const handleAddPixel = useCallback((id: number) => {
     addPixel(id)
@@ -387,7 +380,6 @@ export default function Home() {
           ref={canvasRef}
           pixelData={pixelDataRef.current}
           mapView={mapView}
-          isDark={isDark}
           selectedIds={selectedIds}
           onTogglePixel={handleTogglePixel}
           onAddPixel={handleAddPixel}
@@ -396,7 +388,7 @@ export default function Home() {
           onTapWhileZoomedOut={handleTapWhileZoomedOut}
           version={version}
           loadState={loadState}
-          userAddress={addrStr}
+          userAddress={address}
           changedIds={changedIds}
           profilesMap={mapProfiles}
         />
