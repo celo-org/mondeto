@@ -124,8 +124,10 @@ export default function ProfilePage() {
 
       try {
         const { parseAbiItem } = await import('viem')
+        // Multi-token PixelsPurchased — `token` is the second indexed
+        // parameter as of contract v2.
         const event = parseAbiItem(
-          'event PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost)',
+          'event PixelsPurchased(address indexed buyer, address indexed token, uint256[] ids, uint256 totalCost)',
         )
 
         const currentBlock = await publicClient!.getBlockNumber()
@@ -195,6 +197,39 @@ export default function ProfilePage() {
           return ai - bi
         })
 
+        // Look up each unique payment token's decimals so we can normalize
+        // mixed-token totalCost values into a single 6-decimal "$ microcents"
+        // unit before summing. Without this, summing e18 USDm with e6 USDC
+        // would land in nonsense magnitudes.
+        const tokenDecimals = new Map<string, number>()
+        const uniqueTokens = new Set<string>()
+        for (const log of logs) {
+          uniqueTokens.add((log.args.token as string).toLowerCase())
+        }
+        await Promise.all(
+          [...uniqueTokens].map(async (token) => {
+            try {
+              const [, dec] = (await publicClient!.readContract({
+                address: mondetoAddress,
+                abi: MONDETO_ABI,
+                functionName: 'tokenConfig',
+                args: [token as `0x${string}`],
+              })) as readonly [boolean, number]
+              tokenDecimals.set(token, Number(dec))
+            } catch {
+              // Sensible fallback: 6-decimal stablecoin assumption.
+              tokenDecimals.set(token, 6)
+            }
+          }),
+        )
+
+        // Normalize amount to 6 decimals (the unit `formatUSDT` displays).
+        const toMicrocents = (cost: bigint, decimals: number): bigint => {
+          if (decimals === 6) return cost
+          if (decimals > 6) return cost / 10n ** BigInt(decimals - 6)
+          return cost * 10n ** BigInt(6 - decimals)
+        }
+
         const addr = addrStr!.toLowerCase()
         let totalSpent = 0n
         let totalEarned = 0n
@@ -202,14 +237,16 @@ export default function ProfilePage() {
 
         for (const log of logs) {
           const buyer = (log.args.buyer as string).toLowerCase()
+          const tokenAddr = (log.args.token as string).toLowerCase()
           const ids = log.args.ids as bigint[]
           const totalCost = log.args.totalCost as bigint
+          const normalized = toMicrocents(totalCost, tokenDecimals.get(tokenAddr) ?? 6)
 
           if (buyer === addr) {
-            totalSpent += totalCost
+            totalSpent += normalized
           }
 
-          const perPixelCost = ids.length > 0 ? totalCost / BigInt(ids.length) : 0n
+          const perPixelCost = ids.length > 0 ? normalized / BigInt(ids.length) : 0n
 
           for (const id of ids) {
             const idStr = id.toString()

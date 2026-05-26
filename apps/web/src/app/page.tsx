@@ -190,16 +190,19 @@ export default function Home() {
     fetchProfiles()
   }, [publicClient, loadState, version])
 
-  // Use real on-chain balance when wallet connected. Sum across USDm + USDC
-  // + USDT (all $1-pegged) so users holding any MiniPay stablecoin can see
-  // their spendable dollar balance — not just USDT, which most MiniPay users
-  // hold zero of. Stored in 6-decimal units to match pixel prices on-chain.
+  // Use real on-chain balance when wallet connected. Each buy is settled in
+  // a single stablecoin — the user's highest-balance one (`preferred`) — so
+  // the affordability check has to key off THAT specific balance, not a
+  // total summed across all three. Otherwise we'd green-light a $3 buy for
+  // a wallet holding $2 USDC + $1 USDm and the on-chain transferFrom would
+  // revert. Stored in 6-decimal units to match pixel prices on-chain.
   useEffect(() => {
     if (walletBalance.isConnected) {
-      const parsed = Math.floor(walletBalance.totalAmount * 1_000_000)
+      const preferredAmount = walletBalance.preferred?.amount ?? 0
+      const parsed = Math.floor(preferredAmount * 1_000_000)
       setUserBalance(BigInt(parsed))
     }
-  }, [walletBalance.isConnected, walletBalance.totalAmount])
+  }, [walletBalance.isConnected, walletBalance.preferred?.amount])
 
   // Check balance when price changes
   useEffect(() => {
@@ -463,6 +466,9 @@ export default function Home() {
       {/* Zoom hint toast */}
       <ZoomHintToast hasZoomedPast4x={hasZoomedPast4xRef.current} />
       {/* <CampaignBanner /> */}
+      {/* Browser-only — points users with empty Celo wallets at Squid to
+          bridge in. The component self-hides in MiniPay (where the in-drawer
+          TOP UP BALANCE deeplink to MiniPay Add Cash handles the same case). */}
       <BridgeBanner />
 
       {/* Selection review pill — user taps this to open drawer. When no
@@ -533,6 +539,7 @@ export default function Home() {
           userBalance={userBalance}
           txStep={buy.step}
           txHash={buy.txHash}
+          txError={buy.error}
           userAddress={effectiveAddr}
           profilesMap={drawerProfiles}
           onRemovePixels={handleRemovePixels}
