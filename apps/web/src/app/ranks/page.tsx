@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { usePublicClient } from 'wagmi'
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import LeaderboardTabs from '@/components/Leaderboard/LeaderboardTabs'
@@ -18,13 +17,16 @@ import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { ZERO_ADDRESS } from '@/constants/map'
+import { useReadClient } from '@/hooks/useReadClient'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
 
 export default function RanksPage() {
-  const publicClient = usePublicClient()
+  // Guaranteed-defined read client. Leaderboard is a read-only view and
+  // must populate for anonymous users.
+  const publicClient = useReadClient()
   const { revealedMaps, homeMapId, currentMapId } = useMaps()
   // ScopeToggle's "your home — map N" caption requires a known home, which
   // only exists once the wallet is connected; hide the toggle otherwise.

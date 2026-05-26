@@ -78,37 +78,62 @@ export default function Home() {
     }
   }, [publicClient, load, mondetoAddress])
 
-  // Geolocation auto-zoom on first visit. Lands the user on their region
-  // so they can start picking pixels right away. We ask once, remember the
-  // decision, and skip on subsequent visits.
+  // Auto-zoom to the player's region on first visit. Uses Vercel's
+  // IP-derived coordinates via /api/geo instead of the browser
+  // geolocation API — that path hangs in MiniPay's WebView even with a
+  // Permissions-Policy header, and city-level precision is plenty for
+  // a country-sized zoom. Bonus: no permission prompt to dismiss.
   useEffect(() => {
     if (loadState !== 'ready') return
-    if (typeof window === 'undefined' || !navigator.geolocation) return
+    if (typeof window === 'undefined') return
 
     try {
-      const decided = localStorage.getItem('mondeto-geo-decision')
-      if (decided === 'declined') return
       const alreadyZoomed = sessionStorage.getItem('mondeto-geo-zoomed')
       if (alreadyZoomed) return
     } catch {}
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { x, y } = geoToPixel(pos.coords.latitude, pos.coords.longitude)
-        const targetId = pixelIdFn(x, y)
-        try {
-          localStorage.setItem('mondeto-geo-decision', 'granted')
-          sessionStorage.setItem('mondeto-geo-zoomed', '1')
-        } catch {}
+    const ctrl = new AbortController()
+    const HARD_TIMEOUT_MS = 8_000
+    const hardTimeout = setTimeout(() => {
+      ctrl.abort()
+      console.warn('[geo] /api/geo timed out after', HARD_TIMEOUT_MS, 'ms')
+    }, HARD_TIMEOUT_MS)
 
-        // The canvas ref + its internal TransformWrapper need a few frames
-        // to be ready after loadState flips to 'ready'. Retry up to ~2s
-        // until the ref is attached, then fire the zoom.
+    fetch('/api/geo', { signal: ctrl.signal })
+      .then(async (r) => {
+        clearTimeout(hardTimeout)
+        if (!r.ok) throw new Error(`/api/geo ${r.status}`)
+        const data = (await r.json()) as {
+          lat: number | null
+          lng: number | null
+          city: string | null
+          country: string | null
+        }
+        if (data.lat === null || data.lng === null) {
+          console.warn('[geo] no IP geo headers (local dev?)')
+          return
+        }
+        const { lat, lng } = data
+        const { x, y } = geoToPixel(lat, lng)
+        const targetId = pixelIdFn(x, y)
+
+        // The canvas ref + its internal TransformWrapper need a few
+        // frames to be ready after loadState flips to 'ready'. Retry
+        // up to ~2s until the ref is attached, then fire the zoom.
+        // Only mark sessionStorage AFTER the zoom actually succeeds so
+        // a slow canvas mount doesn't strand later loads on the world
+        // view.
         const start = Date.now()
         const tryZoom = () => {
           const ref = canvasRef.current
           if (ref) {
-            ref.zoomToPixel(targetId)
+            // Scale 10 everywhere — at narrower viewport widths it
+            // gets a smaller absolute area on screen, but the per-tile
+            // size stays the same so the picking feel is consistent.
+            ref.zoomToPixel(targetId, 10)
+            try {
+              sessionStorage.setItem('mondeto-geo-zoomed', '1')
+            } catch {}
             return
           }
           if (Date.now() - start > 2000) {
@@ -118,15 +143,18 @@ export default function Home() {
           setTimeout(tryZoom, 100)
         }
         tryZoom()
-      },
-      (err) => {
-        console.warn('[geo] permission denied or error:', err.message)
-        try {
-          localStorage.setItem('mondeto-geo-decision', 'declined')
-        } catch {}
-      },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
-    )
+      })
+      .catch((err: unknown) => {
+        clearTimeout(hardTimeout)
+        if ((err as { name?: string } | undefined)?.name === 'AbortError') return
+        const message = err instanceof Error ? err.message : 'unknown error'
+        console.warn('[geo] /api/geo failed:', message)
+      })
+
+    return () => {
+      ctrl.abort()
+      clearTimeout(hardTimeout)
+    }
   }, [loadState])
 
   // Fetch profiles for territory labels
@@ -488,6 +516,7 @@ export default function Home() {
           userBalance={userBalance}
           txStep={buy.step}
           txHash={buy.txHash}
+          txError={buy.error}
           userAddress={effectiveAddr}
           profilesMap={drawerProfiles}
           onRemovePixels={handleRemovePixels}

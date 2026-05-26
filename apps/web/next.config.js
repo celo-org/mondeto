@@ -34,6 +34,26 @@ const nextConfig = {
   // PostHog's ingestion endpoints rely on trailing slashes; Next.js's
   // default redirect would break them.
   skipTrailingSlashRedirect: true,
+  // Permissions-Policy explicitly allows our own origin to use the
+  // Geolocation API. Many Chromium-based WebViews (including newer
+  // MiniPay builds) default-deny geolocation when no policy header is
+  // present, which silently leaves `navigator.geolocation.getCurrentPosition`
+  // pending forever. Declaring `geolocation=(self)` is the documented
+  // way to opt in. See:
+  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy/geolocation
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Permissions-Policy',
+            value: 'geolocation=(self)',
+          },
+        ],
+      },
+    ]
+  },
 };
 
 module.exports = nextConfig;

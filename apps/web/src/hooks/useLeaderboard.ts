@@ -212,11 +212,7 @@ export function useLeaderboard(
     Promise.all(
       revealed.map(async (m) => {
         try {
-          // NOTE: today every revealed map points at the same address. When
-          // each map gets its own contract, `fetchAllPixelsFromContract`
-          // will need to accept the per-map address. The shape returned
-          // here doesn't change.
-          const data = await fetchAllPixelsFromContract(read)
+          const data = await fetchAllPixelsFromContract(read, m.address)
           return pixelViewToMapSnapshot(data, m.id, m.revealed)
         } catch (e) {
           console.warn(`Failed to load map ${m.id} for global board:`, e)

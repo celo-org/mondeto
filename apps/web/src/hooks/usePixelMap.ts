@@ -1,22 +1,14 @@
 'use client'
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { usePublicClient } from 'wagmi'
-import { createPublicClient, http } from 'viem'
-import { celo } from 'viem/chains'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getContractByMapId } from '@/lib/maps/contracts'
+import { useReadClient } from '@/hooks/useReadClient'
 import type { MapId } from '@/lib/maps/types'
 
 export type LoadState = 'loading' | 'ready' | 'error'
 
 const POLL_INTERVAL = 30_000
-
-// Fallback client for read-only calls when wagmi isn't ready
-const fallbackClient = createPublicClient({
-  chain: celo,
-  transport: http(),
-})
 
 /**
  * Pixel map state for a single map.
@@ -26,24 +18,19 @@ const fallbackClient = createPublicClient({
  * to the first revealed map.
  */
 export function usePixelMap(mapId?: MapId) {
-  const wagmiClient = usePublicClient()
+  const readClient = useReadClient()
   const contractAddress = getContractByMapId(mapId ?? 0)
   const pixelDataRef = useRef<PixelView[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [version, setVersion] = useState(0)
   const [changedIds, setChangedIds] = useState<number[]>([])
 
-  const getClient = useCallback(() => {
-    return wagmiClient ?? fallbackClient
-  }, [wagmiClient])
-
   const fetchData = useCallback(async (): Promise<PixelView[]> => {
-    const client = getClient()
     return await fetchAllPixelsFromContract(
-      client.readContract.bind(client) as Parameters<typeof fetchAllPixelsFromContract>[0],
+      readClient.readContract.bind(readClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
       contractAddress,
     )
-  }, [getClient, contractAddress])
+  }, [readClient, contractAddress])
 
   const load = useCallback(async () => {
     try {

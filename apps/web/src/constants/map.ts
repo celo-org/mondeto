@@ -21,6 +21,23 @@ export const COLOR_PRESETS = [
   '#ff5722', '#00bcd4', '#8bc34a', '#f0f0f0',
 ] as const
 
+// Default-color palette for new profiles. Curated to skip anything that
+// blends into the map: ocean-blue (#71BBFF and any blue/cyan near it) and
+// land-cream (#F0E7D6). The user can still pick any color via the picker
+// — this is just the seed we use until they save one.
+export const PROFILE_DEFAULT_PALETTE = [
+  '#e74c3c', // red
+  '#e67e22', // orange
+  '#f1c40f', // yellow
+  '#2ecc71', // green
+  '#1abc9c', // teal — distinct enough from ocean blue
+  '#9b59b6', // purple
+  '#e91e63', // pink
+  '#ff5722', // deep orange
+  '#8bc34a', // light green
+  '#B430FF', // brand purple
+] as const
+
 export const DRAWER_SWATCHES = [
   '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71',
   '#1abc9c', '#3498db', '#9b59b6',
