@@ -104,22 +104,16 @@ export default function Home() {
     }
   }, [publicClient, load, mondetoAddress])
 
-  // Geolocation auto-zoom on first visit. Lands the user on their region
-  // so they can start picking pixels right away. We ask once, remember the
-  // decision, and skip on subsequent visits.
+  // Auto-zoom to the player's region on first visit. Uses Vercel's
+  // IP-derived coordinates via /api/geo instead of the browser
+  // geolocation API — that path hangs in MiniPay's WebView even with a
+  // Permissions-Policy header, and city-level precision is plenty for
+  // a country-sized zoom. Bonus: no permission prompt to dismiss.
   useEffect(() => {
     if (loadState !== 'ready') return
-    if (typeof window === 'undefined' || !navigator.geolocation) {
-      setGeoDebug({ status: 'no-api' })
-      return
-    }
+    if (typeof window === 'undefined') return
 
     try {
-      const decided = localStorage.getItem('mondeto-geo-decision')
-      if (decided === 'declined') {
-        setGeoDebug({ status: 'denied', error: 'previously declined' })
-        return
-      }
       const alreadyZoomed = sessionStorage.getItem('mondeto-geo-zoomed')
       if (alreadyZoomed) {
         setGeoDebug({ status: 'skipped', error: 'already zoomed this session' })
@@ -129,60 +123,59 @@ export default function Home() {
 
     setGeoDebug({ status: 'requesting' })
 
-    // Some WebViews (we've seen this on certain Android browsers) accept
-    // the getCurrentPosition call but never invoke success or error, even
-    // past the built-in `timeout` option. Add a hard client-side timeout
-    // so the UI never gets stuck on 'requesting'. The flag short-circuits
-    // both callbacks if they DO eventually fire after the timeout, so we
-    // don't overwrite the timed-out state with stale data.
-    let resolved = false
-    const HARD_TIMEOUT_MS = 12_000
+    const ctrl = new AbortController()
+    const HARD_TIMEOUT_MS = 8_000
     const hardTimeout = setTimeout(() => {
-      if (resolved) return
-      resolved = true
-      console.warn('[geo] hard timeout — no success or error after', HARD_TIMEOUT_MS, 'ms')
+      ctrl.abort()
       setGeoDebug({ status: 'timed-out', error: `no response after ${HARD_TIMEOUT_MS / 1000}s` })
     }, HARD_TIMEOUT_MS)
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (resolved) return
-        resolved = true
+    fetch('/api/geo', { signal: ctrl.signal })
+      .then(async (r) => {
         clearTimeout(hardTimeout)
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
+        if (!r.ok) throw new Error(`/api/geo ${r.status}`)
+        const data = (await r.json()) as {
+          lat: number | null
+          lng: number | null
+          city: string | null
+          country: string | null
+        }
+        if (data.lat === null || data.lng === null) {
+          setGeoDebug({ status: 'denied', error: 'no IP geo headers (local dev?)' })
+          return
+        }
+        const { lat, lng } = data
         const { x, y } = geoToPixel(lat, lng)
         const targetId = pixelIdFn(x, y)
         const landed = isLandXY(x, y)
         setGeoDebug({ status: 'granted', lat, lng, x, y, isLand: landed })
-        try {
-          localStorage.setItem('mondeto-geo-decision', 'granted')
-        } catch {}
 
-        // The canvas ref + its internal TransformWrapper need a few frames
-        // to be ready after loadState flips to 'ready'. Retry up to ~2s
-        // until the ref is attached, then fire the zoom. Only mark the
-        // session as zoomed AFTER the zoom actually succeeds — otherwise
-        // a slow canvas mount leaves the flag set and subsequent loads
-        // skip the geo flow entirely, leaving the user stranded on the
-        // world view.
+        // The canvas ref + its internal TransformWrapper need a few
+        // frames to be ready after loadState flips to 'ready'. Retry
+        // up to ~2s until the ref is attached, then fire the zoom.
+        // Only mark sessionStorage AFTER the zoom actually succeeds so
+        // a slow canvas mount doesn't strand later loads on the world
+        // view.
         const start = Date.now()
         const tryZoom = () => {
           const ref = canvasRef.current
           if (ref) {
-            // Scale picked so the player's region fills the viewport. The
-            // canvas is 170 source-pixels wide and renders at SCALE × 170
-            // CSS px; viewport_width / SCALE = how many source pixels the
-            // player sees horizontally. On desktop ~150 source pixels feels
-            // right; on mobile the screen is much narrower, so we need a
-            // higher scale to land at a similar country-sized view.
+            // Scale picked so the player's region fills the viewport.
+            // The canvas is 170 source-pixels wide and renders at
+            // SCALE × 170 CSS px; viewport_width / SCALE = how many
+            // source pixels the player sees horizontally. On desktop
+            // ~150 source pixels feels right; on mobile the screen is
+            // much narrower, so we need a higher scale to land at a
+            // similar country-sized view.
             const isMobile =
               typeof window !== 'undefined' && window.innerWidth < 600
             ref.zoomToPixel(targetId, isMobile ? 18 : 10)
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
-            console.log(`[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${lat.toFixed(2)},${lng.toFixed(2)} — land=${landed}`)
+            console.log(
+              `[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${lat.toFixed(2)},${lng.toFixed(2)} — land=${landed} via /api/geo (${data.city ?? '?'}, ${data.country ?? '?'})`,
+            )
             return
           }
           if (Date.now() - start > 2000) {
@@ -192,19 +185,19 @@ export default function Home() {
           setTimeout(tryZoom, 100)
         }
         tryZoom()
-      },
-      (err) => {
-        if (resolved) return
-        resolved = true
+      })
+      .catch((err: unknown) => {
         clearTimeout(hardTimeout)
-        console.warn('[geo] permission denied or error:', err.message)
-        setGeoDebug({ status: 'denied', error: err.message })
-        try {
-          localStorage.setItem('mondeto-geo-decision', 'declined')
-        } catch {}
-      },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
-    )
+        if ((err as { name?: string } | undefined)?.name === 'AbortError') return
+        const message = err instanceof Error ? err.message : 'unknown error'
+        console.warn('[geo] /api/geo failed:', message)
+        setGeoDebug({ status: 'denied', error: message })
+      })
+
+    return () => {
+      ctrl.abort()
+      clearTimeout(hardTimeout)
+    }
   }, [loadState])
 
   // Fetch profiles for territory labels
