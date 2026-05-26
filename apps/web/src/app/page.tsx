@@ -71,7 +71,15 @@ export default function Home() {
   const [tappedPixelId, setTappedPixelId] = useState<number | null>(null)
   const [userBalance, setUserBalance] = useState(0n)
   const [geoDebug, setGeoDebug] = useState<{
-    status: 'idle' | 'requesting' | 'granted' | 'denied' | 'skipped' | 'no-api'
+    status:
+      | 'idle'
+      | 'requesting'
+      | 'granted'
+      | 'denied'
+      | 'skipped'
+      | 'no-api'
+      | 'timed-out'
+      | 'minipay-skip'
     lat?: number
     lng?: number
     x?: number
@@ -107,6 +115,18 @@ export default function Home() {
       return
     }
 
+    // MiniPay's WebView doesn't surface the geolocation permission prompt
+    // and never resolves either callback — the request hangs forever on
+    // 'requesting'. Skip the prompt entirely there so the player lands
+    // on the default view instead of being stuck waiting.
+    const isMiniPay =
+      typeof window !== 'undefined' &&
+      !!(window.ethereum as { isMiniPay?: boolean } | undefined)?.isMiniPay
+    if (isMiniPay) {
+      setGeoDebug({ status: 'minipay-skip', error: 'MiniPay WebView does not support geolocation' })
+      return
+    }
+
     try {
       const decided = localStorage.getItem('mondeto-geo-decision')
       if (decided === 'declined') {
@@ -122,8 +142,26 @@ export default function Home() {
 
     setGeoDebug({ status: 'requesting' })
 
+    // Some WebViews (we've seen this on certain Android browsers) accept
+    // the getCurrentPosition call but never invoke success or error, even
+    // past the built-in `timeout` option. Add a hard client-side timeout
+    // so the UI never gets stuck on 'requesting'. The flag short-circuits
+    // both callbacks if they DO eventually fire after the timeout, so we
+    // don't overwrite the timed-out state with stale data.
+    let resolved = false
+    const HARD_TIMEOUT_MS = 12_000
+    const hardTimeout = setTimeout(() => {
+      if (resolved) return
+      resolved = true
+      console.warn('[geo] hard timeout — no success or error after', HARD_TIMEOUT_MS, 'ms')
+      setGeoDebug({ status: 'timed-out', error: `no response after ${HARD_TIMEOUT_MS / 1000}s` })
+    }, HARD_TIMEOUT_MS)
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (resolved) return
+        resolved = true
+        clearTimeout(hardTimeout)
         const lat = pos.coords.latitude
         const lng = pos.coords.longitude
         const { x, y } = geoToPixel(lat, lng)
@@ -169,6 +207,9 @@ export default function Home() {
         tryZoom()
       },
       (err) => {
+        if (resolved) return
+        resolved = true
+        clearTimeout(hardTimeout)
         console.warn('[geo] permission denied or error:', err.message)
         setGeoDebug({ status: 'denied', error: err.message })
         try {
