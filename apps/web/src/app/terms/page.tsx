@@ -110,6 +110,15 @@ export default function TermsPage() {
         </p>
       </section>
 
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 16, marginBottom: 8 }}>10. Operator</h2>
+        <p style={{ fontSize: 13 }}>
+          Mondeto is operated by Celo Core Co. Mondeto is not operated by, affiliated with, or
+          endorsed by Opera or MiniPay — MiniPay is a wallet platform through which Mondeto is
+          accessible. For questions or support, see §9.
+        </p>
+      </section>
+
       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 32 }}>
         <Link href="/" style={{ color: 'var(--accent)' }}>← Back to Mondeto</Link>
       </p>

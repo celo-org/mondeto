@@ -45,6 +45,10 @@ const QA: Array<{ q: string; a: string }> = [
     a: 'When you haven\'t set a player name yet, Mondeto picks one for you — a fruit plus a famous (and non-controversial) figure. Set your own name on the profile page if you want.',
   },
   {
+    q: 'Who runs Mondeto?',
+    a: 'Mondeto is operated by Celo Core Co. It is not operated by, affiliated with, or endorsed by Opera or MiniPay — MiniPay is just the wallet that makes Mondeto accessible inside their app.',
+  },
+  {
     q: 'Where does support go?',
     a: 'Join us at t.me/mondetoSupport. A human (or our bot during phase 1) reads everything.',
   },

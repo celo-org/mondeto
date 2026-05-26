@@ -4,7 +4,7 @@
 > Requirements doc: https://docs.minipay.xyz/ + Celopedia `minipay-requirements.md`
 
 ## Production URL
-- Production: <https://mondeto-web.vercel.app/>
+- Production: <https://www.mondeto.app/> (Vercel-hosted; apex `https://mondeto.app` redirects to `www`)
 - Staging: `https://<TODO-staging-url>`
 - Real-user perf: Vercel Speed Insights enabled (LCP / FID / CLS / INP / TTFB / FCP from real traffic) — dashboard in Vercel project → Speed Insights tab
 
@@ -33,6 +33,19 @@ For the "Transaction Samples" submission field. Per MiniPay: *"for every user-fa
 | `updateProfile` | yes | https://celoscan.io/tx/0x7cd75679e098ba38547b7eef15074f48c4ca989779c9a2beba4293dfd3c74d7c |
 | `withdraw` | no (owner-only) | https://celoscan.io/tx/0xc5174892db368404997ad1b58093d6f68dbccd9a975f4ffd674ca8dbc8897f40 |
 
+## JavaScript-serving origins
+
+For the submission field: *"Provide your app's domains and subdomains which will contain your JavaScript code."*
+
+Only domains the browser actually downloads `.js` files from. Endpoints that return JSON / fonts / beacons don't belong here — they go in the URL/origin manifest below.
+
+- `https://www.mondeto.app`
+- `https://mondeto.app` (apex; redirects to `www` but the browser may briefly see it as an origin)
+
+All bundles ship from same-origin `/_next/static/chunks/*`. Every npm dependency (wagmi, viem, Privy, posthog-js, WalletConnect, Vercel Speed Insights, etc.) is compiled into those chunks. PostHog's static assets are reverse-proxied through `/ingest/static/*` (configured in `apps/web/next.config.js`), so even those reach the browser from our own origin.
+
+How to verify before submitting: Chrome incognito → DevTools → Network → filter `JS` → hard reload `https://www.mondeto.app/` → exercise connect-wallet, ranks, profile, buy. The unique hostnames in that filtered list should match the above.
+
 ## URL / origin manifest
 
 For the "Network Transparency" submission field — every external server the
@@ -43,11 +56,12 @@ Network → "Disable cache" → hard reload → group by Domain.
 Current expected manifest (verify against the actual network trace before
 submitting):
 
-- App: <https://mondeto-web.vercel.app/>
+- App: <https://www.mondeto.app/> (apex `https://mondeto.app/` 308s to `www`)
 - RPC: `https://forno.celo.org` (Celo mainnet)
 - Wallet (web only — NOT loaded inside MiniPay): `https://auth.privy.io/`, `https://api.privy.io/`, `https://*.walletconnect.com/`
 - Fonts: `https://fonts.googleapis.com`, `https://fonts.gstatic.com`
 - Real-user perf: `https://vitals.vercel-insights.com` (Vercel Speed Insights beacon)
+- Analytics (reverse-proxied through `/ingest/*` so the browser stays same-origin): `https://eu.i.posthog.com`, `https://eu-assets.i.posthog.com`
 - TODO: run the prod build with the network inspector and capture every domain hit on cold load + buy flow.
 
 ## Pre-submission checklist (from `minipay-requirements.md`)
