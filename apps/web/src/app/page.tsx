@@ -79,7 +79,6 @@ export default function Home() {
       | 'skipped'
       | 'no-api'
       | 'timed-out'
-      | 'minipay-skip'
     lat?: number
     lng?: number
     x?: number
@@ -112,18 +111,6 @@ export default function Home() {
     if (loadState !== 'ready') return
     if (typeof window === 'undefined' || !navigator.geolocation) {
       setGeoDebug({ status: 'no-api' })
-      return
-    }
-
-    // MiniPay's WebView doesn't surface the geolocation permission prompt
-    // and never resolves either callback — the request hangs forever on
-    // 'requesting'. Skip the prompt entirely there so the player lands
-    // on the default view instead of being stuck waiting.
-    const isMiniPay =
-      typeof window !== 'undefined' &&
-      !!(window.ethereum as { isMiniPay?: boolean } | undefined)?.isMiniPay
-    if (isMiniPay) {
-      setGeoDebug({ status: 'minipay-skip', error: 'MiniPay WebView does not support geolocation' })
       return
     }
 
