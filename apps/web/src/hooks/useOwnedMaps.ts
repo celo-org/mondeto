@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain, type ChainId } from '@/lib/maps/contracts'
-import { useReadClient } from '@/hooks/useReadClient'
-import { READ_CHAIN_ID } from '@/lib/chain'
+import { READ_CHAIN_ID, fallbackReadClient } from '@/lib/chain'
 import type { MapId } from '@/lib/maps/types'
 
 const CACHE_KEY_PREFIX = 'mondeto-owned-maps'
@@ -72,17 +71,17 @@ function writeCache(key: string, counts: Record<MapId, number>): void {
  * back on the map where they own the most pixels — the "1 user -> 1 map"
  * UX without a server-side index.
  *
- * Uses `useReadClient` (the SSR-safe pattern with a module-level fallback
- * client) instead of `usePublicClient()`, which routes through Privy's
- * WagmiProvider and breaks static prerender for every page that mounts
- * `ConnectButton` via `TopBar`.
+ * Uses the module-level `fallbackReadClient` directly (no wagmi hooks)
+ * instead of `useReadClient` / `usePublicClient`. Those route through
+ * Privy's WagmiProvider context at render time, which crashes static
+ * prerender for every page that mounts `ConnectButton` via `TopBar`
+ * with "useWallets was called outside the PrivyProvider component".
  *
  * Cached in `sessionStorage` per (chain, address) for 60 s so navigating
  * across pages doesn't trigger three full-map reads each time.
  */
 export function useOwnedMaps(): OwnedMapsResult {
   const { address } = useAccount()
-  const publicClient = useReadClient()
   const [state, setState] = useState<OwnedMapsResult>({
     loading: true,
     counts: {},
@@ -118,9 +117,9 @@ export function useOwnedMaps(): OwnedMapsResult {
         return
       }
 
-      const read = publicClient.readContract.bind(publicClient) as Parameters<
-        typeof fetchAllPixelsFromContract
-      >[0]
+      const read = fallbackReadClient.readContract.bind(
+        fallbackReadClient,
+      ) as Parameters<typeof fetchAllPixelsFromContract>[0]
       const addrLower = address!.toLowerCase()
       const counts: Record<MapId, number> = {}
 
@@ -153,7 +152,7 @@ export function useOwnedMaps(): OwnedMapsResult {
     return () => {
       cancelled = true
     }
-  }, [address, publicClient])
+  }, [address])
 
   return state
 }

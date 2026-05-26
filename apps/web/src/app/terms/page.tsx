@@ -34,10 +34,11 @@ export default function TermsPage() {
       <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, marginBottom: 8 }}>1. About Mondeto</h2>
         <p style={{ fontSize: 13 }}>
-          Mondeto is an on-chain pixel-buying game on the Celo network. Players claim pixels on a
-          shared world map by paying in supported dollar stablecoins to the Mondeto smart contracts
-          on Celo mainnet. The map, ownership, and pricing are determined entirely by the
-          contracts — Mondeto operates the frontend, not the chain.
+          Mondeto is an on-chain pixel-buying game on the Celo network. Players claim pixels on
+          shared world maps by paying an accepted stablecoin to one of the Mondeto smart contracts
+          on Celo mainnet (addresses listed in the project README under Deployments). The map,
+          ownership, and pricing are determined entirely by the contracts — Mondeto operates the
+          frontend, not the chain.
         </p>
       </section>
 

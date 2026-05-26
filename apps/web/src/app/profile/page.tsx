@@ -101,24 +101,24 @@ export default function ProfilePage() {
     //   2. Chunked + parallel getLogs from estimated-deploy to head. Mirrors
     //      the pattern in useAnalytics — Forno occasionally rejects large
     //      windows, so we cap each chunk at 50k blocks.
-    //   3. Cache the result in sessionStorage so navigating away + back
-    //      doesn't trigger another full scan.
+    //   3. Stale-while-revalidate cache in localStorage: render whatever's
+    //      cached immediately (even if expired) so the user sees numbers
+    //      instantly, then refresh in the background. Skip the rescan only
+    //      if the cached entry is still fresh.
     async function fetchPnL() {
       const CHUNK_BLOCKS = 50_000n
       const MAX_PARALLEL = 4
       const SAFETY_BUFFER_BLOCKS = 100_000n
       const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${addrStr!.toLowerCase()}`
-      const CACHE_TTL_MS = 60_000
+      const CACHE_TTL_MS = 10 * 60_000
 
       try {
-        const cached = sessionStorage.getItem(CACHE_KEY)
+        const cached = localStorage.getItem(CACHE_KEY)
         if (cached) {
           const parsed = JSON.parse(cached) as { ts: number; spent: string; earned: string }
-          if (Date.now() - parsed.ts < CACHE_TTL_MS) {
-            setSpent(BigInt(parsed.spent))
-            setEarned(BigInt(parsed.earned))
-            return
-          }
+          setSpent(BigInt(parsed.spent))
+          setEarned(BigInt(parsed.earned))
+          if (Date.now() - parsed.ts < CACHE_TTL_MS) return
         }
       } catch {}
 
@@ -262,7 +262,7 @@ export default function ProfilePage() {
         setEarned(totalEarned)
 
         try {
-          sessionStorage.setItem(
+          localStorage.setItem(
             CACHE_KEY,
             JSON.stringify({
               ts: Date.now(),
@@ -480,7 +480,7 @@ export default function ProfilePage() {
                   textUnderlineOffset: 3,
                 }}
               >
-                faq
+                help
               </Link>
               <Link
                 href="/terms"

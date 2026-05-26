@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { celo } from 'viem/chains'
 import {
@@ -9,7 +9,6 @@ import {
   type ChainId,
   type MapContract,
 } from '@/lib/maps/contracts'
-import { useOwnedMaps } from '@/hooks/useOwnedMaps'
 import type { MapId } from '@/lib/maps/types'
 
 export interface UseMapsResult {
@@ -47,32 +46,14 @@ export function useMaps(): UseMapsResult {
     [effectiveChain],
   )
 
-  const { ownedMapId, loading: ownedLoading } = useOwnedMaps()
-
   const homeMapId = useMemo<MapId | null>(() => {
     if (!address || revealedMaps.length === 0) return null
-    // Wait for the ownership scan before committing to a home.
-    if (ownedLoading) return null
-    if (
-      ownedMapId !== null &&
-      isRevealedMapId(ownedMapId, effectiveChain)
-    ) {
-      return ownedMapId
-    }
     return revealedMaps[0].id
-  }, [address, revealedMaps, ownedMapId, ownedLoading, effectiveChain])
+  }, [address, revealedMaps])
 
   const [currentMapId, setCurrentMapIdState] = useState<MapId>(
     () => revealedMaps[0]?.id ?? (0 as MapId),
   )
-
-  // Slot the view to home once the ownership scan resolves. If the user
-  // manually switches maps afterwards we keep their choice — `setCurrentMapId`
-  // is the only thing that should overwrite this in-session.
-  useEffect(() => {
-    if (homeMapId === null) return
-    setCurrentMapIdState((prev) => (prev === homeMapId ? prev : homeMapId))
-  }, [homeMapId])
 
   const setCurrentMapId = useCallback(
     (id: MapId) => {
