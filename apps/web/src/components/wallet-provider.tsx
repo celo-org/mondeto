@@ -34,9 +34,16 @@ import { ChainGuard } from "./ChainGuard";
 // route — `force-dynamic` on the layout just moved the failure from
 // build-time prerender to runtime SSR.
 
+// `ssr: true` is wagmi's documented fix for Next.js hydration mismatch:
+// without it, wagmi auto-reconnects from localStorage during the first
+// client render, so `useAccount` returns a connected address on the
+// client while the SSR pass saw `undefined`. The mismatch trips React
+// error #418 and the downstream tree is replayed, which in our setup
+// then crashes the lazy Privy chunk mid-load.
 const wagmiConfig = createConfig({
   chains: [celo, celoSepolia],
   connectors: [injected()],
+  ssr: true,
   transports: {
     [celo.id]: http(),
     [celoSepolia.id]: http(),
