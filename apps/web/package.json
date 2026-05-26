@@ -26,7 +26,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "lucide-react": "^0.460.0",
-    "next": "^14.0.0",
+    "next": "^15.0.0",
     "obscenity": "^0.4.6",
     "posthog-js": "^1.200.0",
     "react": "^18.2.0",
