@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { celo } from "viem/chains";
+import { celoSepolia } from "viem/chains";
 
-const TARGET_CHAIN = celo;
+// Test build: the contract v2 test deployment lives on Celo Sepolia.
+// Swap this back to `celo` once the v2 contract is redeployed on Celo
+// mainnet (and update the address in `lib/maps/contracts.ts`).
+const TARGET_CHAIN = celoSepolia;
+
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
+}
 
 function readEth(): EthereumProvider | undefined {
   if (typeof window === "undefined") return undefined;
-  return window.ethereum;
+  return (window as unknown as { ethereum?: EthereumProvider }).ethereum;
 }
 
 async function readWalletChainId(eth: EthereumProvider): Promise<number | null> {

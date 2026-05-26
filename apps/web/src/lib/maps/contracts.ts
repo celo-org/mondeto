@@ -25,8 +25,14 @@ export interface MapContract {
  * flip `revealed` to true when ops opens them to players. Map ids must be
  * dense (0, 1, 2, ...) so hash-balanced assignment lands on a valid slot.
  */
+// Map 0 currently points at the v2 multi-token test deployment on
+// Celo Sepolia. The contract surface is the new MONDETO_ABI in
+// `lib/contract.ts` — `buyPixels(ids, token)`, multi-stable accepted
+// tokens, the indexed `token` field on `PixelsPurchased`, etc. Swap
+// this address to the mainnet deployment once the v2 contract is
+// redeployed to Celo mainnet.
 export const MAP_CONTRACTS: readonly MapContract[] = [
-  { id: 0, address: '0x7e68c4c7458895ec8ded5a44299e05d0a6d54780', revealed: true },
+  { id: 0, address: '0xc71e444c5339749c1c3067B62AacbfeE7840c934', revealed: true },
   // { id: 1, address: '0x...', revealed: false },
   // { id: 2, address: '0x...', revealed: false },
   // { id: 3, address: '0x...', revealed: false },

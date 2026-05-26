@@ -20,6 +20,13 @@ vi.mock('wagmi', () => ({
     waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: 'success' }),
     simulateContract: vi.fn(),
   }),
+  // useStablecoinBalance now reads accepted tokens via wagmi multicall;
+  // stub the relevant hooks so it returns preferred=null. We only test
+  // idle-state helpers below; the execute() path is exercised via
+  // integration.
+  useBalance: () => ({ data: undefined, isLoading: false }),
+  useReadContract: () => ({ data: [], isLoading: false }),
+  useReadContracts: () => ({ data: [], isLoading: false }),
 }))
 
 describe('useBuyPixels', () => {

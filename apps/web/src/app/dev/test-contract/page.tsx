@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { useReadContract, useAccount } from 'wagmi'
-import { MONDETO_ABI, MONDETO_ADDRESS } from '@/lib/contract'
+import { MONDETO_ABI } from '@/lib/contract'
+import { getContractByMapId } from '@/lib/maps/contracts'
 import { ConnectButton } from '@/components/connect-button'
 
+const MONDETO_ADDRESS = getContractByMapId(0)
 const CONTRACT = { address: MONDETO_ADDRESS, abi: MONDETO_ABI } as const
 
 export default function TestContractPage() {

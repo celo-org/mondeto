@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { useAccount, usePublicClient } from 'wagmi'
+import { useAccount } from 'wagmi'
 import WorldCanvas, { type WorldCanvasRef } from '@/components/Map/WorldCanvas'
 import TopBar from '@/components/Layout/TopBar'
 import MapSwitcher from '@/components/Layout/MapSwitcher'
@@ -19,19 +19,28 @@ import { usePixelMap } from '@/hooks/usePixelMap'
 import { useSelection } from '@/hooks/useSelection'
 import { usePixelPrice } from '@/hooks/usePixelPrice'
 import { useBuyPixels } from '@/hooks/useBuyPixels'
+import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
-import { fetchLandMaskFromContract } from '@/lib/landMask'
+import { fetchLandMaskFromContract, isLandXY } from '@/lib/landMask'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
+import { useReadClient } from '@/hooks/useReadClient'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
 
 export default function Home() {
-  const { address } = useAccount()
-  const publicClient = usePublicClient()
+  // Dark is the only theme now; downstream map components still take the flag
+  // so we pin it to true at the boundary rather than threading every callsite.
+  const isDark = true
+  const { address, isConnected } = useAccount()
+  const addrStr = address as string | undefined
+  // Guaranteed-defined read client (wagmi → fallback viem client). The
+  // map UI is browse-first and shouldn't bail just because no wallet is
+  // resolved yet or because Privy's WagmiProvider hasn't initialized.
+  const publicClient = useReadClient()
 
   const { currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
@@ -49,6 +58,7 @@ export default function Home() {
 
   const { totalPrice, isLoading: priceLoading } = usePixelPrice(selectedIds, currentMapId)
   const buy = useBuyPixels(currentMapId)
+  const profile = useProfile(addrStr, currentMapId)
 
   const walletBalance = useStablecoinBalance()
 
@@ -89,7 +99,9 @@ export default function Home() {
 
     try {
       const alreadyZoomed = sessionStorage.getItem('mondeto-geo-zoomed')
-      if (alreadyZoomed) return
+      if (alreadyZoomed) {
+        return
+      }
     } catch {}
 
     const ctrl = new AbortController()
@@ -116,6 +128,7 @@ export default function Home() {
         const { lat, lng } = data
         const { x, y } = geoToPixel(lat, lng)
         const targetId = pixelIdFn(x, y)
+        const landed = isLandXY(x, y)
 
         // The canvas ref + its internal TransformWrapper need a few
         // frames to be ready after loadState flips to 'ready'. Retry
@@ -130,10 +143,14 @@ export default function Home() {
             // Scale 10 everywhere — at narrower viewport widths it
             // gets a smaller absolute area on screen, but the per-tile
             // size stays the same so the picking feel is consistent.
+            // (We previously bumped to 18 on mobile but it overshot.)
             ref.zoomToPixel(targetId, 10)
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
+            console.log(
+              `[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${lat.toFixed(2)},${lng.toFixed(2)} — land=${landed} via /api/geo (${data.city ?? '?'}, ${data.country ?? '?'})`,
+            )
             return
           }
           if (Date.now() - start > 2000) {
@@ -200,16 +217,19 @@ export default function Home() {
     fetchProfiles()
   }, [publicClient, loadState, version])
 
-  // Use real on-chain balance when wallet connected. Sum across USDm + USDC
-  // + USDT (all $1-pegged) so users holding any MiniPay stablecoin can see
-  // their spendable dollar balance — not just USDT, which most MiniPay users
-  // hold zero of. Stored in 6-decimal units to match pixel prices on-chain.
+  // Use real on-chain balance when wallet connected. Each buy is settled in
+  // a single stablecoin — the user's highest-balance one (`preferred`) — so
+  // the affordability check has to key off THAT specific balance, not a
+  // total summed across all three. Otherwise we'd green-light a $3 buy for
+  // a wallet holding $2 USDC + $1 USDm and the on-chain transferFrom would
+  // revert. Stored in 6-decimal units to match pixel prices on-chain.
   useEffect(() => {
     if (walletBalance.isConnected) {
-      const parsed = Math.floor(walletBalance.totalAmount * 1_000_000)
+      const preferredAmount = walletBalance.preferred?.amount ?? 0
+      const parsed = Math.floor(preferredAmount * 1_000_000)
       setUserBalance(BigInt(parsed))
     }
-  }, [walletBalance.isConnected, walletBalance.totalAmount])
+  }, [walletBalance.isConnected, walletBalance.preferred?.amount])
 
   // Check balance when price changes
   useEffect(() => {
@@ -227,7 +247,7 @@ export default function Home() {
     try { sessionStorage.setItem('mondeto-zoom', String(scale)) } catch {}
   }, [])
 
-  const effectiveAddr = address || '0xYOUR000000000000000000000000000000000001'
+  const effectiveAddr = addrStr || '0xYOUR000000000000000000000000000000000001'
 
   const handleAddPixel = useCallback((id: number) => {
     addPixel(id)
@@ -408,6 +428,7 @@ export default function Home() {
           ref={canvasRef}
           pixelData={pixelDataRef.current}
           mapView={mapView}
+          isDark={isDark}
           selectedIds={selectedIds}
           onTogglePixel={handleTogglePixel}
           onAddPixel={handleAddPixel}
@@ -416,7 +437,7 @@ export default function Home() {
           onTapWhileZoomedOut={handleTapWhileZoomedOut}
           version={version}
           loadState={loadState}
-          userAddress={address}
+          userAddress={addrStr}
           changedIds={changedIds}
           profilesMap={mapProfiles}
         />
@@ -472,10 +493,16 @@ export default function Home() {
       {/* Zoom hint toast */}
       <ZoomHintToast hasZoomedPast4x={hasZoomedPast4xRef.current} />
       {/* <CampaignBanner /> */}
+      {/* Browser-only — points users with empty Celo wallets at Squid to
+          bridge in. The component self-hides in MiniPay (where the in-drawer
+          TOP UP BALANCE deeplink to MiniPay Add Cash handles the same case). */}
       <BridgeBanner />
 
-      {/* Selection review pill — user taps this to open drawer */}
-      {pixelCount > 0 && activeOverlay === 'none' && (
+      {/* Selection review pill — user taps this to open drawer. When no
+          wallet is connected we swap to a "connect to buy" hint since the
+          drawer's BALANCE / LOCK IT IN flow has no meaning yet. The
+          existing CONNECT button in the top-right is the actual CTA. */}
+      {pixelCount > 0 && activeOverlay === 'none' && isConnected && (
         <button
           onClick={handleOpenDrawer}
           className="pixel-btn pixel-btn-filled font-display"
@@ -494,6 +521,28 @@ export default function Home() {
           REVIEW {pixelCount} PIXELS
         </button>
       )}
+      {pixelCount > 0 && activeOverlay === 'none' && !isConnected && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 90,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 15,
+            fontSize: 9,
+            fontFamily: "'Press Start 2P', monospace",
+            letterSpacing: 2,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+            padding: '10px 18px',
+            textAlign: 'center',
+            maxWidth: 320,
+          }}
+        >
+          connect your wallet to buy
+        </div>
+      )}
 
       {/* Dim layer — only rendered when an overlay is active */}
       {activeOverlay !== 'none' && (
@@ -504,8 +553,9 @@ export default function Home() {
         />
       )}
 
-      {/* Selection drawer — only rendered when open */}
-      {activeOverlay === 'drawer' && (
+      {/* Selection drawer — only rendered when open AND a wallet is
+          connected (the BALANCE + LOCK IT IN flow has no meaning otherwise). */}
+      {activeOverlay === 'drawer' && isConnected && (
         <SelectionDrawer
           visible={true}
           selectedIds={selectedIds}

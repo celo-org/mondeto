@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { useAccount, usePublicClient } from 'wagmi'
+import { useAccount } from 'wagmi'
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import AvatarBlock from '@/components/Profile/AvatarBlock'
@@ -14,18 +14,27 @@ import { useMaps } from '@/hooks/useMaps'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
+import { useReadClient } from '@/hooks/useReadClient'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { isLand } from '@/lib/landMask'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
+import { ConnectButton } from '@/components/connect-button'
 
 export default function ProfilePage() {
   const { address } = useAccount()
+  const addrStr = address as string | undefined
+  // URL input removed — unverified user URLs are an injection vector.
+  // setUrl is left wired but unused so existing useProfile callers keep
+  // their shape; updateProfile is called below with an empty string for url.
   const { currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
-  const { name, setName, color, setColor, saveState, save } = useProfile(address, currentMapId)
+  const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
-  const publicClient = usePublicClient()
+  // Guaranteed-defined read client. Pixel-count + P&L still resolve when
+  // the user is browsing without a wallet (they just won't have personal
+  // stats, but the contract reads work generically).
+  const publicClient = useReadClient()
   const [nameError, setNameError] = useState<string | null>(null)
 
   const [pixelCount, setPixelCount] = useState(0)
@@ -35,7 +44,7 @@ export default function ProfilePage() {
 
   // Fetch owned pixel count from contract
   useEffect(() => {
-    if (!publicClient || !address) return
+    if (!publicClient || !addrStr) return
 
     async function fetchStats() {
       try {
@@ -64,7 +73,7 @@ export default function ProfilePage() {
           const count = (ownerCounts.get(ownerHex.toLowerCase()) ?? 0) + 1
           ownerCounts.set(ownerHex.toLowerCase(), count)
 
-          if (ownerHex.toLowerCase() === address!.toLowerCase()) {
+          if (ownerHex.toLowerCase() === addrStr!.toLowerCase()) {
             myCount++
           }
         }
@@ -73,7 +82,7 @@ export default function ProfilePage() {
 
         // Compute rank
         const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
-        const rankIdx = sorted.findIndex(([owner]) => owner === address!.toLowerCase())
+        const rankIdx = sorted.findIndex(([owner]) => owner === addrStr!.toLowerCase())
         setRank(rankIdx >= 0 ? rankIdx + 1 : 0)
       } catch (e) {
         console.warn('Failed to fetch pixel stats from contract:', e)
@@ -98,7 +107,7 @@ export default function ProfilePage() {
       const CHUNK_BLOCKS = 50_000n
       const MAX_PARALLEL = 4
       const SAFETY_BUFFER_BLOCKS = 100_000n
-      const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${address!.toLowerCase()}`
+      const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${addrStr!.toLowerCase()}`
       const CACHE_TTL_MS = 60_000
 
       try {
@@ -115,8 +124,10 @@ export default function ProfilePage() {
 
       try {
         const { parseAbiItem } = await import('viem')
+        // Multi-token PixelsPurchased — `token` is the second indexed
+        // parameter as of contract v2.
         const event = parseAbiItem(
-          'event PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost)',
+          'event PixelsPurchased(address indexed buyer, address indexed token, uint256[] ids, uint256 totalCost)',
         )
 
         const currentBlock = await publicClient!.getBlockNumber()
@@ -186,21 +197,56 @@ export default function ProfilePage() {
           return ai - bi
         })
 
-        const addr = address!.toLowerCase()
+        // Look up each unique payment token's decimals so we can normalize
+        // mixed-token totalCost values into a single 6-decimal "$ microcents"
+        // unit before summing. Without this, summing e18 USDm with e6 USDC
+        // would land in nonsense magnitudes.
+        const tokenDecimals = new Map<string, number>()
+        const uniqueTokens = new Set<string>()
+        for (const log of logs) {
+          uniqueTokens.add((log.args.token as string).toLowerCase())
+        }
+        await Promise.all(
+          [...uniqueTokens].map(async (token) => {
+            try {
+              const [, dec] = (await publicClient!.readContract({
+                address: mondetoAddress,
+                abi: MONDETO_ABI,
+                functionName: 'tokenConfig',
+                args: [token as `0x${string}`],
+              })) as readonly [boolean, number]
+              tokenDecimals.set(token, Number(dec))
+            } catch {
+              // Sensible fallback: 6-decimal stablecoin assumption.
+              tokenDecimals.set(token, 6)
+            }
+          }),
+        )
+
+        // Normalize amount to 6 decimals (the unit `formatUSDT` displays).
+        const toMicrocents = (cost: bigint, decimals: number): bigint => {
+          if (decimals === 6) return cost
+          if (decimals > 6) return cost / 10n ** BigInt(decimals - 6)
+          return cost * 10n ** BigInt(6 - decimals)
+        }
+
+        const addr = addrStr!.toLowerCase()
         let totalSpent = 0n
         let totalEarned = 0n
         const ownerOf = new Map<string, string>()
 
         for (const log of logs) {
           const buyer = (log.args.buyer as string).toLowerCase()
+          const tokenAddr = (log.args.token as string).toLowerCase()
           const ids = log.args.ids as bigint[]
           const totalCost = log.args.totalCost as bigint
+          const normalized = toMicrocents(totalCost, tokenDecimals.get(tokenAddr) ?? 6)
 
           if (buyer === addr) {
-            totalSpent += totalCost
+            totalSpent += normalized
           }
 
-          const perPixelCost = ids.length > 0 ? totalCost / BigInt(ids.length) : 0n
+          const perPixelCost = ids.length > 0 ? normalized / BigInt(ids.length) : 0n
 
           for (const id of ids) {
             const idStr = id.toString()
@@ -231,7 +277,7 @@ export default function ProfilePage() {
     }
 
     fetchPnL()
-  }, [publicClient, address, mondetoAddress])
+  }, [publicClient, addrStr, mondetoAddress])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :
@@ -254,6 +300,47 @@ export default function ProfilePage() {
           justifyContent: 'center',
         }}
       >
+        {!addrStr && (
+          <div
+            style={{
+              background: 'var(--card-bg)',
+              border: '2px solid var(--brand-lime)',
+              padding: '16px 18px',
+              margin: '0 16px 16px',
+              maxWidth: 460,
+              width: 'calc(100% - 32px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontFamily: "'Press Start 2P', monospace",
+                letterSpacing: 2,
+                color: 'var(--text)',
+              }}
+            >
+              CONNECT TO PLAY
+            </div>
+            <div
+              style={{
+                fontSize: 7,
+                fontFamily: "'Press Start 2P', monospace",
+                letterSpacing: 1.5,
+                lineHeight: 1.6,
+                color: 'var(--text-muted)',
+                maxWidth: 320,
+              }}
+            >
+              link a wallet to claim pixels, set your color, and save your name on-chain
+            </div>
+            <ConnectButton />
+          </div>
+        )}
         <AvatarBlock color={color} name={name} />
         <StatsRow
           pixels={pixelCount}
@@ -319,7 +406,7 @@ export default function ProfilePage() {
               setNameError(null)
               save()
             }}
-            disabled={saveState === 'saving' || saveState === 'confirming'}
+            disabled={!addrStr || saveState === 'saving' || saveState === 'confirming'}
             className="pixel-btn pixel-btn-filled font-display"
             style={{
               display: 'block',
@@ -328,18 +415,12 @@ export default function ProfilePage() {
               fontSize: 10,
               letterSpacing: 2,
               padding: 12,
-              opacity: (saveState === 'saving' || saveState === 'confirming') ? 0.5 : 1,
-              cursor: (saveState === 'saving' || saveState === 'confirming') ? 'default' : 'pointer',
+              opacity: (!addrStr || saveState === 'saving' || saveState === 'confirming') ? 0.5 : 1,
+              cursor: (!addrStr || saveState === 'saving' || saveState === 'confirming') ? 'default' : 'pointer',
             }}
           >
             {saveLabel}
           </button>
-
-          {!address && (
-            <div style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: 'var(--text-muted)', textAlign: 'center', marginTop: 8, letterSpacing: 1 }}>
-              connect wallet to save on-chain
-            </div>
-          )}
 
           {/* Support + legal footer — boxed card so it reads as a distinct
               section. MiniPay requires Support / Terms / Privacy to be

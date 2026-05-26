@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
-import type { Address } from 'viem'
 import { MONDETO_ABI } from '@/lib/contract'
 import { uint24ToHex, hexToUint24 } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
@@ -17,7 +16,7 @@ import type { MapId } from '@/lib/maps/types'
  * same wallet always lands on the same starting color, without colliding
  * with the map's ocean-blue or land-cream tones.
  */
-function defaultColorFor(address: Address | undefined): string {
+function defaultColorFor(address: string | undefined): string {
   if (!address) return PROFILE_DEFAULT_PALETTE[0]
   let hash = 0
   for (let i = 2; i < address.length; i++) {
@@ -29,9 +28,10 @@ function defaultColorFor(address: Address | undefined): string {
 
 export type ProfileSaveState = 'idle' | 'saving' | 'confirming' | 'saved' | 'error'
 
-export function useProfile(address: Address | undefined, mapId?: MapId) {
+export function useProfile(address: string | undefined, mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
   const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
   const [color, setColor] = useState<string>(() => defaultColorFor(address))
   const [saveState, setSaveState] = useState<ProfileSaveState>('idle')
 
@@ -47,7 +47,7 @@ export function useProfile(address: Address | undefined, mapId?: MapId) {
     address: contractAddress,
     abi: MONDETO_ABI,
     functionName: 'profiles',
-    args: [address ?? '0x0000000000000000000000000000000000000000'],
+    args: [(address ?? '0x0000000000000000000000000000000000000000') as `0x${string}`],
     query: { enabled: !!address },
   })
 
@@ -56,11 +56,13 @@ export function useProfile(address: Address | undefined, mapId?: MapId) {
   // has something to display (and to save) without seeing a raw 0x… first.
   useEffect(() => {
     if (!profileData) return
-    const [contractColor, labelBytes] = profileData as [number, unknown, unknown]
+    const [contractColor, labelBytes, urlBytes] = profileData as [number, unknown, unknown]
     if (contractColor) setColor(uint24ToHex(contractColor))
     const label = decodeBytes(labelBytes)
+    const url = decodeBytes(urlBytes)
     if (label) setName(label)
     else if (address) setName(generateUsername(address))
+    if (url) setUrl(url)
   }, [profileData, address])
 
   // Write profile to contract
@@ -92,13 +94,13 @@ export function useProfile(address: Address | undefined, mapId?: MapId) {
         address: contractAddress,
         abi: MONDETO_ABI,
         functionName: 'updateProfile',
-        args: [hexToUint24(color), name, ''],
+        args: [hexToUint24(color), name, url],
         dataSuffix: getBuilderCodeSuffix(),
       })
     } catch {
       setSaveState('error')
     }
-  }, [address, name, color, writeContract, contractAddress])
+  }, [address, name, url, color, writeContract])
 
-  return { name, setName, color, setColor, saveState, save }
+  return { name, setName, url, setUrl, color, setColor, saveState, save }
 }

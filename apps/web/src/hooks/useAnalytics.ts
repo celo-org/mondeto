@@ -52,8 +52,10 @@ export interface AnalyticsData {
   fetchedAt: number
 }
 
+// Multi-token PixelsPurchased — `token` is the second indexed parameter
+// as of contract v2.
 const EVENT_PURCHASED = parseAbiItem(
-  'event PixelsPurchased(address indexed buyer, uint256[] ids, uint256 totalCost)',
+  'event PixelsPurchased(address indexed buyer, address indexed token, uint256[] ids, uint256 totalCost)',
 )
 
 function serializeWithBigInts(data: AnalyticsData): string {
@@ -162,6 +164,37 @@ export function useAnalytics(mapId?: MapId): AnalyticsData {
         const weekCutoff =
           currentBlock > BLOCKS_PER_WEEK ? currentBlock - BLOCKS_PER_WEEK : 0n
 
+        // Look up each unique payment token's decimals so we can normalize
+        // mixed-token totalCost values into a 6-decimal "$ microcents"
+        // unit before summing. Otherwise USDm (18d) and USDC/USDT (6d)
+        // would mix in nonsense magnitudes.
+        const tokenDecimals = new Map<string, number>()
+        const uniqueTokens = new Set<string>()
+        for (const log of logs) {
+          uniqueTokens.add((log.args.token as string).toLowerCase())
+        }
+        await Promise.all(
+          [...uniqueTokens].map(async (token) => {
+            try {
+              const [, dec] = (await publicClient!.readContract({
+                address: contractAddress,
+                abi: MONDETO_ABI,
+                functionName: 'tokenConfig',
+                args: [token as `0x${string}`],
+              })) as readonly [boolean, number]
+              tokenDecimals.set(token, Number(dec))
+            } catch {
+              tokenDecimals.set(token, 6)
+            }
+          }),
+        )
+
+        const toMicrocents = (cost: bigint, decimals: number): bigint => {
+          if (decimals === 6) return cost
+          if (decimals > 6) return cost / 10n ** BigInt(decimals - 6)
+          return cost * 10n ** BigInt(6 - decimals)
+        }
+
         const allBuyers = new Set<string>()
         const dailyBuyers = new Set<string>()
         const weeklyBuyers = new Set<string>()
@@ -174,21 +207,23 @@ export function useAnalytics(mapId?: MapId): AnalyticsData {
 
         for (const log of logs) {
           const buyer = (log.args.buyer as string).toLowerCase()
+          const tokenAddr = (log.args.token as string).toLowerCase()
           const totalCost = log.args.totalCost as bigint
+          const normalized = toMicrocents(totalCost, tokenDecimals.get(tokenAddr) ?? 6)
           const block = log.blockNumber ?? 0n
 
           allBuyers.add(buyer)
-          volumeAllTime += totalCost
+          volumeAllTime += normalized
 
           if (block >= weekCutoff) {
             weeklyBuyers.add(buyer)
             txCount7d++
-            volume7d += totalCost
+            volume7d += normalized
           }
           if (block >= dayCutoff) {
             dailyBuyers.add(buyer)
             txCount24h++
-            volume24h += totalCost
+            volume24h += normalized
           }
         }
 

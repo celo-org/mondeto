@@ -33,6 +33,7 @@ export interface WorldCanvasRef {
 interface WorldCanvasProps {
   pixelData: PixelView[]
   mapView: 'normal' | 'heatmap' | 'myland'
+  isDark: boolean
   selectedIds: Set<number>
   onTogglePixel: (id: number) => void
   onAddPixel: (id: number) => void
@@ -54,6 +55,7 @@ interface InnerCanvasProps extends WorldCanvasProps {
 function InnerCanvas({
   pixelData,
   mapView,
+  isDark,
   selectedIds,
   onTogglePixel,
   onAddPixel,
@@ -90,12 +92,17 @@ function InnerCanvas({
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    drawPixels(ctx, pixelData, mapView, userAddress)
-  }, [pixelData, mapView, pixelCanvasRef, version, userAddress])
+    drawPixels(ctx, pixelData, mapView, isDark, userAddress)
+  }, [pixelData, mapView, isDark, pixelCanvasRef, version, userAddress])
 
   return (
     <div style={{ position: 'relative', width: WIDTH, height: HEIGHT }}>
-      <PixelLayer canvasRef={pixelCanvasRef} />
+      <PixelLayer
+        pixelData={pixelData}
+        mapView={mapView}
+        isDark={isDark}
+        canvasRef={pixelCanvasRef}
+      />
       <FlashLayer changedIds={changedIds ?? []} pixelData={pixelData} />
       {mapView === 'normal' && (
         <TerritoryLabels pixelData={pixelData} scale={scale} profilesMap={profilesMap} />
@@ -145,7 +152,7 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
       zoomIn() { zoomControlsRef.current?.zoomIn() },
       zoomOut() { zoomControlsRef.current?.zoomOut() },
       zoomToPixel(pid: number, scale?: number) {
-        // Retry until both the zoom controls and the viewport element are
+        // Retry until both the zoom controls and the wrapper element are
         // ready. The geo-auto-zoom path calls this right after the map's
         // loadState flips to 'ready', which can be a few frames before
         // <ZoomCapture>'s useEffect attaches zoomControlsRef. Default
@@ -154,21 +161,20 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
         const tryNow = (): boolean => {
           const ctrl = zoomControlsRef.current
           if (!ctrl) return false
-          // IMPORTANT: react-zoom-pan-pinch styles `.react-transform-wrapper`
-          // with `width: fit-content; height: fit-content`, so reading
-          // `clientWidth` on it returns the inner canvas's natural 170×100,
-          // NOT the actual viewport. Step out to the wrapper's parent —
-          // the absolute-positioned div from page.tsx that fills the
-          // viewport minus the top/bottom bars — and measure that.
+          // IMPORTANT: read clientWidth/Height from the .react-transform-wrapper
+          // (the OUTER element that has the viewport's dimensions), NOT from
+          // the inner transformed element. `parentElement.parentElement` lands
+          // on the latter — which is the canvas's own size — so dividing by it
+          // for the center math snaps the target to the canvas's top-left
+          // instead of the viewport center.
           const canvas = pixelCanvasRef.current
           if (!canvas) return false
-          const transformWrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
-          const viewport = transformWrapper?.parentElement
-          if (!viewport) return false
+          const wrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
+          if (!wrapper) return false
           const { x, y } = idToXY(pid)
           const s = scale ?? PAINT_SCALE + 1
-          const tx = -x * s + viewport.clientWidth / 2
-          const ty = -y * s + viewport.clientHeight / 2
+          const tx = -x * s + wrapper.clientWidth / 2
+          const ty = -y * s + wrapper.clientHeight / 2
           ctrl.setTransform(tx, ty, s, 300)
           return true
         }
@@ -184,15 +190,16 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
       recenter() {
         const ctrl = zoomControlsRef.current
         if (!ctrl) return
-        // Same viewport-vs-wrapper trick as zoomToPixel — see comment there.
+        // Find the TransformWrapper's outer wrapper element
         const canvas = pixelCanvasRef.current
         if (!canvas) return
-        const transformWrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
-        const viewport = transformWrapper?.parentElement
-        if (!viewport) return
+        const wrapper = canvas.closest('.react-transform-wrapper')
+        if (!wrapper) return
         const s = 3
-        const tx = (viewport.clientWidth - WIDTH * s) / 2
-        const ty = (viewport.clientHeight - HEIGHT * s) / 2
+        const ww = (wrapper as HTMLElement).clientWidth
+        const wh = (wrapper as HTMLElement).clientHeight
+        const tx = (ww - WIDTH * s) / 2
+        const ty = (wh - HEIGHT * s) / 2
         ctrl.setTransform(tx, ty, s, 300)
       },
       drawInspectRing(pid: number) {

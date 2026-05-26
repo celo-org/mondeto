@@ -95,7 +95,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId="cmmxiatqc01fa0cjv4eg3b9kp"
       config={{
-        defaultChain: celo,
+        // Test build: contract v2 lives on Celo Sepolia. Flip back to
+        // `celo` once v2 is redeployed to mainnet.
+        defaultChain: celoSepolia,
         supportedChains: [celo, celoSepolia],
         loginMethods: ["wallet"],
         embeddedWallets: { ethereum: { createOnLogin: "off" } },
