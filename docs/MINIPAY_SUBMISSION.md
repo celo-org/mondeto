@@ -15,7 +15,10 @@ Mondeto runs multiple identical map contracts on Celo mainnet (chain ID 42220). 
 - **Map 0 (UUPS)**: `0xf825914Fa66F82f603310a1a7146C0F64A382298` — https://celoscan.io/address/0xf825914Fa66F82f603310a1a7146C0F64A382298#code
 - **Map 1 (UUPS)**: `0xB58dA361F816af8F7C996864a66cd1e12C35D0f1` — https://celoscan.io/address/0xB58dA361F816af8F7C996864a66cd1e12C35D0f1#code
 - **Map 2 (UUPS)**: `0x198c60A8515cdA74Ae82c8D3D56d3683e2713599` — https://celoscan.io/address/0x198c60A8515cdA74Ae82c8D3D56d3683e2713599#code
-- **Payment token**: USDT (`0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e`)
+- **Payment tokens** (any of, 1:1 — buy settles in the user's highest-balance stablecoin):
+  - USDm — `0x765DE816845861e75A25fCA122bb6898B8B1282a`
+  - USDC — `0xcebA9300f2b948710d2653dD7B07f33A8B32118C`
+  - USDT — `0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e`
 
 ## Sample transactions (mainnet)
 
@@ -23,9 +26,11 @@ For the "Transaction Samples" submission field. Per MiniPay: *"for every user-fa
 
 | Method | User-facing? | Tx Hash |
 |--------|---|---------|
-| `approve` (USDT → Mondeto) | yes | https://celoscan.io/tx/0xc47b7f8db12b33482b5de0129fc1da66f7b6cb45e56d1d16954ba7e0532bf4d5 |
-| `buyPixels` | yes | https://celoscan.io/tx/0xbf65cbfbc2635e80087654688a8a3c5d4da763502a548e6cdf55d9df833cba96 |
-| `updateProfile` | yes | https://celoscan.io/tx/0x7084222577f1b681612f047d4a4a4384738b9d0bff92a787b69cd6c0dd2836b2 |
+| `approve` (stablecoin → Mondeto) | yes | https://celoscan.io/tx/0xc47b7f8db12b33482b5de0129fc1da66f7b6cb45e56d1d16954ba7e0532bf4d5 |
+| `buyPixels` (USDm) | yes | https://celoscan.io/tx/0x66ffcf9598cba7b9489f6841ada7e7f0a7e0c0305dac22ba49b2984730d25137 |
+| `buyPixels` (USDT) | yes | https://celoscan.io/tx/0x07d88d1a9e0c6ae733164ec631f7084b3a2716ec273b3fcda3d8aa5524250c38 |
+| `buyPixels` (USDC) | yes | https://celoscan.io/tx/0x584dcc8749ca4ee3d161cb7d3c67a5039ca8f0f1311a8e9c72ba26aa38f6de7d |
+| `updateProfile` | yes | https://celoscan.io/tx/0x7cd75679e098ba38547b7eef15074f48c4ca989779c9a2beba4293dfd3c74d7c |
 | `withdraw` | no (owner-only) | https://celoscan.io/tx/0xc5174892db368404997ad1b58093d6f68dbccd9a975f4ffd674ca8dbc8897f40 |
 
 ## URL / origin manifest
@@ -57,7 +62,7 @@ submitting):
 - [x] Profanity filter on user-entered names (obscenity package)
 - [x] Custom on-theme 404 with a way back home (no dead ends in the WebView)
 - [x] All contracts verified on Celoscan
-- [x] Sample tx hashes for every user-facing method (3 of 3; `withdraw` owner-only sample included for completeness)
+- [x] Sample tx hashes for every user-facing method (`approve`, `buyPixels` × USDm/USDT/USDC, `updateProfile`; `withdraw` owner-only sample included for completeness)
 - [x] Redirects to Top up (MiniPay deposit deeplink) on insufficient balance
 - [x] In-app support link (t.me/mondetoSupport)
 - [x] ToS + Privacy linked in-app
