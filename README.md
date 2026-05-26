@@ -88,6 +88,31 @@ scripts/
   convert-land-mask.py    Convert contract uint256 words to frontend format
 ```
 
+## Deployments
+
+Mondeto runs multiple identical 170×100 map contracts. New wallets are auto-assigned to the current "active" map (the lowest-id map whose average pixel price is below `NEXT_PUBLIC_MAP_THRESHOLD_USD`, default `$2`); the pointer advances automatically as each map fills. Existing wallets keep their sticky home (persisted to `localStorage`). All contracts live in [`apps/web/src/lib/maps/contracts.ts`](apps/web/src/lib/maps/contracts.ts).
+
+### Production (Celo mainnet)
+
+| Map | Address |
+|-----|---------|
+| 0   | [`0xf825914Fa66F82f603310a1a7146C0F64A382298`](https://celoscan.io/address/0xf825914Fa66F82f603310a1a7146C0F64A382298) |
+| 1   | [`0xB58dA361F816af8F7C996864a66cd1e12C35D0f1`](https://celoscan.io/address/0xB58dA361F816af8F7C996864a66cd1e12C35D0f1) |
+| 2   | [`0x198c60A8515cdA74Ae82c8D3D56d3683e2713599`](https://celoscan.io/address/0x198c60A8515cdA74Ae82c8D3D56d3683e2713599) |
+
+Add new mainnet deployments to `PRODUCTION_MAPS` in the registry as one-line entries. No other code change is required — the active-pointer mechanism picks them up.
+
+### Staging
+
+`NEXT_PUBLIC_ENV=staging` switches to a separate registry so we can exercise the app without affecting production:
+
+| Chain | Map | Address |
+|-------|-----|---------|
+| Celo mainnet  | 0 | [`0x7e68c4c7458895ec8ded5a44299e05d0a6d54780`](https://celoscan.io/address/0x7e68c4c7458895ec8ded5a44299e05d0a6d54780) (previous production contract) |
+| Celo Sepolia  | 0 | [`0xc71e444c5339749c1c3067B62AacbfeE7840c934`](https://celo-sepolia.blockscout.com/address/0xc71e444c5339749c1c3067B62AacbfeE7840c934) |
+
+`ChainGuard` is relaxed on staging so the wallet can stay on either chain. Production wallets are auto-switched to Celo mainnet.
+
 ## Tech Stack
 
 - **Framework:** Next.js 14 (App Router)
