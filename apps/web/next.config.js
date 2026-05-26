@@ -1,12 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Diagnostics for the prod SSR/hydration debugging cycle: ship
-  // browser source maps with prod builds so stack traces in DevTools
-  // show real file names + line numbers instead of `iX`/`lO`. Adds
-  // ~3-5 MB to the deployed assets (gzipped); remove once the Privy
-  // wallet path is stable.
-  productionBrowserSourceMaps: true,
   // Required in Next 14 to run `instrumentation.ts` on server boot.
   // Stable in Next 15+ (the flag becomes a no-op).
   experimental: {
