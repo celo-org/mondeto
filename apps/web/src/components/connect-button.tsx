@@ -8,7 +8,42 @@ import { generateUsername } from "@/lib/username";
 import { useProfile } from "@/hooks/useProfile";
 import { useMaps } from "@/hooks/useMaps";
 
+const buttonClassName = "pixel-btn pixel-btn-sm font-display";
+const buttonStyle: React.CSSProperties = {
+  fontSize: 8,
+  letterSpacing: 1.5,
+  minWidth: 108,
+  padding: "0 10px",
+  justifyContent: "center",
+  maxWidth: 160,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+// `useConnectWallet` is a Privy hook that reads the PrivyProvider context.
+// During Next's SSR pass the context is uninitialized, so the hook warns
+// `useWallets was called outside the PrivyProvider component` and then
+// crashes on a null ref — every route 500s. Splitting the interactive
+// body into a child that only mounts after hydration keeps the hook off
+// the server path while preserving an SSR-rendered placeholder.
 export function ConnectButton() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) {
+    return (
+      <div style={{ position: "relative" }}>
+        <button className={buttonClassName} style={buttonStyle}>
+          CONNECT
+        </button>
+      </div>
+    );
+  }
+
+  return <ConnectButtonInteractive />;
+}
+
+function ConnectButtonInteractive() {
   const { connectWallet } = useConnectWallet();
   const { disconnect } = useDisconnect();
   const { isConnected, address } = useAccount();
@@ -65,20 +100,7 @@ export function ConnectButton() {
 
   return (
     <div ref={wrapperRef} style={{ position: "relative" }}>
-      <button
-        onClick={onClick}
-        className="pixel-btn pixel-btn-sm font-display"
-        style={{
-          fontSize: 8,
-          letterSpacing: 1.5,
-          minWidth: 108,
-          padding: "0 10px",
-          justifyContent: "center",
-          maxWidth: 160,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
+      <button onClick={onClick} className={buttonClassName} style={buttonStyle}>
         {label}
       </button>
       {menuOpen && isConnected && (
