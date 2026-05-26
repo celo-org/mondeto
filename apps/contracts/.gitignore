@@ -2,8 +2,8 @@
 cache/
 out/
 
-# Dependencies (install via `forge install`)
-lib/
+# Dependencies are git submodules (see root .gitmodules); run
+# `git submodule update --init --recursive` after cloning.
 
 # Broadcast logs
 /broadcast/
