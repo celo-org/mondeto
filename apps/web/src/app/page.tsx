@@ -160,16 +160,11 @@ export default function Home() {
         const tryZoom = () => {
           const ref = canvasRef.current
           if (ref) {
-            // Scale picked so the player's region fills the viewport.
-            // The canvas is 170 source-pixels wide and renders at
-            // SCALE × 170 CSS px; viewport_width / SCALE = how many
-            // source pixels the player sees horizontally. On desktop
-            // ~150 source pixels feels right; on mobile the screen is
-            // much narrower, so we need a higher scale to land at a
-            // similar country-sized view.
-            const isMobile =
-              typeof window !== 'undefined' && window.innerWidth < 600
-            ref.zoomToPixel(targetId, isMobile ? 18 : 10)
+            // Scale 10 everywhere — at narrower viewport widths it
+            // gets a smaller absolute area on screen, but the per-tile
+            // size stays the same so the picking feel is consistent.
+            // (We previously bumped to 18 on mobile but it overshot.)
+            ref.zoomToPixel(targetId, 10)
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
