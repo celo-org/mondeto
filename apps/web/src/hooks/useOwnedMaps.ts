@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAccount, usePublicClient } from 'wagmi'
-import { celo } from 'viem/chains'
+import { useAccount } from 'wagmi'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain, type ChainId } from '@/lib/maps/contracts'
+import { useReadClient } from '@/hooks/useReadClient'
+import { READ_CHAIN_ID } from '@/lib/chain'
 import type { MapId } from '@/lib/maps/types'
 
 const CACHE_KEY_PREFIX = 'mondeto-owned-maps'
@@ -65,17 +66,23 @@ function writeCache(key: string, counts: Record<MapId, number>): void {
 /**
  * Per-map pixel ownership count for the connected wallet.
  *
- * Scans every registered map on the wallet's connected chain, counting
+ * Scans every registered map on the env's primary read chain
+ * (`READ_CHAIN_ID` — mainnet in production, Sepolia on staging), counting
  * pixels owned by the wallet. Used by `useMaps` to drop returning players
  * back on the map where they own the most pixels — the "1 user -> 1 map"
  * UX without a server-side index.
+ *
+ * Uses `useReadClient` (the SSR-safe pattern with a module-level fallback
+ * client) instead of `usePublicClient()`, which routes through Privy's
+ * WagmiProvider and breaks static prerender for every page that mounts
+ * `ConnectButton` via `TopBar`.
  *
  * Cached in `sessionStorage` per (chain, address) for 60 s so navigating
  * across pages doesn't trigger three full-map reads each time.
  */
 export function useOwnedMaps(): OwnedMapsResult {
-  const { address, chainId } = useAccount()
-  const publicClient = usePublicClient()
+  const { address } = useAccount()
+  const publicClient = useReadClient()
   const [state, setState] = useState<OwnedMapsResult>({
     loading: true,
     counts: {},
@@ -87,14 +94,8 @@ export function useOwnedMaps(): OwnedMapsResult {
       setState({ loading: false, counts: {}, ownedMapId: null })
       return
     }
-    if (!publicClient) {
-      setState((p) => ({ ...p, loading: true }))
-      return
-    }
 
-    const effectiveChain = (chainId ?? celo.id) as ChainId
-    const cacheKey = `${CACHE_KEY_PREFIX}:${effectiveChain}:${address.toLowerCase()}`
-
+    const cacheKey = `${CACHE_KEY_PREFIX}:${READ_CHAIN_ID}:${address.toLowerCase()}`
     const cached = readCache(cacheKey)
     if (cached) {
       setState({
@@ -109,7 +110,7 @@ export function useOwnedMaps(): OwnedMapsResult {
     setState((p) => ({ ...p, loading: true }))
 
     async function run() {
-      const maps = getMapsForChain(effectiveChain)
+      const maps = getMapsForChain(READ_CHAIN_ID as ChainId)
       if (maps.length === 0) {
         if (!cancelled) {
           setState({ loading: false, counts: {}, ownedMapId: null })
@@ -117,7 +118,7 @@ export function useOwnedMaps(): OwnedMapsResult {
         return
       }
 
-      const read = publicClient!.readContract.bind(publicClient!) as Parameters<
+      const read = publicClient.readContract.bind(publicClient) as Parameters<
         typeof fetchAllPixelsFromContract
       >[0]
       const addrLower = address!.toLowerCase()
@@ -152,7 +153,7 @@ export function useOwnedMaps(): OwnedMapsResult {
     return () => {
       cancelled = true
     }
-  }, [address, publicClient, chainId])
+  }, [address, publicClient])
 
   return state
 }
