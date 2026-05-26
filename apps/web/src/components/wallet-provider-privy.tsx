@@ -25,6 +25,7 @@ import { ChainGuard } from "./ChainGuard";
 const privyWagmiConfig = createPrivyWagmiConfig({
   chains: [celo, celoSepolia],
   connectors: [injected()],
+  ssr: true,
   transports: {
     [celo.id]: http(),
     [celoSepolia.id]: http(),
