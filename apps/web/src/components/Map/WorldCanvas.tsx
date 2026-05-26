@@ -161,7 +161,15 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
         const tryNow = (): boolean => {
           const ctrl = zoomControlsRef.current
           if (!ctrl) return false
-          const wrapper = pixelCanvasRef.current?.parentElement?.parentElement
+          // IMPORTANT: read clientWidth/Height from the .react-transform-wrapper
+          // (the OUTER element that has the viewport's dimensions), NOT from
+          // the inner transformed element. `parentElement.parentElement` lands
+          // on the latter — which is the canvas's own size — so dividing by it
+          // for the center math snaps the target to the canvas's top-left
+          // instead of the viewport center.
+          const canvas = pixelCanvasRef.current
+          if (!canvas) return false
+          const wrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
           if (!wrapper) return false
           const { x, y } = idToXY(pid)
           const s = scale ?? PAINT_SCALE + 1
