@@ -73,11 +73,12 @@ export default function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardT
       {active && (
         <div
           style={{
-            padding: '10px 14px',
-            fontSize: 7,
-            color: 'rgba(255,255,255,0.5)',
+            padding: '12px 14px',
+            fontSize: 9,
+            color: 'var(--brand-orange)',
             fontFamily: PIXEL_FONT,
             letterSpacing: 1.5,
+            lineHeight: 1.5,
             borderBottom: '1px solid rgba(255,255,255,0.08)',
             background: 'var(--card-bg)',
           }}

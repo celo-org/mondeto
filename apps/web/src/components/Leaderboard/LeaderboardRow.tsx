@@ -8,7 +8,16 @@ interface LeaderboardRowProps {
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
-const BRAND_LIME = '#A7FF05'
+const BRAND_ORANGE = '#FF4C00'
+const BRAND_PURPLE = '#B430FF'
+
+// Top-5 highlight: 1-3 in brand orange (podium), 4-5 in brand purple
+// (runners-up). Everything below 5 falls back to the muted defaults.
+function rankAccentColor(rank: number): string | null {
+  if (rank <= 3) return BRAND_ORANGE
+  if (rank <= 5) return BRAND_PURPLE
+  return null
+}
 
 function rankSuffix(rank: number): string {
   if (rank === 1) return '1ST'
@@ -34,8 +43,8 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
   // URL field hidden — unverified user-entered URLs are an injection /
   // phishing vector. Re-enable once URL verification is in place.
   const isFirst = entry.rank === 1
-  const isPodium = entry.rank <= 3
-  const rankColor = isPodium ? BRAND_LIME : 'rgba(255,255,255,0.55)'
+  const accent = rankAccentColor(entry.rank)
+  const rankColor = accent ?? 'rgba(255,255,255,0.55)'
   const rankFs = isFirst ? FIRST_RANK_FS : DEFAULT_RANK_FS
 
   return (
@@ -89,7 +98,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
         style={{
           fontSize: ROW_SCORE_FS,
           letterSpacing: 2,
-          color: isPodium ? BRAND_LIME : '#FFFFFF',
+          color: accent ?? '#FFFFFF',
           whiteSpace: 'nowrap',
           flexShrink: 0,
           fontFamily: PIXEL_FONT,
