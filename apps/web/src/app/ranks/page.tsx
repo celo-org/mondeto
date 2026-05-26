@@ -8,7 +8,6 @@ import LeaderboardRow from '@/components/Leaderboard/LeaderboardRow'
 import {
   useLeaderboard,
   type LeaderboardTab,
-  type LeaderboardScope,
   type OwnerProfileData,
 } from '@/hooks/useLeaderboard'
 import { useMaps } from '@/hooks/useMaps'
@@ -27,15 +26,11 @@ export default function RanksPage() {
   // Guaranteed-defined read client. Leaderboard is a read-only view and
   // must populate for anonymous users.
   const publicClient = useReadClient()
-  const { revealedMaps, homeMapId, currentMapId } = useMaps()
-  // ScopeToggle's "your home — map N" caption requires a known home, which
-  // only exists once the wallet is connected; hide the toggle otherwise.
-  const showScopeToggle = revealedMaps.length > 1 && homeMapId !== null
+  const { homeMapId, currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
-  const [scope, setScope] = useState<LeaderboardScope>('local')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -101,10 +96,13 @@ export default function RanksPage() {
     load()
   }, [publicClient, mondetoAddress])
 
+  // Global scope toggle removed — leaderboard is local-only for now.
+  // Tracked as a follow-up in project memory; restore the ScopeToggle when
+  // re-introducing cross-map rankings.
   const { area, empire, tycoons, loading: boardsLoading } = useLeaderboard(
     pixelData,
     profilesMap,
-    { scope, homeMapId: homeMapId ?? undefined },
+    { scope: 'local', homeMapId: homeMapId ?? undefined },
   )
 
   const dataMap: Record<LeaderboardTab, typeof area> = {
@@ -121,16 +119,6 @@ export default function RanksPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
       <TopBar title="MONDETO" />
-      {showScopeToggle && homeMapId !== null && (
-        <ScopeToggle
-          scope={scope}
-          onScopeChange={(next) => {
-            setScope(next)
-            setShowAll(false)
-          }}
-          homeMapId={homeMapId}
-        />
-      )}
       <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
       <div
         style={{
@@ -212,69 +200,6 @@ export default function RanksPage() {
         )}
       </div>
       <BottomNav activeRoute="/ranks" />
-    </div>
-  )
-}
-
-interface ScopeToggleProps {
-  scope: LeaderboardScope
-  onScopeChange: (scope: LeaderboardScope) => void
-  homeMapId: number
-}
-
-function ScopeToggle({ scope, onScopeChange, homeMapId }: ScopeToggleProps) {
-  const caption =
-    scope === 'local'
-      ? `your home — map ${homeMapId}`
-      : 'all maps'
-
-  return (
-    <div
-      style={{
-        background: 'var(--card-bg)',
-        borderBottom: '1px solid var(--border)',
-        padding: '8px 12px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-      }}
-    >
-      <div style={{ display: 'flex', gap: 6 }}>
-        {(['local', 'global'] as const).map((s) => {
-          const isActive = s === scope
-          return (
-            <button
-              key={s}
-              onClick={() => onScopeChange(s)}
-              style={{
-                fontSize: 8,
-                fontFamily: PIXEL_FONT,
-                letterSpacing: 2,
-                padding: '6px 12px',
-                cursor: 'pointer',
-                background: isActive ? '#A7FF05' : 'transparent',
-                color: isActive ? '#1B1B1B' : 'rgba(255,255,255,0.55)',
-                border: `1px solid ${isActive ? '#A7FF05' : 'rgba(255,255,255,0.2)'}`,
-                borderRadius: 0,
-              }}
-            >
-              {s === 'local' ? 'LOCAL' : 'GLOBAL'}
-            </button>
-          )
-        })}
-      </div>
-      <span
-        style={{
-          fontSize: 7,
-          fontFamily: PIXEL_FONT,
-          color: 'var(--text-muted)',
-          letterSpacing: 1,
-        }}
-      >
-        {caption}
-      </span>
     </div>
   )
 }
