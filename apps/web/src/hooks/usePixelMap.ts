@@ -1,23 +1,14 @@
 'use client'
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { usePublicClient } from 'wagmi'
-import { createPublicClient, http } from 'viem'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getContractByMapId } from '@/lib/maps/contracts'
-import { READ_CHAIN, READ_CHAIN_ID } from '@/lib/chain'
+import { useReadClient } from '@/hooks/useReadClient'
 import type { MapId } from '@/lib/maps/types'
 
 export type LoadState = 'loading' | 'ready' | 'error'
 
 const POLL_INTERVAL = 30_000
-
-// Fallback client for read-only calls when wagmi isn't ready. Pinned to
-// the same chain as the deployment (see `lib/chain.ts`).
-const fallbackClient = createPublicClient({
-  chain: READ_CHAIN,
-  transport: http(),
-})
 
 /**
  * Pixel map state for a single map.
@@ -27,26 +18,19 @@ const fallbackClient = createPublicClient({
  * to the first revealed map.
  */
 export function usePixelMap(mapId?: MapId) {
-  // Pin to the read chain so wagmi returns a client even when the user is
-  // disconnected — the map should render for anonymous visitors.
-  const wagmiClient = usePublicClient({ chainId: READ_CHAIN_ID })
+  const readClient = useReadClient()
   const contractAddress = getContractByMapId(mapId ?? 0)
   const pixelDataRef = useRef<PixelView[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [version, setVersion] = useState(0)
   const [changedIds, setChangedIds] = useState<number[]>([])
 
-  const getClient = useCallback(() => {
-    return wagmiClient ?? fallbackClient
-  }, [wagmiClient])
-
   const fetchData = useCallback(async (): Promise<PixelView[]> => {
-    const client = getClient()
     return await fetchAllPixelsFromContract(
-      client.readContract.bind(client) as Parameters<typeof fetchAllPixelsFromContract>[0],
+      readClient.readContract.bind(readClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
       contractAddress,
     )
-  }, [getClient, contractAddress])
+  }, [readClient, contractAddress])
 
   const load = useCallback(async () => {
     try {

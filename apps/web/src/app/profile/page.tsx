@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { useAccount, usePublicClient } from 'wagmi'
+import { useAccount } from 'wagmi'
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import AvatarBlock from '@/components/Profile/AvatarBlock'
@@ -14,7 +14,7 @@ import { useMaps } from '@/hooks/useMaps'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
-import { READ_CHAIN_ID } from '@/lib/chain'
+import { useReadClient } from '@/hooks/useReadClient'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { isLand } from '@/lib/landMask'
 import { SUPPORT_URL } from '@/lib/deeplinks'
@@ -31,10 +31,10 @@ export default function ProfilePage() {
   const mondetoAddress = getContractByMapId(currentMapId)
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
-  // Pin to the read chain so pixel-count + P&L still resolve when the
-  // user is browsing without a wallet (they just won't have personal
-  // stats yet, but the contract reads still work generically).
-  const publicClient = usePublicClient({ chainId: READ_CHAIN_ID })
+  // Guaranteed-defined read client. Pixel-count + P&L still resolve when
+  // the user is browsing without a wallet (they just won't have personal
+  // stats, but the contract reads work generically).
+  const publicClient = useReadClient()
   const [nameError, setNameError] = useState<string | null>(null)
 
   const [pixelCount, setPixelCount] = useState(0)
