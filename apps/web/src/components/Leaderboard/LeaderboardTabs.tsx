@@ -19,7 +19,7 @@ const tabConfig: { key: LeaderboardTab; label: string; description: string }[] =
   {
     key: 'EMPIRE',
     label: 'EMPIRE',
-    description: 'Largest connected territory held by a single owner.',
+    description: 'Biggest connected empire.',
   },
   {
     key: 'TYCOONS',

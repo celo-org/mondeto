@@ -7,12 +7,6 @@ Mondeto (Esperanto for "small world") is a pixel world map where anyone can buy,
 **Live demo:** [mondeto-web.vercel.app](https://mondeto-web.vercel.app)
 **Smart contract:** [github.com/karlb/mondeto](https://github.com/karlb/mondeto)
 
-## Screenshots
-
-| Map | Heatmap | Leaderboard | Profile |
-|-----|---------|-------------|---------|
-| ![Map](apps/web/public/screenshots/map.jpeg) | ![Heatmap](apps/web/public/screenshots/heatmap.jpeg) | ![Leaderboard](apps/web/public/screenshots/leaderboard.jpeg) | ![Profile](apps/web/public/screenshots/profile.jpeg) |
-
 ## How It Works
 
 1. **Zoom in** to the dot-matrix world map and enter paint mode (4x zoom)
