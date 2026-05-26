@@ -145,11 +145,12 @@ export default function Home() {
         const tryZoom = () => {
           const ref = canvasRef.current
           if (ref) {
-            // Scale PAINT_SCALE + 1 (= 5) lands the user already inside
-            // paint mode — the GAME ON banner is up, pixel grid is clearly
-            // visible, and they can start picking immediately instead of
-            // first having to zoom in.
-            ref.zoomToPixel(targetId, PAINT_SCALE + 1)
+            // Scale 10 lands the user well inside paint mode (PAINT_SCALE
+            // is 4) and zooms close enough that their region fills the
+            // viewport — not the whole world. Picked over a smaller value
+            // because at PAINT_SCALE + 1 the player still sees the entire
+            // map and has to manually zoom in before picking.
+            ref.zoomToPixel(targetId, 10)
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
