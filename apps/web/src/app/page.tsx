@@ -28,6 +28,7 @@ import { getContractByMapId } from '@/lib/maps/contracts'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
+import { READ_CHAIN_ID } from '@/lib/chain'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
 
 export default function Home() {
@@ -36,7 +37,9 @@ export default function Home() {
   const isDark = true
   const { address, isConnected } = useAccount()
   const addrStr = address as string | undefined
-  const publicClient = usePublicClient()
+  // Pin to the read chain so the land mask + profile reads land even
+  // when no wallet is connected — Mondeto's map UI is browse-first.
+  const publicClient = usePublicClient({ chainId: READ_CHAIN_ID })
 
   const { currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
@@ -104,17 +107,25 @@ export default function Home() {
         const targetId = pixelIdFn(x, y)
         try {
           localStorage.setItem('mondeto-geo-decision', 'granted')
-          sessionStorage.setItem('mondeto-geo-zoomed', '1')
         } catch {}
 
         // The canvas ref + its internal TransformWrapper need a few frames
         // to be ready after loadState flips to 'ready'. Retry up to ~2s
-        // until the ref is attached, then fire the zoom.
+        // until the ref is attached, then fire the zoom. Only mark the
+        // session as zoomed AFTER the zoom actually succeeds — otherwise
+        // a slow canvas mount leaves the flag set and subsequent loads
+        // skip the geo flow entirely, leaving the user stranded on the
+        // world view.
         const start = Date.now()
         const tryZoom = () => {
           const ref = canvasRef.current
           if (ref) {
-            ref.zoomToPixel(targetId)
+            // Scale 3 lands the user inside their region without dragging
+            // them past PAINT_SCALE — they can browse before picking.
+            ref.zoomToPixel(targetId, 3)
+            try {
+              sessionStorage.setItem('mondeto-geo-zoomed', '1')
+            } catch {}
             console.log(`[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${pos.coords.latitude.toFixed(2)},${pos.coords.longitude.toFixed(2)}`)
             return
           }
@@ -461,9 +472,9 @@ export default function Home() {
       <BridgeBanner />
 
       {/* Selection review pill — user taps this to open drawer. When no
-          wallet is connected we replace the pill with a hint pointing at
-          the CONNECT button up top, since the drawer's price + balance +
-          buy CTA only make sense once we know who's paying. */}
+          wallet is connected we swap to a "connect to buy" hint since the
+          drawer's BALANCE / LOCK IT IN flow has no meaning yet. The
+          existing CONNECT button in the top-right is the actual CTA. */}
       {pixelCount > 0 && activeOverlay === 'none' && isConnected && (
         <button
           onClick={handleOpenDrawer}
@@ -516,9 +527,7 @@ export default function Home() {
       )}
 
       {/* Selection drawer — only rendered when open AND a wallet is
-          connected (the drawer's BALANCE / LOCK IT IN flow has no meaning
-          without one, and we shouldn't show stale balances from a previous
-          session). */}
+          connected (the BALANCE + LOCK IT IN flow has no meaning otherwise). */}
       {activeOverlay === 'drawer' && isConnected && (
         <SelectionDrawer
           visible={true}

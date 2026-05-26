@@ -18,13 +18,16 @@ import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { ZERO_ADDRESS } from '@/constants/map'
+import { READ_CHAIN_ID } from '@/lib/chain'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
 
 export default function RanksPage() {
-  const publicClient = usePublicClient()
+  // Pin to the read chain so the leaderboard loads for anonymous users —
+  // it's a read-only view, no wallet required.
+  const publicClient = usePublicClient({ chainId: READ_CHAIN_ID })
   const { revealedMaps, homeMapId, currentMapId } = useMaps()
   // ScopeToggle's "your home — map N" caption requires a known home, which
   // only exists once the wallet is connected; hide the toggle otherwise.

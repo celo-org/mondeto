@@ -19,14 +19,16 @@ function rankSuffix(rank: number): string {
 
 // Every row uses the same name/score/padding. Only the rank label on the
 // #1 row is bumped up so the leader visibly pops without making the whole
-// row taller than the rest.
+// row taller than the rest. The rank column width is the same on every
+// row so the right edges of "1ST" / "2ND" / "3RD" all line up and the
+// name column starts at a single x — otherwise the bigger 1st-place
+// label bleeds into the name column.
 const ROW_NAME_FS = 9
 const ROW_SCORE_FS = 10
 const ROW_PAD_Y = 10
 const DEFAULT_RANK_FS = 9
-const DEFAULT_RANK_WIDTH = 44
 const FIRST_RANK_FS = 16
-const FIRST_RANK_WIDTH = 60
+const RANK_WIDTH = 60
 
 export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
   // URL field hidden — unverified user-entered URLs are an injection /
@@ -35,7 +37,6 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
   const isPodium = entry.rank <= 3
   const rankColor = isPodium ? BRAND_LIME : 'rgba(255,255,255,0.55)'
   const rankFs = isFirst ? FIRST_RANK_FS : DEFAULT_RANK_FS
-  const rankWidth = isFirst ? FIRST_RANK_WIDTH : DEFAULT_RANK_WIDTH
 
   return (
     <div
@@ -55,7 +56,7 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
         style={{
           fontSize: rankFs,
           fontWeight: 700,
-          width: rankWidth,
+          width: RANK_WIDTH,
           textAlign: 'right',
           color: rankColor,
           flexShrink: 0,
