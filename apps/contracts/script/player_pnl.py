@@ -6,9 +6,11 @@ Requires: foundry (cast) installed. No Python dependencies beyond stdlib.
 Env vars:
     PROXY_ADDRESS   Mondeto proxy contract address
     ETH_RPC_URL     RPC endpoint (same env var cast uses)
+    DEPLOY_BLOCK    Block to start scanning from. Defaults to "earliest";
+                    set to the deploy block hex (e.g. 0x4a1b2c3) for speed.
 
 Usage:
-    PROXY_ADDRESS=0x7e68c4c7458895ec8ded5a44299e05d0a6d54780 \
+    PROXY_ADDRESS=0xf825914Fa66F82f603310a1a7146C0F64A382298 \
         python3 script/player_pnl.py
 """
 
@@ -19,7 +21,7 @@ import os
 import subprocess
 import sys
 
-DEPLOY_BLOCK = "0x3b25aeb"  # 62,020,331
+DEPLOY_BLOCK = os.environ.get("DEPLOY_BLOCK", "earliest")
 
 # keccak256("PixelsPurchased(address,uint256[],uint256)")
 PIXELS_PURCHASED_TOPIC = (

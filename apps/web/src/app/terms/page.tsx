@@ -80,9 +80,9 @@ export default function TermsPage() {
       <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, marginBottom: 8 }}>6. Network fees and stablecoins</h2>
         <p style={{ fontSize: 13 }}>
-          Pixel prices are charged in USDT. Network fees on Celo are paid by MiniPay automatically
-          through fee abstraction. Prices are determined by the on-chain pricing curve and may
-          change between transactions.
+          Pixel prices are charged in supported dollar stablecoins on Celo (treated 1:1). Network
+          fees on Celo are paid by MiniPay automatically through fee abstraction. Prices are
+          determined by the on-chain pricing curve and may change between transactions.
         </p>
       </section>
 

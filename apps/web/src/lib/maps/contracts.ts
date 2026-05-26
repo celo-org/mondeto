@@ -10,10 +10,9 @@
  *
  * Per-environment split:
  *  - production (default): the live Celo mainnet contracts new users get.
- *  - staging: a separate registry that points to the previous mainnet contract
- *    (for testing on mainnet without polluting prod) and the Celo Sepolia
- *    contract (for testnet runs). Staging picks per-chain based on the
- *    wallet's connected chain; ChainGuard is relaxed there to allow both.
+ *  - staging: a separate registry that points to the Celo Sepolia testnet
+ *    contract for pre-release work. ChainGuard is relaxed there to allow
+ *    the wallet to stay on Sepolia.
  *
  * The `revealed: false` flag is intentionally kept even though every current
  * entry is `revealed: true`. It's the kill switch for future paid-access maps
@@ -46,9 +45,6 @@ const PRODUCTION_MAPS: readonly MapContract[] = [
 ] as const
 
 const STAGING_MAPS: readonly MapContract[] = [
-  // Previous mainnet deployment — kept on staging so we can exercise the app
-  // against real on-chain state without affecting production users.
-  { id: 0, address: '0x7e68c4c7458895ec8ded5a44299e05d0a6d54780', chainId: celo.id, revealed: true },
   // Celo Sepolia for testnet work.
   { id: 0, address: '0xc71e444c5339749c1c3067B62AacbfeE7840c934', chainId: celoSepolia.id, revealed: true },
 ] as const

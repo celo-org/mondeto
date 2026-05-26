@@ -18,8 +18,8 @@ import { ask, MODELS } from '../anthropic.js'
 
 const SYSTEM = `You are Mondeto's financial-support intake agent.
 
-Mondeto is a pixel-buying game on Celo. Users buy pixels with USDT against
-the contract at 0x7e68c4c7458895ec8ded5a44299e05d0a6d54780.
+Mondeto is a pixel-buying game on Celo. Users buy pixels with supported
+dollar stablecoins against the Mondeto contracts on Celo mainnet.
 
 Rules — these are hard limits:
 - NEVER ask for private keys, seed phrases, or recovery words. If the user
