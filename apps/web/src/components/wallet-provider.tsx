@@ -95,7 +95,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId="cmmxiatqc01fa0cjv4eg3b9kp"
       config={{
-        defaultChain: celo,
+        // Pinned to celoSepolia to work around a latent SSR crash:
+        // `ConnectButton` calls Privy's `useConnectWallet()` during the
+        // server render, which trips `useWallets was called outside the
+        // PrivyProvider component`. The crash only surfaces when
+        // `defaultChain: celo`; with celoSepolia the same code path
+        // returns gracefully. Flip back to `celo` once the SSR gating
+        // is added to ConnectButton / WalletProvider.
+        defaultChain: celoSepolia,
         supportedChains: [celo, celoSepolia],
         loginMethods: ["wallet"],
         embeddedWallets: { ethereum: { createOnLogin: "off" } },
