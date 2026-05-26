@@ -2,11 +2,12 @@
 
 import { useConnectWallet } from "@privy-io/react-auth";
 import { useAccount, useDisconnect } from "wagmi";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { generateUsername } from "@/lib/username";
 import { useProfile } from "@/hooks/useProfile";
 import { useMaps } from "@/hooks/useMaps";
+import { PrivyReadyContext } from "./wallet-provider-privy";
 
 const buttonClassName = "pixel-btn pixel-btn-sm font-display";
 const buttonStyle: React.CSSProperties = {
@@ -20,25 +21,41 @@ const buttonStyle: React.CSSProperties = {
   textOverflow: "ellipsis",
 };
 
-// `useConnectWallet` is a Privy hook that reads the PrivyProvider context.
-// During Next's SSR pass the context is uninitialized, so the hook warns
-// `useWallets was called outside the PrivyProvider component` and then
-// crashes on a null ref — every route 500s. Splitting the interactive
-// body into a child that only mounts after hydration keeps the hook off
-// the server path while preserving an SSR-rendered placeholder.
+function ConnectButtonPlaceholder() {
+  return (
+    <div style={{ position: "relative" }}>
+      <button className={buttonClassName} style={buttonStyle}>
+        CONNECT
+      </button>
+    </div>
+  );
+}
+
+// `useConnectWallet` requires `PrivyProvider` to be an ancestor at the
+// moment it runs. With the MiniPay-first WalletProvider, that's only
+// true once the lazy Privy subtree has mounted — which it doesn't on
+// SSR, on first paint, or for MiniPay users at all. `PrivyReadyContext`
+// is provided by `PrivyTree`; everywhere else `useContext` returns its
+// default of `false`, so we render a static placeholder and never call
+// the Privy hook outside its provider.
 export function ConnectButton() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  if (!mounted) {
-    return (
-      <div style={{ position: "relative" }}>
-        <button className={buttonClassName} style={buttonStyle}>
-          CONNECT
-        </button>
-      </div>
-    );
+  const privyReady = useContext(PrivyReadyContext);
+
+  // SSR + first client render must match: always placeholder.
+  if (!mounted) return <ConnectButtonPlaceholder />;
+
+  // MiniPay surfaces an injected wallet straight away; there's no
+  // manual connect step to expose.
+  if ((window.ethereum as { isMiniPay?: boolean } | undefined)?.isMiniPay) {
+    return null;
   }
+
+  // Privy chunk hasn't loaded yet — keep the placeholder visible so
+  // the layout doesn't shift, but don't call any Privy hook.
+  if (!privyReady) return <ConnectButtonPlaceholder />;
 
   return <ConnectButtonInteractive />;
 }
@@ -49,15 +66,8 @@ function ConnectButtonInteractive() {
   const { isConnected, address } = useAccount();
   const { currentMapId } = useMaps();
   const { name: onChainName } = useProfile(address, currentMapId);
-  const [isMiniPay, setIsMiniPay] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
-      setIsMiniPay(true);
-    }
-  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -69,8 +79,6 @@ function ConnectButtonInteractive() {
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [menuOpen]);
-
-  if (isMiniPay) return null;
 
   const username =
     isConnected && address ? onChainName || generateUsername(address) : null;
