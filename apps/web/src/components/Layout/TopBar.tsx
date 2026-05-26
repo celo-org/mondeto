@@ -19,7 +19,9 @@ export default function TopBar({ title, children }: TopBarProps) {
         left: 0,
         right: 0,
         height: 56,
-        zIndex: 10,
+        // Stays above PaintModeBanner (zIndex 15) so the ConnectButton's
+        // PROFILE / LOG OUT dropdown isn't covered when zoomed into the map.
+        zIndex: 20,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
