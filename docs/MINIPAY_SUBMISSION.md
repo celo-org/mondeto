@@ -8,11 +8,13 @@
 - Staging: `https://<TODO-staging-url>`
 - Real-user perf: Vercel Speed Insights enabled (LCP / FID / CLS / INP / TTFB / FCP from real traffic) — dashboard in Vercel project → Speed Insights tab
 
-## Contract
+## Contracts
 
-- **Mondeto proxy (UUPS)**: `0x7e68c4c7458895ec8ded5a44299e05d0a6d54780`
-- **Network**: Celo mainnet (chain ID 42220)
-- **Verification**: https://celoscan.io/address/0x7e68c4c7458895ec8ded5a44299e05d0a6d54780#code
+Mondeto runs multiple identical map contracts on Celo mainnet (chain ID 42220). New wallets are auto-assigned to the current "active" map; existing wallets keep their sticky home. The full registry lives in [`apps/web/src/lib/maps/contracts.ts`](../apps/web/src/lib/maps/contracts.ts).
+
+- **Map 0 (UUPS)**: `0xf825914Fa66F82f603310a1a7146C0F64A382298` — https://celoscan.io/address/0xf825914Fa66F82f603310a1a7146C0F64A382298#code
+- **Map 1 (UUPS)**: `0xB58dA361F816af8F7C996864a66cd1e12C35D0f1` — https://celoscan.io/address/0xB58dA361F816af8F7C996864a66cd1e12C35D0f1#code
+- **Map 2 (UUPS)**: `0x198c60A8515cdA74Ae82c8D3D56d3683e2713599` — https://celoscan.io/address/0x198c60A8515cdA74Ae82c8D3D56d3683e2713599#code
 - **Payment token**: USDT (`0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e`)
 
 ## Sample transactions (mainnet)

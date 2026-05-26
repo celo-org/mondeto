@@ -1,6 +1,6 @@
 # Mondeto
 
-A 170x100 pixel world map on Celo where every land pixel is ownable on-chain. Pixels are colored by owner, creating a territorial mosaic. Uses USDT as currency, targets MiniPay.
+A 170x100 pixel world map on Celo where every land pixel is ownable on-chain. Pixels are colored by owner, creating a territorial mosaic. Accepts a set of dollar stablecoins (1:1) as currency, targets MiniPay.
 
 ## Build & Test
 
@@ -42,7 +42,7 @@ The actual price linearly interpolates between adjacent discrete price levels wi
 
 **What this means economically**: Each sale doubles the price. Over each `HALVING_TIME` (currently 182 days) without a sale, the price gradually halves. A pixel bought once (saleCount=1) returns to `initialPrice` after one epoch, then keeps decaying. This creates a natural "use it or lose it" pressure — land you buy will decay in value toward `minPrice` if nobody re-buys it.
 
-**`setInitialPrice` is retroactive**: Changing `initialPrice` changes the price of ALL pixels instantly, since it's the base of every price calculation. This is intentional but dangerous — use with care.
+**`initialPrice` is fixed at deployment**: Set once in `initialize()` and never changeable afterward — there is deliberately no setter. Since `initialPrice` is the base of every pixel's price, a setter would retroactively reprice the entire map out from under existing owners. To change pricing, deploy a fresh contract.
 
 **saleCount is uint8**: Saturates at 255. This is fine economically — at saleCount 128 with epoch 0, the price would be `initialPrice * 2^128`, an astronomically large number that nobody would pay.
 
@@ -73,25 +73,22 @@ Label and URL are capped at 64 bytes each (not characters — matters for multib
 
 ## Deployment
 
-```sh
-# .env
-USDT_ADDRESS=0x...     # Celo USDT contract
-INITIAL_PRICE=100000   # 0.10 USDT (6 decimals)
-MIN_PRICE=1            # 0.000001 USDT
-WIDTH=170
-HEIGHT=100
+See the **Deployment** section of `README.md` for the full step-by-step (env template,
+required vars, signer). In short: `Deploy.s.sol` is configured by env vars (`ACCEPTED_TOKENS`,
+`INITIAL_PRICE`, `MIN_PRICE`, `HALVING_TIME_DAYS`, `INITIAL_FEE_RATE`, `ETH_RPC_URL`) plus
+the land mask in `map/land_mask.json` (which supplies `WIDTH`/`HEIGHT`). `deploy.env.example`
+is the committed template; real `*.env` files are gitignored.
 
-forge script script/Deploy.s.sol --rpc-url celo --broadcast
-```
-
-The deploy script reads the land mask from `map/land_mask.json` and passes it to `initialize()` along with dimensions.
+`ACCEPTED_TOKENS` is a comma-separated list of dollar stablecoins, all treated 1:1.
+`initialize()` reads each token's `decimals()` on-chain and scales transfers from the
+6-decimal price base, so mixed-decimal coins (e.g. 6-decimal USDT and 18-decimal cUSD) work.
 
 ## Upgrade Checklist
 
 1. New contract must inherit from `Mondeto` (or replicate its storage layout exactly)
-2. **Never reorder or remove existing state variables** — only append new ones after `landMask`
+2. **Never reorder or remove existing state variables** — only append new ones after the current last state var (`acceptedTokens`)
 3. `WIDTH`, `HEIGHT`, `TOTAL_PIXELS`, `LAND_MASK_LENGTH` are immutable (baked into implementation bytecode) — new implementation must be deployed with the same constructor args
-4. `usdt` and `deployTimestamp` are regular storage (not `immutable`) because of the proxy pattern
+4. `deployTimestamp` (and the rest of the token/pixel/profile state) is regular storage (not `immutable`) because of the proxy pattern
 5. Test the upgrade in a fork before mainnet: deploy V2, call `upgradeToAndCall`, verify old state survives
 
 ## OpenZeppelin v5 Compatibility Note

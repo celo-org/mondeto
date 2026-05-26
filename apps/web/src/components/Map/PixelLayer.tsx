@@ -36,7 +36,6 @@ export function drawPixels(
   ctx: CanvasRenderingContext2D,
   pixelData: PixelView[],
   mapView: MapView,
-  isDark: boolean,
   userAddress?: string,
 ) {
   ctx.clearRect(0, 0, WIDTH, HEIGHT)
@@ -44,8 +43,8 @@ export function drawPixels(
   const gap = TILE_GAP
   const rad = TILE_RADIUS
   const userAddr = userAddress?.toLowerCase()
-  const unownedColor = isDark ? '#dddddd' : '#555555'
-  const fadedColor = isDark ? 'rgba(221,221,221,0.25)' : 'rgba(85,85,85,0.25)'
+  const unownedColor = '#dddddd'
+  const fadedColor = 'rgba(221,221,221,0.25)'
 
   if (mapView === 'heatmap') {
     let maxSales = 0
@@ -112,9 +111,6 @@ export function drawPixels(
 }
 
 interface PixelLayerProps {
-  pixelData: PixelView[]
-  mapView: MapView
-  isDark: boolean
   canvasRef: React.MutableRefObject<HTMLCanvasElement | null>
 }
 

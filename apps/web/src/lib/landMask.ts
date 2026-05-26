@@ -38,9 +38,7 @@ export async function fetchLandMaskFromContract(
         args: [],
       }) as bigint[]
       words = result
-      console.log(`getLandMask() returned ${words.length} words`)
     } catch {
-      console.log('getLandMask() not available, fetching per-word...')
       const promises = Array.from({ length: wordCount }, (_, i) =>
         readContract({
           address: contractAddress,
@@ -61,8 +59,6 @@ export async function fetchLandMaskFromContract(
       }
     }
 
-    const landCount = mask.reduce((sum, v) => sum + v, 0)
-    console.log(`Land mask fetched from contract: ${landCount} land pixels`)
     liveMask = mask
   } catch (e) {
     console.warn('Failed to fetch land mask from contract, using static fallback:', e)

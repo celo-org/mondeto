@@ -155,6 +155,31 @@ export interface OpenNextOptions {
   averagePriceThreshold: number;
 }
 
+/**
+ * Sequential active-map pointer: the map new wallets get assigned to.
+ *
+ * Lowest-id map whose average price is below the threshold (i.e. the
+ * "current frontier"). Once a map crosses the threshold, the pointer moves
+ * to the next map and new wallets land there. If every registered map has
+ * crossed, the highest-id map gets newcomers (rare — adding more contracts
+ * to the registry resolves it).
+ *
+ * Existing wallets are unaffected by pointer movement; their home is read
+ * from the AssignmentStore (persisted to localStorage) and only computed
+ * via this function on a first-ever visit.
+ */
+export function activeMapId(
+  perMap: { id: MapId; avgPriceUsd: number }[],
+  thresholdUsd: number,
+): MapId {
+  if (perMap.length === 0) {
+    throw new Error('activeMapId: no maps available')
+  }
+  const sorted = [...perMap].sort((a, b) => a.id - b.id)
+  const next = sorted.find((m) => m.avgPriceUsd < thresholdUsd)
+  return next ? next.id : sorted[sorted.length - 1].id
+}
+
 /** Advisory: should another map be opened now? (auto signal; manual is fine too) */
 export function shouldOpenNextMap(
   maps: MapSnapshot[],

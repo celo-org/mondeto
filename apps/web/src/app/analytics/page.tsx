@@ -1,5 +1,11 @@
 'use client'
 
+// Wallet-dependent hooks (useAccount via useShouldOpenNextMap) call into
+// Privy at render time, which doesn't initialize during static prerender
+// and crashes the build. Opt out — analytics is a live-data dashboard,
+// nothing to prerender anyway.
+export const dynamic = 'force-dynamic'
+
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import { useAnalytics } from '@/hooks/useAnalytics'

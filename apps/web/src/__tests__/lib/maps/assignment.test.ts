@@ -4,6 +4,7 @@ import {
   hashAddress,
   assignUserToMap,
   shouldOpenNextMap,
+  activeMapId,
 } from "@/lib/maps/assignment";
 import type { AssignmentStore, MapId, MapSnapshot, PixelState } from "@/lib/maps/types";
 
@@ -212,5 +213,48 @@ describe("migrateUser", () => {
     const maps = [makeMap(0, true, [1]), makeMap(7, false, [0.003])];
     expect(() => migrateUser("0xp", 7, maps, store)).toThrow(/closed/);
     expect(() => migrateUser("0xp", 42, maps, store)).toThrow(/does not exist/);
+  });
+});
+
+describe("activeMapId", () => {
+  const THRESHOLD = 2;
+
+  it("returns the lowest id whose avg is below threshold", () => {
+    const perMap = [
+      { id: 0, avgPriceUsd: 3 },
+      { id: 1, avgPriceUsd: 0.5 },
+      { id: 2, avgPriceUsd: 0 },
+    ];
+    expect(activeMapId(perMap, THRESHOLD)).toBe(1);
+  });
+
+  it("returns id 0 when the first map is fresh", () => {
+    const perMap = [
+      { id: 0, avgPriceUsd: 0.1 },
+      { id: 1, avgPriceUsd: 0 },
+    ];
+    expect(activeMapId(perMap, THRESHOLD)).toBe(0);
+  });
+
+  it("falls back to the highest id when every map has crossed", () => {
+    const perMap = [
+      { id: 0, avgPriceUsd: 5 },
+      { id: 1, avgPriceUsd: 4 },
+      { id: 2, avgPriceUsd: 3 },
+    ];
+    expect(activeMapId(perMap, THRESHOLD)).toBe(2);
+  });
+
+  it("is order-insensitive on input", () => {
+    const perMap = [
+      { id: 2, avgPriceUsd: 0 },
+      { id: 0, avgPriceUsd: 3 },
+      { id: 1, avgPriceUsd: 3 },
+    ];
+    expect(activeMapId(perMap, THRESHOLD)).toBe(2);
+  });
+
+  it("throws on empty input", () => {
+    expect(() => activeMapId([], THRESHOLD)).toThrow(/no maps/);
   });
 });

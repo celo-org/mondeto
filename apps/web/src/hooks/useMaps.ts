@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { getRevealedMaps, isRevealedMapId, type MapContract } from '@/lib/maps/contracts'
-import { hashAddress, assignUserToMap } from '@/lib/maps/assignment'
+import { celo } from 'viem/chains'
+import {
+  getMapsForChain,
+  isRevealedMapId,
+  type ChainId,
+  type MapContract,
+} from '@/lib/maps/contracts'
 import { memoryAssignmentStore } from '@/lib/maps/store'
-import type { MapId, MapSnapshot } from '@/lib/maps/types'
+import type { MapId } from '@/lib/maps/types'
 
 const STORAGE_KEY = 'mondeto-current-map-id'
 const REF_PARAM = 'ref'
@@ -45,21 +50,8 @@ function readReferredMapId(): MapId | undefined {
   }
 }
 
-/**
- * Build the minimum MapSnapshot list the pure assignment module needs.
- *
- * Per-map snapshots are not in scope at launch; every revealed map is
- * treated as fresh/empty so referral placement still works correctly.
- */
-function toSnapshots(revealed: MapContract[]): MapSnapshot[] {
-  return revealed.map((m) => ({
-    meta: { id: m.id, open: true },
-    pixels: [],
-  }))
-}
-
 export interface UseMapsResult {
-  /** Maps the operator has flipped on, in stable id order. */
+  /** Maps visible on the wallet's connected chain, in stable id order. */
   revealedMaps: MapContract[]
   /** The user's sticky home map. Null when not connected. */
   homeMapId: MapId | null
@@ -71,57 +63,62 @@ export interface UseMapsResult {
 /**
  * Multi-map state hook.
  *
- * - `homeMapId` is derived from `hashAddress(address) % revealedMaps.length`
- *   so a launch crowd spreads evenly across whatever is revealed.
- * - On first visit, a `?ref=<map-id>` parameter is honored via
- *   `assignUserToMap` (referral placement). Subsequent visits ignore it.
- * - `currentMapId` persists to localStorage so a browse-anywhere user
- *   returns to their last view on the next visit.
+ * - `homeMapId` is the user's permanent home, persisted via
+ *   `memoryAssignmentStore` (localStorage). On a first-ever visit a wallet
+ *   gets placed on the lowest-id revealed map (or the `?ref=<id>` map if
+ *   that query param is present and valid). Once stored, it never moves.
+ * - `currentMapId` (the view, distinct from home) persists in localStorage
+ *   so a browse-anywhere user returns to their last view.
  *
- * If only one map is revealed (the launch state), this hook stays inert:
- * `homeMapId === currentMapId === 0` and the UI hides the switcher.
+ * Note: the price-threshold "active pointer" logic lives in
+ * `lib/maps/assignment.ts::activeMapId` and `useShouldOpenNextMap`. It is
+ * intentionally NOT wired up here yet — those hooks call into wagmi/Privy
+ * during render, which breaks static prerender for every page that mounts
+ * `ConnectButton` via `TopBar`. Bring it back when multi-map testing /
+ * sequential rollover lands and gate it behind a route that's already
+ * dynamic (e.g. /analytics).
  */
 export function useMaps(): UseMapsResult {
-  const { address } = useAccount()
-  const revealedMaps = useMemo(() => getRevealedMaps(), [])
+  const { address, chainId } = useAccount()
+  const effectiveChain = (chainId ?? celo.id) as ChainId
+  const revealedMaps = useMemo(
+    () => getMapsForChain(effectiveChain),
+    [effectiveChain],
+  )
 
-  // Compute home map id from the wallet address. Recomputed when address
-  // or the revealed list changes; deterministic and trivially cheap.
   const homeMapId = useMemo<MapId | null>(() => {
     if (!address || revealedMaps.length === 0) return null
-    const ids = revealedMaps.map((m) => m.id).sort((a, b) => a - b)
 
-    // Honor a referral only on the very first visit (no record + no
-    // localStorage current map yet). assignUserToMap is sticky so any
-    // existing assignment wins.
+    // Honor a referral only on the very first visit (no stored home).
     const referredMapId = readReferredMapId()
-    if (referredMapId !== undefined && isRevealedMapId(referredMapId)) {
-      try {
-        return assignUserToMap(address, toSnapshots(revealedMaps), memoryAssignmentStore, {
-          referredMapId,
-        })
-      } catch {
-        // No open map — fall through to hash-based default.
-      }
+    const existing = memoryAssignmentStore.get(address)
+    if (
+      existing === null &&
+      referredMapId !== undefined &&
+      isRevealedMapId(referredMapId, effectiveChain)
+    ) {
+      memoryAssignmentStore.set(address, referredMapId)
+      return referredMapId
     }
 
-    const existing = memoryAssignmentStore.get(address)
-    if (existing !== null && ids.includes(existing)) return existing
+    if (existing !== null && isRevealedMapId(existing, effectiveChain)) {
+      return existing
+    }
 
-    const pick = ids[hashAddress(address) % ids.length]
+    // First visit: drop new wallets on the lowest revealed map id.
+    const pick = revealedMaps[0].id
     memoryAssignmentStore.set(address, pick)
     return pick
-  }, [address, revealedMaps])
+  }, [address, revealedMaps, effectiveChain])
 
-  // Current view defaults to home; localStorage rehydrates browse-anywhere.
   const [currentMapId, setCurrentMapIdState] = useState<MapId>(() => {
     const stored = readStoredMapId()
-    if (stored !== null && isRevealedMapId(stored)) return stored
+    if (stored !== null && isRevealedMapId(stored, effectiveChain)) return stored
     return revealedMaps[0]?.id ?? (0 as MapId)
   })
 
-  // Once we know the home map (i.e. wallet is connected), promote it over
-  // the default-zero state if the user has no stored preference yet.
+  // Once we know the home (i.e. wallet is connected) and the user has no
+  // explicit stored view, promote home to the current view.
   useEffect(() => {
     if (homeMapId === null) return
     const stored = readStoredMapId()
@@ -130,11 +127,14 @@ export function useMaps(): UseMapsResult {
     }
   }, [homeMapId])
 
-  const setCurrentMapId = useCallback((id: MapId) => {
-    if (!isRevealedMapId(id)) return
-    setCurrentMapIdState(id)
-    writeStoredMapId(id)
-  }, [])
+  const setCurrentMapId = useCallback(
+    (id: MapId) => {
+      if (!isRevealedMapId(id, effectiveChain)) return
+      setCurrentMapIdState(id)
+      writeStoredMapId(id)
+    },
+    [effectiveChain],
+  )
 
   return { revealedMaps, homeMapId, currentMapId, setCurrentMapId }
 }

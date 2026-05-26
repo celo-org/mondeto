@@ -2,8 +2,8 @@
 cache/
 out/
 
-# Dependencies (install via `forge install`)
-lib/
+# Dependencies are git submodules (see root .gitmodules); run
+# `git submodule update --init --recursive` after cloning.
 
 # Broadcast logs
 /broadcast/
@@ -12,5 +12,7 @@ lib/
 docs/
 !docs/api.md
 
-# Dotenv file
+# Dotenv files (use deploy.env.example as a template)
 .env
+*.env
+!*.env.example

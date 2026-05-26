@@ -1,11 +1,19 @@
 # Mondeto operator runbook
 
-Short ops note for the launch period. Mondeto ships with 6 identical maps
-pre-deployed. Only one is revealed at launch; the operator reveals the next
-one when the freshest open map starts to mature. The `/analytics` page
-surfaces the advisory that tells you when to do it.
+Mondeto runs multiple identical map contracts and **auto-advances** the active map (the one new wallets land on) when its average pixel price crosses the threshold. There is no manual reveal step in production. The `/analytics` page surfaces the same data the auto-advance reads, so you can see what's happening and override the threshold if needed.
 
-## What the advisory means
+## Tuning the auto-advance threshold
+
+The single knob is `NEXT_PUBLIC_MAP_THRESHOLD_USD`. Default is **$2.00**, defined in `apps/web/src/hooks/useShouldOpenNextMap.ts::DEFAULT_THRESHOLD_USD`.
+
+- **Where to set it:** Vercel → Project → Settings → Environment Variables. Add `NEXT_PUBLIC_MAP_THRESHOLD_USD=<value>`, scope to Production / Preview / `staging` branch as appropriate, then trigger a redeploy.
+- **Symptoms and the fix:**
+  - *Maps are advancing too fast* (the active map flips before it feels "filled") → raise to `3` or `4`.
+  - *Map 0 is overcrowded and new users aren't moving on* → lower toward `1`.
+  - *Staging needs to exercise the rollover quickly* → set to `0.1` on the `staging` branch scope only; the active pointer will move on the first sale or two.
+- Any positive number works; non-numeric values silently fall back to $2.00.
+
+## What the `/analytics` advisory means
 
 `/analytics` shows an OPERATOR ADVISORY card at the bottom with one of two
 states:
@@ -27,36 +35,11 @@ Below the card is the PER MAP table: one row per revealed map with
 `% claimed` and `avg $`. Use this to sanity-check the advisory before
 revealing.
 
-## What to do when it flips to OPEN NEXT MAP
+## What happens when it flips to OPEN NEXT MAP
 
-1. Open the PER MAP table on `/analytics` and confirm the freshest open map
-   is genuinely full (high `% claimed`, avg price near or above threshold).
-2. Reveal the next map. Two paths, depending on what's wired up:
+Nothing manual. The advisory is informational — the assignment hook reads the same per-map prices and moves the active pointer to the next id automatically. Use the card to confirm the new map is registering as the active one, and announce the drop.
 
-   **Path A — settings table (preferred once Agent A's settings store is
-   live):** open the `revealedMapIds` row in the Vercel dashboard data
-   editor and append the next map id (e.g. `[0]` -> `[0, 1]`). Save. The
-   front end picks up the new id on the next session-cache miss (~60s).
-
-   **Path B — code flip (stopgap while the settings store isn't merged):**
-   in `apps/web/src/lib/maps/contracts.ts`, flip `revealed: true` on the
-   next map's entry. Open a tiny PR, merge, and let Vercel redeploy.
-
-3. Watch `/analytics` for a few minutes. The advisory should flip back to
-   HEALTHY once the new map registers as the freshest open one.
-4. Announce the new map drop in the usual channels.
-
-## How to override the threshold
-
-The default is $2.00. To use a different value:
-
-- **Preferred (settings store, once merged):** edit the threshold row in
-  the Vercel dashboard data editor. The advisory picks it up on the next
-  refresh.
-- **Stopgap (env override):** set
-  `NEXT_PUBLIC_MAP_THRESHOLD_USD=<value>` in the Vercel project's env vars
-  and redeploy. Any positive number works; non-numeric values fall back to
-  $2.00.
+If you ever need to add a new contract to the rotation, add a one-line entry to `PRODUCTION_MAPS` in `apps/web/src/lib/maps/contracts.ts` and merge. The active-pointer mechanism picks it up on the next deploy; no other code change required.
 
 ## Notes
 
