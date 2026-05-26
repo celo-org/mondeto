@@ -60,6 +60,7 @@ export default function RootLayout({
       <body
         className="font-mono antialiased"
         style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}
+        suppressHydrationWarning
       >
         <PostHogProvider>
           <div className="relative flex min-h-screen flex-col">
