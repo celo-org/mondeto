@@ -31,6 +31,10 @@ interface SelectionDrawerProps {
   userBalance: bigint
   txStep: TxStep
   txHash: string | null
+  /** Last error from the buy flow, if any. Surfaced verbatim under the
+   *  pixel list so the user (and we) can see what actually failed instead
+   *  of a generic "try again" string. */
+  txError: string | null
   userAddress?: string
   profilesMap?: Map<string, { label: string; url: string }>
   onRemovePixels: (ids: number[]) => void
@@ -49,6 +53,7 @@ export default function SelectionDrawer({
   userBalance,
   txStep,
   txHash,
+  txError,
   userAddress,
   profilesMap,
   onRemovePixels,
@@ -268,10 +273,12 @@ export default function SelectionDrawer({
             })}
           </div>
 
-          {/* Error */}
+          {/* Error — show the real reason from the buy flow verbatim so
+              the user (and we) can see what actually failed. Fall back to
+              a generic line only when the error string is empty. */}
           {txStep === 'error' && (
-            <div style={{ fontSize: 7, color: 'var(--error)', marginBottom: 4, flexShrink: 0 }}>
-              That didn't work. Try again?
+            <div style={{ fontSize: 7, color: 'var(--error)', marginBottom: 4, flexShrink: 0, lineHeight: 1.5, wordBreak: 'break-word' }}>
+              {txError && txError.trim().length > 0 ? txError : "That didn't work. Try again?"}
             </div>
           )}
 
