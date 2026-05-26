@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { useAccount, usePublicClient } from 'wagmi'
+import { useAccount } from 'wagmi'
 import WorldCanvas, { type WorldCanvasRef } from '@/components/Map/WorldCanvas'
 import TopBar from '@/components/Layout/TopBar'
 import MapSwitcher from '@/components/Layout/MapSwitcher'
@@ -28,7 +28,7 @@ import { getContractByMapId } from '@/lib/maps/contracts'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
-import { READ_CHAIN_ID } from '@/lib/chain'
+import { useReadClient } from '@/hooks/useReadClient'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
 
 export default function Home() {
@@ -37,9 +37,10 @@ export default function Home() {
   const isDark = true
   const { address, isConnected } = useAccount()
   const addrStr = address as string | undefined
-  // Pin to the read chain so the land mask + profile reads land even
-  // when no wallet is connected — Mondeto's map UI is browse-first.
-  const publicClient = usePublicClient({ chainId: READ_CHAIN_ID })
+  // Guaranteed-defined read client (wagmi → fallback viem client). The
+  // map UI is browse-first and shouldn't bail just because no wallet is
+  // resolved yet or because Privy's WagmiProvider hasn't initialized.
+  const publicClient = useReadClient()
 
   const { currentMapId } = useMaps()
   const mondetoAddress = getContractByMapId(currentMapId)
