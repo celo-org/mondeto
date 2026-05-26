@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSwitchChain } from "wagmi";
 import { celoSepolia } from "viem/chains";
 
 // Test build: the contract v2 test deployment lives on Celo Sepolia.
@@ -30,28 +29,59 @@ async function readWalletChainId(eth: EthereumProvider): Promise<number | null> 
 }
 
 /**
+ * Ask the wallet to switch chains. Tries the standard switch first; if the
+ * chain isn't known to the wallet (error 4902), falls back to add+switch
+ * using viem's chain metadata.
+ */
+async function requestSwitchChain(eth: EthereumProvider): Promise<void> {
+  const hex = `0x${TARGET_CHAIN.id.toString(16)}`;
+  try {
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: hex }],
+    });
+  } catch (err) {
+    const code = (err as { code?: number })?.code;
+    if (code === 4902) {
+      const rpcs = TARGET_CHAIN.rpcUrls.default.http;
+      const explorerUrl = TARGET_CHAIN.blockExplorers?.default?.url;
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: hex,
+            chainName: TARGET_CHAIN.name,
+            rpcUrls: rpcs,
+            nativeCurrency: TARGET_CHAIN.nativeCurrency,
+            blockExplorerUrls: explorerUrl ? [explorerUrl] : [],
+          },
+        ],
+      });
+    } else {
+      throw err;
+    }
+  }
+}
+
+/**
  * Forces every connected wallet onto the target chain.
  *
- * We read the chain id **directly from `window.ethereum`** instead of from
- * `useAccount().chainId`. Privy's wagmi integration reports its own
- * configured chain even when the user's external wallet (MetaMask, Rabby,
- * etc.) is sitting on a different one, which silently masks the mismatch
- * and lets a buyer submit a tx that the wallet then refuses to sign.
+ * We bypass wagmi's `useSwitchChain` and talk to `window.ethereum`
+ * directly. Privy's `WagmiProvider` doesn't reliably propagate
+ * switchChain to the external wallet (MetaMask et al.), so the prompt
+ * silently never fires and the buyer sits on the wrong chain. Going to
+ * the provider directly guarantees `wallet_switchEthereumChain` (with an
+ * `addEthereumChain` fallback for code 4902) actually reaches the wallet.
  *
- * If the wallet's chain doesn't match the target, we call wagmi's
- * `switchChain` to fire the standard `wallet_switchEthereumChain` /
- * `wallet_addEthereumChain` flow. A ref tracks the last chain we prompted
- * on so a rejected switch doesn't loop. We also listen for the wallet's
- * `chainChanged` event so the guard reacts to manual chain changes too.
+ * The guard polls `eth_chainId` on mount and subscribes to the wallet's
+ * `chainChanged` event so it reacts to manual chain changes too. A ref
+ * tracks the last chain we prompted on so a rejected switch doesn't loop.
  */
 export function ChainGuard() {
-  const { switchChain, isPending } = useSwitchChain();
   const [walletChainId, setWalletChainId] = useState<number | null>(null);
+  const [isSwitching, setIsSwitching] = useState(false);
   const lastPromptedChain = useRef<number | null>(null);
 
-  // Poll once on mount and subscribe to chainChanged. Polling on mount
-  // covers the case where the user is already connected when the page
-  // loads (no chainChanged event will fire in that case).
   useEffect(() => {
     const eth = readEth();
     if (!eth) return;
@@ -79,12 +109,22 @@ export function ChainGuard() {
       lastPromptedChain.current = null;
       return;
     }
-    if (isPending) return;
+    if (isSwitching) return;
     if (lastPromptedChain.current === walletChainId) return;
 
+    const eth = readEth();
+    if (!eth) return;
+
     lastPromptedChain.current = walletChainId;
-    switchChain({ chainId: TARGET_CHAIN.id });
-  }, [walletChainId, isPending, switchChain]);
+    setIsSwitching(true);
+    requestSwitchChain(eth)
+      .catch((err) => {
+        console.warn("[chain-guard] switch rejected or failed:", err);
+      })
+      .finally(() => {
+        setIsSwitching(false);
+      });
+  }, [walletChainId, isSwitching]);
 
   return null;
 }
