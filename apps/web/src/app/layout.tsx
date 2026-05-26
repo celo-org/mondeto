@@ -61,6 +61,7 @@ export default function RootLayout({
       <body
         className="font-mono antialiased"
         style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}
+        suppressHydrationWarning
       >
         <DebugErrorBoundary>
           <PostHogProvider>

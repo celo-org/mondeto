@@ -28,6 +28,14 @@ export default function NotFound() {
         gap: 18,
       }}
     >
+      <img
+        src="/brand/mondeto-symbol.gif"
+        alt=""
+        width={96}
+        height={96}
+        style={{ display: 'block', imageRendering: 'pixelated' }}
+      />
+
       <div
         style={{
           fontSize: 48,

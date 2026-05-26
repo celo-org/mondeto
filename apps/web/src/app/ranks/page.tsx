@@ -135,11 +135,11 @@ export default function RanksPage() {
         {isLoading ? (
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <img
-              src="/brand/watermark.svg"
+              src="/brand/mondeto-symbol.gif"
               alt=""
-              width={48}
-              height={48}
-              style={{ animation: 'spin 2.4s linear infinite', display: 'block' }}
+              width={72}
+              height={72}
+              style={{ display: 'block', imageRendering: 'pixelated' }}
             />
           </div>
         ) : hasOwned ? (
@@ -180,20 +180,13 @@ export default function RanksPage() {
               gap: 8,
             }}
           >
-            <svg
-              viewBox="0 0 24 24"
-              width={32}
-              height={32}
-              fill="none"
-              stroke="var(--text-muted)"
-              strokeWidth={1}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx={12} cy={12} r={10} />
-              <path d="M2 12h20" />
-              <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-            </svg>
+            <img
+              src="/brand/mondeto-symbol.gif"
+              alt=""
+              width={72}
+              height={72}
+              style={{ display: 'block', imageRendering: 'pixelated', marginBottom: 6 }}
+            />
             <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
             <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
           </div>
