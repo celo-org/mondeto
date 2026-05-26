@@ -502,6 +502,7 @@ export default function Home() {
           userBalance={userBalance}
           txStep={buy.step}
           txHash={buy.txHash}
+          txError={buy.error}
           userAddress={effectiveAddr}
           profilesMap={drawerProfiles}
           onRemovePixels={handleRemovePixels}
