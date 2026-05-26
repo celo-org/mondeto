@@ -34,7 +34,7 @@ export default function Home() {
   // Dark is the only theme now; downstream map components still take the flag
   // so we pin it to true at the boundary rather than threading every callsite.
   const isDark = true
-  const { address } = useAccount()
+  const { address, isConnected } = useAccount()
   const addrStr = address as string | undefined
   const publicClient = usePublicClient()
 
@@ -460,8 +460,11 @@ export default function Home() {
           TOP UP BALANCE deeplink to MiniPay Add Cash handles the same case). */}
       <BridgeBanner />
 
-      {/* Selection review pill — user taps this to open drawer */}
-      {pixelCount > 0 && activeOverlay === 'none' && (
+      {/* Selection review pill — user taps this to open drawer. When no
+          wallet is connected we replace the pill with a hint pointing at
+          the CONNECT button up top, since the drawer's price + balance +
+          buy CTA only make sense once we know who's paying. */}
+      {pixelCount > 0 && activeOverlay === 'none' && isConnected && (
         <button
           onClick={handleOpenDrawer}
           className="pixel-btn pixel-btn-filled font-display"
@@ -480,6 +483,28 @@ export default function Home() {
           REVIEW {pixelCount} PIXELS
         </button>
       )}
+      {pixelCount > 0 && activeOverlay === 'none' && !isConnected && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 90,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 15,
+            fontSize: 9,
+            fontFamily: "'Press Start 2P', monospace",
+            letterSpacing: 2,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+            padding: '10px 18px',
+            textAlign: 'center',
+            maxWidth: 320,
+          }}
+        >
+          connect your wallet to buy
+        </div>
+      )}
 
       {/* Dim layer — only rendered when an overlay is active */}
       {activeOverlay !== 'none' && (
@@ -490,8 +515,11 @@ export default function Home() {
         />
       )}
 
-      {/* Selection drawer — only rendered when open */}
-      {activeOverlay === 'drawer' && (
+      {/* Selection drawer — only rendered when open AND a wallet is
+          connected (the drawer's BALANCE / LOCK IT IN flow has no meaning
+          without one, and we shouldn't show stale balances from a previous
+          session). */}
+      {activeOverlay === 'drawer' && isConnected && (
         <SelectionDrawer
           visible={true}
           selectedIds={selectedIds}
