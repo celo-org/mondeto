@@ -1,5 +1,27 @@
-import { createPublicClient, http } from 'viem'
+import { createPublicClient, fallback, http } from 'viem'
 import { celo, celoSepolia } from 'viem/chains'
+
+/**
+ * Celo mainnet read transport with fallbacks.
+ *
+ * Forno (the chain's default RPC, fronted by Cloudflare) intermittently
+ * times out for users on shared VPN egress IPs and on networks where
+ * Cloudflare applies bot/rate-limit protection — including mainland
+ * China and some Hong Kong VPN exits. viem's `fallback()` rotates to
+ * the next transport when the active one fails, so a single misbehaving
+ * provider doesn't take the map / leaderboard reads down.
+ *
+ * Order: Forno first (default, fastest when it works), then dRPC and
+ * Ankr public endpoints — both respond from regions where Forno's
+ * Cloudflare frontend gets throttled.
+ */
+export const celoTransport = fallback([
+  http(),
+  http('https://celo.drpc.org'),
+  http('https://rpc.ankr.com/celo'),
+])
+
+export const celoSepoliaTransport = http()
 
 /**
  * The chain we read from for public (no-wallet) on-chain calls.
@@ -28,5 +50,5 @@ export const READ_CHAIN_ID = READ_CHAIN.id
  */
 export const fallbackReadClient = createPublicClient({
   chain: READ_CHAIN,
-  transport: http(),
+  transport: isStaging ? celoSepoliaTransport : celoTransport,
 })
