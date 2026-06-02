@@ -43,9 +43,11 @@ discretePrice = initialPrice >> (epoch - saleCount)    when saleCount < epoch, f
 
 The actual price linearly interpolates between adjacent discrete price levels within each epoch, so decay is gradual rather than a hard step every `HALVING_TIME`. At epoch boundaries the interpolated price equals the discrete price.
 
-**Why relative epoch matters**: `epoch = (block.timestamp - deployTimestamp) / HALVING_TIME`. If you used absolute `block.timestamp / HALVING_TIME`, epoch would be ~108+ at deploy time, making all pixels nearly free immediately. The relative epoch starts at 0 and increments every `HALVING_TIME` after deploy.
+**Why relative epoch matters**: `epoch = (block.timestamp - halvingStartTimestamp) / HALVING_TIME`. If you used absolute `block.timestamp / HALVING_TIME`, epoch would be ~108+ at deploy time, making all pixels nearly free immediately. The relative epoch starts at 0 once the halving clock starts and increments every `HALVING_TIME` thereafter.
 
-**What this means economically**: Each sale doubles the price. Over each `HALVING_TIME` (currently 182 days) without a sale, the price gradually halves. A pixel bought once (saleCount=1) returns to `initialPrice` after one epoch, then keeps decaying. This creates a natural "use it or lose it" pressure — land you buy will decay in value toward `minPrice` if nobody re-buys it.
+**The halving clock only starts on the first buy**: `halvingStartTimestamp` is `0` after deployment and is stamped to `block.timestamp` on the first non-empty `buyPixels` call. While it is `0`, `elapsed` is treated as `0` and every land pixel costs exactly `initialPrice` regardless of wall-clock time. This prevents the map from silently halving down before any traction — `initialPrice` holds until somebody actually buys in.
+
+**What this means economically**: Each sale doubles the price. Over each `HALVING_TIME` (currently 182 days) without a sale, the price gradually halves. A pixel bought once (saleCount=1) returns to `initialPrice` after one epoch, then keeps decaying. This creates a natural "use it or lose it" pressure — land you buy will decay in value toward `minPrice` if nobody re-buys it. Before the first purchase the clock doesn't run, so the map sits at `initialPrice` indefinitely until someone buys in.
 
 **`initialPrice` is fixed at deployment**: Set once in `initialize()` and never changeable afterward — there is deliberately no setter. Since `initialPrice` is the base of every pixel's price, a setter would retroactively reprice the entire map out from under existing owners. To change pricing, deploy a fresh contract.
 
@@ -109,7 +111,7 @@ is the committed template; real `*.env` files are gitignored.
 1. New contract must inherit from `Mondeto` (or replicate its storage layout exactly)
 2. **Never reorder or remove existing state variables** — only append new ones after the current last state var (`acceptedTokens`)
 3. `WIDTH`, `HEIGHT`, `TOTAL_PIXELS`, `LAND_MASK_LENGTH` are immutable (baked into implementation bytecode) — new implementation must be deployed with the same constructor args
-4. `deployTimestamp` (and the rest of the token/pixel/profile state) is regular storage (not `immutable`) because of the proxy pattern
+4. `halvingStartTimestamp` (and the rest of the token/pixel/profile state) is regular storage (not `immutable`) because of the proxy pattern
 5. Test the upgrade in a fork before mainnet: deploy V2, call `upgradeToAndCall`, verify old state survives
 
 ## OpenZeppelin v5 Compatibility Note
