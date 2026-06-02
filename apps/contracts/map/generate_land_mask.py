@@ -4,14 +4,18 @@
 # dependencies = ["Pillow"]
 # ///
 """
-Convert world_map_bw.png to a bitmask for the Mondeto smart contract.
+Convert a BW map PNG to a bitmask for the Mondeto smart contract.
 
 Land (black pixels) = 1, Water (white pixels) = 0.
 Dimensions and word count are derived from the image.
 
 Pixel ID = y * width + x, matching the contract's pixelId() function.
+
+Usage: generate_land_mask.py [INPUT_PNG] [OUTPUT_JSON]
+Both args default to the world map (world_map_bw.png -> land_mask.json).
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -45,8 +49,22 @@ def generate_land_mask(image_path: str) -> tuple[int, int, list[int]]:
 
 def main():
     script_dir = Path(__file__).parent
-    image_path = script_dir / "world_map_bw.png"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "input",
+        nargs="?",
+        default=str(script_dir / "world_map_bw.png"),
+        help="Input BW PNG path",
+    )
+    parser.add_argument(
+        "output",
+        nargs="?",
+        default=str(script_dir / "land_mask.json"),
+        help="Output JSON path",
+    )
+    args = parser.parse_args()
 
+    image_path = Path(args.input)
     if not image_path.exists():
         print(f"Error: {image_path} not found", file=sys.stderr)
         sys.exit(1)
@@ -54,15 +72,18 @@ def main():
     width, height, mask = generate_land_mask(str(image_path))
     total_pixels = width * height
 
-    # Count land pixels
     land_count = sum(bin(w).count("1") for w in mask)
-    print(f"Image: {width}x{height} ({total_pixels} pixels, {len(mask)} words)", file=sys.stderr)
-    print(f"Land pixels: {land_count} / {total_pixels}", file=sys.stderr)
+    print(
+        f"{image_path.name}: {width}x{height} ({total_pixels} px, {len(mask)} words), "
+        f"{land_count} land",
+        file=sys.stderr,
+    )
 
-    sol_path = script_dir / "land_mask.json"
-    with open(sol_path, "w") as f:
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w") as f:
         json.dump({"width": width, "height": height, "mask": mask}, f)
-    print(f"Solidity-compatible mask written to {sol_path}", file=sys.stderr)
+    print(f"-> {out_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

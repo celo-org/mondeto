@@ -20,6 +20,11 @@ Regenerate `world_map_bw.png` from the source SVG (requires cairosvg + Pillow):
 cd map && uv run convert_map.py
 ```
 
+Regenerate per-continent maps and masks (writes to `map/continents/<name>.{png,json}`):
+```sh
+uv run map/generate_continents.py
+```
+
 ## Architecture
 
 **Proxy pattern**: UUPS (OpenZeppelin). The proxy address is the one users interact with. The implementation contract has `_disableInitializers()` in its constructor — never call `initialize()` on the implementation directly.
@@ -65,6 +70,20 @@ Not all pixels are buyable. Water pixels (oceans) are excluded.
 - The land mask is passed to `initialize()` at deploy time and is immutable after that.
 - Currently 5,622 land pixels out of 17,000.
 
+### Per-continent maps
+
+Geographic continent maps come from Natural Earth's `ne_10m_admin_0_map_subunits` dataset, cached at `map/data/ne_10m_admin_0_map_subunits.geojson`. Each subunit has a `CONTINENT` field, and transcontinental countries are pre-split — Russia appears as two subunits (`CONTINENT=Europe` west of the Urals, `CONTINENT=Asia` east of them).
+
+`map/generate_continents.py` groups subunits by `CONTINENT`, projects them, scales the bbox to ~17,000 pixels, and rasterizes filled polygons (with holes punched white) using PIL. Output goes to `map/continents/<name>.{png,json}`.
+
+Projections:
+- Antarctica: azimuthal equidistant from the south pole.
+- Others: equirectangular with `cos(latitude)` aspect correction at the continent's mid-latitude. Each continent has a `CENTER_LON` value used to recenter longitudes before projection — this avoids antimeridian wrapping for Asia (Chukotka), Oceania (Fiji/Kiribati), and North America (Aleutians).
+
+`map/continents.py` (the ISO 3166-1 alpha-3 country list) is kept for future country-list/country-map rendering via `convert_map.py --continent`; it is not used by the geographic continent generator.
+
+Continent names: `africa`, `asia`, `europe`, `north-america`, `oceania`, `south-america`, `antarctica`.
+
 ## Profile System
 
 Each address has one profile (color, label, url). Set via `updateProfile()`, which always overwrites. `buyPixels()` does not touch profiles.
@@ -76,7 +95,9 @@ Label and URL are capped at 64 bytes each (not characters — matters for multib
 See the **Deployment** section of `README.md` for the full step-by-step (env template,
 required vars, signer). In short: `Deploy.s.sol` is configured by env vars (`ACCEPTED_TOKENS`,
 `INITIAL_PRICE`, `MIN_PRICE`, `HALVING_TIME_DAYS`, `INITIAL_FEE_RATE`, `ETH_RPC_URL`) plus
-the land mask in `map/land_mask.json` (which supplies `WIDTH`/`HEIGHT`). `deploy.env.example`
+the land mask JSON file (which supplies `WIDTH`/`HEIGHT`). The mask path comes from the
+optional `LAND_MASK_PATH` env var (default `map/land_mask.json`); set it to e.g.
+`map/continents/africa.json` to deploy a single-continent map. `deploy.env.example`
 is the committed template; real `*.env` files are gitignored.
 
 `ACCEPTED_TOKENS` is a comma-separated list of dollar stablecoins, all treated 1:1.

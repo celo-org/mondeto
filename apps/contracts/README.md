@@ -12,7 +12,9 @@ forge test
 ## Deployment
 
 The deploy script (`script/Deploy.s.sol`) is configured entirely through environment
-variables and the land mask in `map/land_mask.json` (which also supplies `WIDTH`/`HEIGHT`).
+variables and a land mask JSON file (which also supplies `WIDTH`/`HEIGHT`). The default
+is the full `map/land_mask.json` (world); set `LAND_MASK_PATH` to point at a per-continent
+mask under `map/continents/` to deploy a single continent instead.
 
 1. Copy the template and fill it in:
 
@@ -31,6 +33,7 @@ variables and the land mask in `map/land_mask.json` (which also supplies `WIDTH`
    | `HALVING_TIME_DAYS`| Epoch length; price gradually halves over this window.               |
    | `INITIAL_FEE_RATE` | Treasury fee on resales, in basis points (`500` = 5%).               |
    | `ETH_RPC_URL`      | RPC endpoint (used by default when `--rpc-url` is omitted).          |
+   | `LAND_MASK_PATH`   | *Optional.* Path to the land mask JSON. Defaults to `map/land_mask.json`. Set to `map/continents/<name>.json` (e.g. `africa`, `asia`, `europe`, `north-america`, `oceania`, `south-america`, `antarctica`) for a single-continent deploy. |
 
    `PROXY_ADDRESS` is not used by the Solidity deploy — it's read by the operational
    scripts (`script/pay_leaders.py`, `script/player_pnl.py`), so set it after the first deploy.
