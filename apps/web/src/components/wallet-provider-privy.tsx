@@ -7,10 +7,10 @@ import {
 } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext } from "react";
-import { http } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
 import { ChainGuard } from "./ChainGuard";
+import { celoTransport, celoSepoliaTransport } from "@/lib/chain";
 
 // Privy-only tree, isolated from the MiniPay path. Lazy-loaded by
 // WalletProvider via next/dynamic({ ssr: false }) so this module never
@@ -27,8 +27,8 @@ const privyWagmiConfig = createPrivyWagmiConfig({
   connectors: [injected()],
   ssr: true,
   transports: {
-    [celo.id]: http(),
-    [celoSepolia.id]: http(),
+    [celo.id]: celoTransport,
+    [celoSepolia.id]: celoSepoliaTransport,
   },
 });
 

@@ -3,10 +3,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { http, useConnect, WagmiProvider, createConfig } from "wagmi";
+import { useConnect, WagmiProvider, createConfig } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
 import { ChainGuard } from "./ChainGuard";
+import { celoTransport, celoSepoliaTransport } from "@/lib/chain";
 
 // Architecture — MiniPay first, Privy lazy.
 //
@@ -45,8 +46,8 @@ const wagmiConfig = createConfig({
   connectors: [injected()],
   ssr: true,
   transports: {
-    [celo.id]: http(),
-    [celoSepolia.id]: http(),
+    [celo.id]: celoTransport,
+    [celoSepolia.id]: celoSepoliaTransport,
   },
 });
 
