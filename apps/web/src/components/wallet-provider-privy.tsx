@@ -7,10 +7,10 @@ import {
 } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext } from "react";
-import { http } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
 import { ChainGuard } from "./ChainGuard";
+import { celoTransport, celoSepoliaTransport } from "@/lib/chain";
 
 // Privy-only tree, isolated from the MiniPay path. Lazy-loaded by
 // WalletProvider via next/dynamic({ ssr: false }) so this module never
@@ -22,16 +22,13 @@ import { ChainGuard } from "./ChainGuard";
 // Privy docs require importing `createConfig` + `WagmiProvider` from
 // `@privy-io/wagmi`, not from `wagmi` directly. See
 // https://docs.privy.io/wallets/connectors/ethereum/integrations/wagmi
-// See wallet-provider.tsx for why this URL is public-by-design.
-const fornoRpcUrl = process.env.NEXT_PUBLIC_FORNO_RPC_URL;
-
 const privyWagmiConfig = createPrivyWagmiConfig({
   chains: [celo, celoSepolia],
   connectors: [injected()],
   ssr: true,
   transports: {
-    [celo.id]: http(fornoRpcUrl),
-    [celoSepolia.id]: http(),
+    [celo.id]: celoTransport,
+    [celoSepolia.id]: celoSepoliaTransport,
   },
 });
 

@@ -94,13 +94,15 @@ export default function ProfilePage() {
     // Fetch P&L from PixelsPurchased events across the full contract history.
     //
     // Strategy:
-    //   1. Read the contract's `deployTimestamp()` and the current block's
-    //      timestamp to back-estimate how many blocks ago the contract went
-    //      live. Celo post-L2 produces ~1 block / sec; using 1s here +
-    //      a safety buffer guarantees we never miss the first sale.
-    //   2. Chunked + parallel getLogs from estimated-deploy to head. Mirrors
-    //      the pattern in useAnalytics — Forno occasionally rejects large
-    //      windows, so we cap each chunk at 50k blocks.
+    //   1. Read the contract's `halvingStartTimestamp()` (the block-time of
+    //      the first pixel sale, or 0 if none yet) and the current block's
+    //      timestamp to back-estimate how many blocks ago that first sale
+    //      happened. Celo post-L2 produces ~1 block / sec; using 1s here +
+    //      a safety buffer guarantees we never miss the first sale. If the
+    //      contract has had no sales, there's nothing to scan — bail out.
+    //   2. Chunked + parallel getLogs from estimated-first-sale to head.
+    //      Mirrors the pattern in useAnalytics — Forno occasionally rejects
+    //      large windows, so we cap each chunk at 50k blocks.
     //   3. Stale-while-revalidate cache in localStorage: render whatever's
     //      cached immediately (even if expired) so the user sees numbers
     //      instantly, then refresh in the background. Skip the rescan only
@@ -132,24 +134,27 @@ export default function ProfilePage() {
 
         const currentBlock = await publicClient!.getBlockNumber()
 
-        // Estimate the deploy block from the contract's own clock.
+        // Estimate the first-sale block from the contract's own clock.
         let fromBlock = 0n
         try {
-          const [deployTs, head] = await Promise.all([
+          const [halvingStartTs, head] = await Promise.all([
             publicClient!.readContract({
               address: mondetoAddress,
               abi: MONDETO_ABI,
-              functionName: 'deployTimestamp',
+              functionName: 'halvingStartTimestamp',
             }) as Promise<bigint>,
             publicClient!.getBlock({ blockNumber: currentBlock }),
           ])
-          const secondsSinceDeploy = head.timestamp - deployTs
+          // 0 means no purchases yet — no logs to scan, and the initial
+          // 0/0 P&L state set above is already correct.
+          if (halvingStartTs === 0n) return
+          const secondsSinceStart = head.timestamp - halvingStartTs
           // 1s/block on Celo L2 — overestimating is safe (fromBlock just
           // ends up earlier than needed and the empty chunks are cheap).
-          const estimatedBlocks = secondsSinceDeploy + SAFETY_BUFFER_BLOCKS
+          const estimatedBlocks = secondsSinceStart + SAFETY_BUFFER_BLOCKS
           fromBlock = currentBlock > estimatedBlocks ? currentBlock - estimatedBlocks : 0n
         } catch (e) {
-          console.warn('Could not read deployTimestamp; scanning from block 0:', e)
+          console.warn('Could not read halvingStartTimestamp; scanning from block 0:', e)
         }
 
         // Build chunk ranges.

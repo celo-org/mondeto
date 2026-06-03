@@ -20,6 +20,11 @@ Regenerate `world_map_bw.png` from the source SVG (requires cairosvg + Pillow):
 cd map && uv run convert_map.py
 ```
 
+Regenerate per-continent maps and masks (writes to `map/continents/<name>.{png,json}`):
+```sh
+uv run map/generate_continents.py
+```
+
 ## Architecture
 
 **Proxy pattern**: UUPS (OpenZeppelin). The proxy address is the one users interact with. The implementation contract has `_disableInitializers()` in its constructor — never call `initialize()` on the implementation directly.
@@ -38,9 +43,11 @@ discretePrice = initialPrice >> (epoch - saleCount)    when saleCount < epoch, f
 
 The actual price linearly interpolates between adjacent discrete price levels within each epoch, so decay is gradual rather than a hard step every `HALVING_TIME`. At epoch boundaries the interpolated price equals the discrete price.
 
-**Why relative epoch matters**: `epoch = (block.timestamp - deployTimestamp) / HALVING_TIME`. If you used absolute `block.timestamp / HALVING_TIME`, epoch would be ~108+ at deploy time, making all pixels nearly free immediately. The relative epoch starts at 0 and increments every `HALVING_TIME` after deploy.
+**Why relative epoch matters**: `epoch = (block.timestamp - halvingStartTimestamp) / HALVING_TIME`. If you used absolute `block.timestamp / HALVING_TIME`, epoch would be ~108+ at deploy time, making all pixels nearly free immediately. The relative epoch starts at 0 once the halving clock starts and increments every `HALVING_TIME` thereafter.
 
-**What this means economically**: Each sale doubles the price. Over each `HALVING_TIME` (currently 182 days) without a sale, the price gradually halves. A pixel bought once (saleCount=1) returns to `initialPrice` after one epoch, then keeps decaying. This creates a natural "use it or lose it" pressure — land you buy will decay in value toward `minPrice` if nobody re-buys it.
+**The halving clock only starts on the first buy**: `halvingStartTimestamp` is `0` after deployment and is stamped to `block.timestamp` on the first non-empty `buyPixels` call. While it is `0`, `elapsed` is treated as `0` and every land pixel costs exactly `initialPrice` regardless of wall-clock time. This prevents the map from silently halving down before any traction — `initialPrice` holds until somebody actually buys in.
+
+**What this means economically**: Each sale doubles the price. Over each `HALVING_TIME` (currently 182 days) without a sale, the price gradually halves. A pixel bought once (saleCount=1) returns to `initialPrice` after one epoch, then keeps decaying. This creates a natural "use it or lose it" pressure — land you buy will decay in value toward `minPrice` if nobody re-buys it. Before the first purchase the clock doesn't run, so the map sits at `initialPrice` indefinitely until someone buys in.
 
 **`initialPrice` is fixed at deployment**: Set once in `initialize()` and never changeable afterward — there is deliberately no setter. Since `initialPrice` is the base of every pixel's price, a setter would retroactively reprice the entire map out from under existing owners. To change pricing, deploy a fresh contract.
 
@@ -65,6 +72,20 @@ Not all pixels are buyable. Water pixels (oceans) are excluded.
 - The land mask is passed to `initialize()` at deploy time and is immutable after that.
 - Currently 5,622 land pixels out of 17,000.
 
+### Per-continent maps
+
+Geographic continent maps come from Natural Earth's `ne_10m_admin_0_map_subunits` dataset, cached at `map/data/ne_10m_admin_0_map_subunits.geojson`. Each subunit has a `CONTINENT` field, and transcontinental countries are pre-split — Russia appears as two subunits (`CONTINENT=Europe` west of the Urals, `CONTINENT=Asia` east of them).
+
+`map/generate_continents.py` groups subunits by `CONTINENT`, projects them, scales the bbox to ~17,000 pixels, and rasterizes filled polygons (with holes punched white) using PIL. Output goes to `map/continents/<name>.{png,json}`.
+
+Projections:
+- Antarctica: azimuthal equidistant from the south pole.
+- Others: equirectangular with `cos(latitude)` aspect correction at the continent's mid-latitude. Each continent has a `CENTER_LON` value used to recenter longitudes before projection — this avoids antimeridian wrapping for Asia (Chukotka), Oceania (Fiji/Kiribati), and North America (Aleutians).
+
+`map/continents.py` (the ISO 3166-1 alpha-3 country list) is kept for future country-list/country-map rendering via `convert_map.py --continent`; it is not used by the geographic continent generator.
+
+Continent names: `africa`, `asia`, `europe`, `north-america`, `oceania`, `south-america`, `antarctica`.
+
 ## Profile System
 
 Each address has one profile (color, label, url). Set via `updateProfile()`, which always overwrites. `buyPixels()` does not touch profiles.
@@ -76,7 +97,9 @@ Label and URL are capped at 64 bytes each (not characters — matters for multib
 See the **Deployment** section of `README.md` for the full step-by-step (env template,
 required vars, signer). In short: `Deploy.s.sol` is configured by env vars (`ACCEPTED_TOKENS`,
 `INITIAL_PRICE`, `MIN_PRICE`, `HALVING_TIME_DAYS`, `INITIAL_FEE_RATE`, `ETH_RPC_URL`) plus
-the land mask in `map/land_mask.json` (which supplies `WIDTH`/`HEIGHT`). `deploy.env.example`
+the land mask JSON file (which supplies `WIDTH`/`HEIGHT`). The mask path comes from the
+optional `LAND_MASK_PATH` env var (default `map/land_mask.json`); set it to e.g.
+`map/continents/africa.json` to deploy a single-continent map. `deploy.env.example`
 is the committed template; real `*.env` files are gitignored.
 
 `ACCEPTED_TOKENS` is a comma-separated list of dollar stablecoins, all treated 1:1.
@@ -88,7 +111,7 @@ is the committed template; real `*.env` files are gitignored.
 1. New contract must inherit from `Mondeto` (or replicate its storage layout exactly)
 2. **Never reorder or remove existing state variables** — only append new ones after the current last state var (`acceptedTokens`)
 3. `WIDTH`, `HEIGHT`, `TOTAL_PIXELS`, `LAND_MASK_LENGTH` are immutable (baked into implementation bytecode) — new implementation must be deployed with the same constructor args
-4. `deployTimestamp` (and the rest of the token/pixel/profile state) is regular storage (not `immutable`) because of the proxy pattern
+4. `halvingStartTimestamp` (and the rest of the token/pixel/profile state) is regular storage (not `immutable`) because of the proxy pattern
 5. Test the upgrade in a fork before mainnet: deploy V2, call `upgradeToAndCall`, verify old state survives
 
 ## OpenZeppelin v5 Compatibility Note

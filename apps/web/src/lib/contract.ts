@@ -174,13 +174,41 @@ export const MONDETO_ABI = [
     "name": "config",
     "inputs": [],
     "outputs": [
-      { "name": "width", "type": "uint16", "internalType": "uint16" },
-      { "name": "height", "type": "uint16", "internalType": "uint16" },
-      { "name": "halvingTime", "type": "uint256", "internalType": "uint256" },
-      { "name": "_initialPrice", "type": "uint256", "internalType": "uint256" },
-      { "name": "_minPrice", "type": "uint256", "internalType": "uint256" },
-      { "name": "_deployTimestamp", "type": "uint256", "internalType": "uint256" },
-      { "name": "_feeRate", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "width",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "height",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "halvingTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_initialPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_minPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_halvingStartTimestamp",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_feeRate",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
     "stateMutability": "view"
   },
@@ -188,65 +216,143 @@ export const MONDETO_ABI = [
     "type": "function",
     "name": "currentEpoch",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "deployTimestamp",
-    "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "feeRate",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "getAcceptedTokens",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "address[]", "internalType": "address[]" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address[]",
+        "internalType": "address[]"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "getLandMask",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256[]", "internalType": "uint256[]" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "getPixelBatch",
     "inputs": [
-      { "name": "x", "type": "uint16", "internalType": "uint16" },
-      { "name": "y", "type": "uint16", "internalType": "uint16" },
-      { "name": "w", "type": "uint16", "internalType": "uint16" },
-      { "name": "h", "type": "uint16", "internalType": "uint16" }
+      {
+        "name": "x",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "y",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "w",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "h",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
     ],
-    "outputs": [{ "name": "", "type": "bytes", "internalType": "bytes" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "halvingStartTimestamp",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "initialPrice",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "initialize",
     "inputs": [
-      { "name": "_tokens", "type": "address[]", "internalType": "address[]" },
-      { "name": "_initialPrice", "type": "uint256", "internalType": "uint256" },
-      { "name": "_minPrice", "type": "uint256", "internalType": "uint256" },
-      { "name": "_feeRate", "type": "uint256", "internalType": "uint256" },
-      { "name": "_landMask", "type": "uint256[]", "internalType": "uint256[]" }
+      {
+        "name": "_tokens",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "_initialPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_minPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_feeRate",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_landMask",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -255,50 +361,116 @@ export const MONDETO_ABI = [
     "type": "function",
     "name": "isLand",
     "inputs": [
-      { "name": "x", "type": "uint16", "internalType": "uint16" },
-      { "name": "y", "type": "uint16", "internalType": "uint16" }
+      {
+        "name": "x",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "y",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
     ],
-    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "landMask",
-    "inputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "minPrice",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "owner",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "pixelId",
     "inputs": [
-      { "name": "x", "type": "uint16", "internalType": "uint16" },
-      { "name": "y", "type": "uint16", "internalType": "uint16" }
+      {
+        "name": "x",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "y",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "pixels",
-    "inputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
-      { "name": "owner", "type": "address", "internalType": "address" },
-      { "name": "saleCount", "type": "uint8", "internalType": "uint8" }
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "saleCount",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
     ],
     "stateMutability": "view"
   },
@@ -306,20 +478,52 @@ export const MONDETO_ABI = [
     "type": "function",
     "name": "priceOf",
     "inputs": [
-      { "name": "x", "type": "uint16", "internalType": "uint16" },
-      { "name": "y", "type": "uint16", "internalType": "uint16" }
+      {
+        "name": "x",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "y",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "profiles",
-    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [
-      { "name": "color", "type": "uint24", "internalType": "uint24" },
-      { "name": "label", "type": "bytes", "internalType": "bytes" },
-      { "name": "url", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "color",
+        "type": "uint24",
+        "internalType": "uint24"
+      },
+      {
+        "name": "label",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "url",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
     "stateMutability": "view"
   },
@@ -327,25 +531,59 @@ export const MONDETO_ABI = [
     "type": "function",
     "name": "proxiableUUID",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "bytes32", "internalType": "bytes32" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "rectanglePrice",
     "inputs": [
-      { "name": "x", "type": "uint16", "internalType": "uint16" },
-      { "name": "y", "type": "uint16", "internalType": "uint16" },
-      { "name": "w", "type": "uint16", "internalType": "uint16" },
-      { "name": "h", "type": "uint16", "internalType": "uint16" }
+      {
+        "name": "x",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "y",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "w",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "h",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "removeAcceptedToken",
-    "inputs": [{ "name": "token", "type": "address", "internalType": "address" }],
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -359,38 +597,69 @@ export const MONDETO_ABI = [
   {
     "type": "function",
     "name": "selectionPrice",
-    "inputs": [{ "name": "ids", "type": "uint256[]", "internalType": "uint256[]" }],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "inputs": [
+      {
+        "name": "ids",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "setFeeRate",
-    "inputs": [{ "name": "_feeRate", "type": "uint256", "internalType": "uint256" }],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setInitialPrice",
-    "inputs": [{ "name": "_initialPrice", "type": "uint256", "internalType": "uint256" }],
+    "inputs": [
+      {
+        "name": "_feeRate",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "tokenConfig",
-    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [
-      { "name": "accepted", "type": "bool", "internalType": "bool" },
-      { "name": "decimals", "type": "uint8", "internalType": "uint8" }
+      {
+        "name": "accepted",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "decimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "transferOwnership",
-    "inputs": [{ "name": "newOwner", "type": "address", "internalType": "address" }],
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -398,9 +667,21 @@ export const MONDETO_ABI = [
     "type": "function",
     "name": "updateProfile",
     "inputs": [
-      { "name": "color", "type": "uint24", "internalType": "uint24" },
-      { "name": "label", "type": "string", "internalType": "string" },
-      { "name": "url", "type": "string", "internalType": "string" }
+      {
+        "name": "color",
+        "type": "uint24",
+        "internalType": "uint24"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "url",
+        "type": "string",
+        "internalType": "string"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -409,8 +690,16 @@ export const MONDETO_ABI = [
     "type": "function",
     "name": "upgradeToAndCall",
     "inputs": [
-      { "name": "newImplementation", "type": "address", "internalType": "address" },
-      { "name": "data", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "newImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
     "outputs": [],
     "stateMutability": "payable"
@@ -419,9 +708,21 @@ export const MONDETO_ABI = [
     "type": "function",
     "name": "withdraw",
     "inputs": [
-      { "name": "token", "type": "address", "internalType": "address" },
-      { "name": "to", "type": "address", "internalType": "address" },
-      { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -429,7 +730,13 @@ export const MONDETO_ABI = [
   {
     "type": "function",
     "name": "withdrawAll",
-    "inputs": [{ "name": "to", "type": "address", "internalType": "address" }],
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -437,8 +744,18 @@ export const MONDETO_ABI = [
     "type": "event",
     "name": "AcceptedTokenAdded",
     "inputs": [
-      { "name": "token", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "decimals", "type": "uint8", "indexed": false, "internalType": "uint8" }
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "decimals",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      }
     ],
     "anonymous": false
   },
@@ -446,7 +763,25 @@ export const MONDETO_ABI = [
     "type": "event",
     "name": "AcceptedTokenRemoved",
     "inputs": [
-      { "name": "token", "type": "address", "indexed": true, "internalType": "address" }
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeeRateUpdated",
+    "inputs": [
+      {
+        "name": "feeRate",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
     ],
     "anonymous": false
   },
@@ -454,7 +789,12 @@ export const MONDETO_ABI = [
     "type": "event",
     "name": "Initialized",
     "inputs": [
-      { "name": "version", "type": "uint64", "indexed": false, "internalType": "uint64" }
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
     ],
     "anonymous": false
   },
@@ -462,8 +802,18 @@ export const MONDETO_ABI = [
     "type": "event",
     "name": "OwnershipTransferred",
     "inputs": [
-      { "name": "previousOwner", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "newOwner", "type": "address", "indexed": true, "internalType": "address" }
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
     ],
     "anonymous": false
   },
@@ -471,10 +821,30 @@ export const MONDETO_ABI = [
     "type": "event",
     "name": "PixelsPurchased",
     "inputs": [
-      { "name": "buyer", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "token", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "ids", "type": "uint256[]", "indexed": false, "internalType": "uint256[]" },
-      { "name": "totalCost", "type": "uint256", "indexed": false, "internalType": "uint256" }
+      {
+        "name": "buyer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "ids",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "totalCost",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
     ],
     "anonymous": false
   },
@@ -482,10 +852,30 @@ export const MONDETO_ABI = [
     "type": "event",
     "name": "ProfileUpdated",
     "inputs": [
-      { "name": "user", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "color", "type": "uint24", "indexed": false, "internalType": "uint24" },
-      { "name": "label", "type": "bytes", "indexed": false, "internalType": "bytes" },
-      { "name": "url", "type": "bytes", "indexed": false, "internalType": "bytes" }
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "color",
+        "type": "uint24",
+        "indexed": false,
+        "internalType": "uint24"
+      },
+      {
+        "name": "label",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      },
+      {
+        "name": "url",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
     ],
     "anonymous": false
   },
@@ -493,34 +883,195 @@ export const MONDETO_ABI = [
     "type": "event",
     "name": "Upgraded",
     "inputs": [
-      { "name": "implementation", "type": "address", "indexed": true, "internalType": "address" }
+      {
+        "name": "implementation",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
     ],
     "anonymous": false
   },
-  { "type": "error", "name": "AddressEmptyCode", "inputs": [{ "name": "target", "type": "address", "internalType": "address" }] },
-  { "type": "error", "name": "ERC1967InvalidImplementation", "inputs": [{ "name": "implementation", "type": "address", "internalType": "address" }] },
-  { "type": "error", "name": "ERC1967NonPayable", "inputs": [] },
-  { "type": "error", "name": "FailedCall", "inputs": [] },
-  { "type": "error", "name": "InvalidCoordinates", "inputs": [] },
-  { "type": "error", "name": "InvalidFeeRate", "inputs": [] },
-  { "type": "error", "name": "InvalidInitialization", "inputs": [] },
-  { "type": "error", "name": "InvalidMaskLength", "inputs": [] },
-  { "type": "error", "name": "InvalidPixelId", "inputs": [{ "name": "id", "type": "uint256", "internalType": "uint256" }] },
-  { "type": "error", "name": "InvalidToken", "inputs": [] },
-  { "type": "error", "name": "LabelTooLong", "inputs": [] },
-  { "type": "error", "name": "NoTokens", "inputs": [] },
-  { "type": "error", "name": "NotInitializing", "inputs": [] },
-  { "type": "error", "name": "NotLand", "inputs": [{ "name": "id", "type": "uint256", "internalType": "uint256" }] },
-  { "type": "error", "name": "OutOfBounds", "inputs": [] },
-  { "type": "error", "name": "OwnableInvalidOwner", "inputs": [{ "name": "owner", "type": "address", "internalType": "address" }] },
-  { "type": "error", "name": "OwnableUnauthorizedAccount", "inputs": [{ "name": "account", "type": "address", "internalType": "address" }] },
-  { "type": "error", "name": "ReentrancyGuardReentrantCall", "inputs": [] },
-  { "type": "error", "name": "SafeERC20FailedOperation", "inputs": [{ "name": "token", "type": "address", "internalType": "address" }] },
-  { "type": "error", "name": "TokenAlreadyAccepted", "inputs": [{ "name": "token", "type": "address", "internalType": "address" }] },
-  { "type": "error", "name": "TokenNotAccepted", "inputs": [{ "name": "token", "type": "address", "internalType": "address" }] },
-  { "type": "error", "name": "UUPSUnauthorizedCallContext", "inputs": [] },
-  { "type": "error", "name": "UUPSUnsupportedProxiableUUID", "inputs": [{ "name": "slot", "type": "bytes32", "internalType": "bytes32" }] },
-  { "type": "error", "name": "UrlTooLong", "inputs": [] }
+  {
+    "type": "error",
+    "name": "AddressEmptyCode",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC1967InvalidImplementation",
+    "inputs": [
+      {
+        "name": "implementation",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC1967NonPayable",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FailedCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCoordinates",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidFeeRate",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaskLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPixelId",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidToken",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LabelTooLong",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoTokens",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotLand",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OutOfBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeERC20FailedOperation",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TokenAlreadyAccepted",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TokenNotAccepted",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UUPSUnauthorizedCallContext",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UUPSUnsupportedProxiableUUID",
+    "inputs": [
+      {
+        "name": "slot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UrlTooLong",
+    "inputs": []
+  }
 ] as const
 
 // Generic ERC20 ABI — works against whichever accepted stablecoin the
@@ -530,41 +1081,93 @@ export const ERC20_ABI = [
     "type": "function",
     "name": "approve",
     "inputs": [
-      { "name": "spender", "type": "address", "internalType": "address" },
-      { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "allowance",
     "inputs": [
-      { "name": "owner", "type": "address", "internalType": "address" },
-      { "name": "spender", "type": "address", "internalType": "address" }
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "balanceOf",
-    "inputs": [{ "name": "account", "type": "address", "internalType": "address" }],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "decimals",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint8", "internalType": "uint8" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "symbol",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "string", "internalType": "string" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
     "stateMutability": "view"
   }
 ] as const

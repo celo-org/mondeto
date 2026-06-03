@@ -46,7 +46,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     }
 
     // --- State ---
-    uint256 public deployTimestamp;
+    /// @notice Timestamp at which the halving clock starts. `0` until the first
+    ///         `buyPixels` call lands; stamped to `block.timestamp` on that call.
+    ///         While `0`, every land pixel costs exactly `initialPrice` regardless
+    ///         of wall-clock time.
+    uint256 public halvingStartTimestamp;
     uint256 public initialPrice;
     uint256 public minPrice;
 
@@ -105,7 +109,6 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         if (_feeRate > 10000) revert InvalidFeeRate();
         if (_tokens.length == 0) revert NoTokens();
 
-        deployTimestamp = block.timestamp;
         initialPrice = _initialPrice;
         minPrice = _minPrice;
         feeRate = _feeRate;
@@ -123,7 +126,15 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         TokenConfig memory tc = tokenConfig[token];
         if (!tc.accepted) revert TokenNotAccepted(token);
 
-        uint256 elapsed = block.timestamp - deployTimestamp;
+        // Start the halving clock on the first ever buy. Before that, the map
+        // sits at initialPrice indefinitely. Empty ids[] is a no-op and must
+        // not start the clock.
+        uint256 start = halvingStartTimestamp;
+        if (start == 0 && ids.length > 0) {
+            start = block.timestamp;
+            halvingStartTimestamp = start;
+        }
+        uint256 elapsed = start == 0 ? 0 : block.timestamp - start;
         uint256 _feeRate = feeRate;
         uint256 _initialPrice = initialPrice;
         uint256 _minPrice = minPrice;
@@ -235,7 +246,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     }
 
     function currentEpoch() public view returns (uint256) {
-        return (block.timestamp - deployTimestamp) / HALVING_TIME;
+        return _elapsed() / HALVING_TIME;
     }
 
     function pixelId(uint16 x, uint16 y) public view returns (uint256) {
@@ -246,7 +257,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         if (x >= WIDTH || y >= HEIGHT) revert InvalidCoordinates();
         uint256 id = pixelId(x, y);
         if (!_isLand(id)) revert NotLand(id);
-        return _price(pixels[id].saleCount, block.timestamp - deployTimestamp, initialPrice, minPrice);
+        return _price(pixels[id].saleCount, _elapsed(), initialPrice, minPrice);
     }
 
     function isLand(uint16 x, uint16 y) external view returns (bool) {
@@ -262,10 +273,10 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         uint256 halvingTime,
         uint256 _initialPrice,
         uint256 _minPrice,
-        uint256 _deployTimestamp,
+        uint256 _halvingStartTimestamp,
         uint256 _feeRate
     ) {
-        return (WIDTH, HEIGHT, HALVING_TIME, initialPrice, minPrice, deployTimestamp, feeRate);
+        return (WIDTH, HEIGHT, HALVING_TIME, initialPrice, minPrice, halvingStartTimestamp, feeRate);
     }
 
     /// @notice Returns packed pixel data for land pixels in a rectangle. Water pixels are skipped.
@@ -287,8 +298,8 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     ///         2. Compute `id = row * WIDTH + col` from the iteration coordinates.
     ///         3. Decode owner (bytes 0–19), saleCount (byte 20), color (bytes 21–23) from the record.
     ///         4. Compute price client-side from saleCount (if necessary). Call config() once to get
-    ///            initialPrice, minPrice, deployTimestamp, and HALVING_TIME, then for each pixel:
-    ///              elapsed     = block.timestamp - deployTimestamp
+    ///            initialPrice, minPrice, halvingStartTimestamp, and HALVING_TIME, then for each pixel:
+    ///              elapsed     = halvingStartTimestamp == 0 ? 0 : block.timestamp - halvingStartTimestamp
     ///              epochStart  = elapsed / HALVING_TIME
     ///              remainder   = elapsed - epochStart * HALVING_TIME
     ///              discreteP(e)= initialPrice << (saleCount - e)   if saleCount >= e
@@ -360,7 +371,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     function rectanglePrice(uint16 x, uint16 y, uint16 w, uint16 h) external view returns (uint256) {
         if (x + w > WIDTH || y + h > HEIGHT) revert OutOfBounds();
 
-        uint256 elapsed = block.timestamp - deployTimestamp;
+        uint256 elapsed = _elapsed();
         uint256 _initialPrice = initialPrice;
         uint256 _minPrice = minPrice;
         uint256 total;
@@ -388,7 +399,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     }
 
     function selectionPrice(uint256[] calldata ids) external view returns (uint256) {
-        uint256 elapsed = block.timestamp - deployTimestamp;
+        uint256 elapsed = _elapsed();
         uint256 _initialPrice = initialPrice;
         uint256 _minPrice = minPrice;
         uint256 total;
@@ -458,6 +469,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     }
 
     // --- Internal ---
+
+    function _elapsed() internal view returns (uint256) {
+        uint256 start = halvingStartTimestamp;
+        return start == 0 ? 0 : block.timestamp - start;
+    }
 
     function _price(uint8 saleCount, uint256 elapsed, uint256 _initialPrice, uint256 _minPrice) internal view returns (uint256) {
         uint256 epochStart = elapsed / HALVING_TIME;

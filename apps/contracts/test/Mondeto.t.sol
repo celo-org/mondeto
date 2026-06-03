@@ -73,6 +73,15 @@ contract MondetoTest is Test {
 
     // ========== Price Math ==========
 
+    /// @dev Boots the halving clock by buying a pixel other than (0,0), so price
+    ///      tests against (0,0) see a saleCount of 0 with an active clock.
+    function _startHalving() internal {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 1; // (1, 0)
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt));
+    }
+
     function test_priceAtEpoch0() public view {
         // Unowned pixel at epoch 0 should cost initialPrice
         uint256 price = mondeto.priceOf(0, 0);
@@ -92,6 +101,8 @@ contract MondetoTest is Test {
     }
 
     function test_priceHalvesAfterEpoch() public {
+        _startHalving();
+
         // Warp forward 1 epoch
         vm.warp(block.timestamp + HALVING_TIME);
 
@@ -100,6 +111,8 @@ contract MondetoTest is Test {
     }
 
     function test_priceDecaysGradually() public {
+        _startHalving();
+
         // At epoch 0: price = INITIAL_PRICE
         uint256 priceStart = mondeto.priceOf(0, 0);
         assertEq(priceStart, INITIAL_PRICE);
@@ -121,11 +134,49 @@ contract MondetoTest is Test {
     }
 
     function test_priceFloorsAtMinPrice() public {
+        _startHalving();
+
         // Warp forward many epochs
         vm.warp(block.timestamp + HALVING_TIME * 200);
 
         uint256 price = mondeto.priceOf(0, 0);
         assertEq(price, MIN_PRICE);
+    }
+
+    function test_priceDoesNotDecayBeforeFirstBuy() public {
+        // Warp 10 halvings forward with nobody having bought yet
+        vm.warp(block.timestamp + HALVING_TIME * 10);
+
+        assertEq(mondeto.priceOf(0, 0), INITIAL_PRICE);
+        assertEq(mondeto.currentEpoch(), 0);
+        assertEq(mondeto.halvingStartTimestamp(), 0);
+    }
+
+    function test_firstBuyStartsHalvingClock() public {
+        // Warp before any purchase
+        vm.warp(block.timestamp + 100 days);
+        uint256 firstBuyTime = block.timestamp;
+
+        // Buy pixel 0 (pixel (1,0) stays unowned for the post-warp check)
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt));
+
+        // Halving clock now starts at the first-buy timestamp
+        assertEq(mondeto.halvingStartTimestamp(), firstBuyTime);
+
+        // Warp 1 halving forward; pixel (1,0) (saleCount=0) is now at half price
+        vm.warp(block.timestamp + HALVING_TIME);
+        assertEq(mondeto.priceOf(1, 0), INITIAL_PRICE / 2);
+    }
+
+    function test_emptyBuyDoesNotStartHalvingClock() public {
+        // Empty buyPixels must not boot the clock — otherwise anyone could grief
+        uint256[] memory ids = new uint256[](0);
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt));
+        assertEq(mondeto.halvingStartTimestamp(), 0);
     }
 
     function test_priceAfterSaleAndEpoch() public {
@@ -665,12 +716,14 @@ contract MondetoTest is Test {
 
         uint8 buys = uint8(bound(saleCount, 0, 10));
 
-        // Warp far into the future so each buy costs minPrice
-        vm.warp(block.timestamp + 182 days * 300);
-
         for (uint8 i; i < buys; ++i) {
             vm.prank(i % 2 == 0 ? alice : bob);
             mondeto.buyPixels(ids, address(usdt));
+            if (i == 0) {
+                // First buy starts the halving clock at initialPrice. Warp far
+                // forward so subsequent buys floor at minPrice and balances last.
+                vm.warp(block.timestamp + 182 days * 300);
+            }
         }
 
         // Warp to fuzzed time and verify priceOf doesn't revert
@@ -698,16 +751,19 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
 
-        // Warp far into the future so price is minPrice regardless of saleCount
+        // First buy starts the halving clock at initialPrice (saleCount: 0 → 1).
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt));
+
+        // Warp far so subsequent buys floor at minPrice (balances would otherwise run out).
         vm.warp(block.timestamp + 182 days * 300);
 
-        // Buy 256 times alternating alice and bob
-        for (uint256 i; i < 256; ++i) {
-            vm.prank(i % 2 == 0 ? alice : bob);
+        // 255 more buys (256 total) — saleCount should saturate at 255.
+        for (uint256 i; i < 255; ++i) {
+            vm.prank(i % 2 == 0 ? bob : alice);
             mondeto.buyPixels(ids, address(usdt));
         }
 
-        // saleCount should saturate at 255, not wrap to 0
         (, uint8 saleCount) = mondeto.pixels(0);
         assertEq(saleCount, 255);
     }
