@@ -8,19 +8,25 @@ const MAX_UINT256 = (1n << 256n) - 1n
 export interface PriceConfig {
   initialPrice: bigint
   minPrice: bigint
-  deployTimestamp: bigint
+  halvingStartTimestamp: bigint
   halvingTime: bigint
 }
 
 /**
  * Compute the current price of a pixel given its saleCount and the current block timestamp.
+ *
+ * `halvingStartTimestamp === 0n` means the first sale hasn't happened yet —
+ * the halving clock hasn't started, so every pixel sits at `initialPrice`.
  */
 export function pixelPrice(
   saleCount: number,
   blockTimestamp: bigint,
   config: PriceConfig,
 ): bigint {
-  const elapsed = blockTimestamp - config.deployTimestamp
+  const elapsed =
+    config.halvingStartTimestamp === 0n
+      ? 0n
+      : blockTimestamp - config.halvingStartTimestamp
   const epochStart = elapsed / config.halvingTime
   const remainder = elapsed % config.halvingTime
 
