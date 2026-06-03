@@ -5,7 +5,6 @@
 Mondeto (Esperanto for "small world") is a pixel world map where anyone can buy, own, and trade land on a 170x100 pixel grid. Built for [MiniPay](https://www.opera.com/products/minipay) on the [Celo](https://celo.org) blockchain.
 
 **Live demo:** [mondeto-web.vercel.app](https://mondeto-web.vercel.app)
-**Smart contract:** [github.com/karlb/mondeto](https://github.com/karlb/mondeto)
 
 ## How It Works
 
