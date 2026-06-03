@@ -89,7 +89,11 @@ export async function fetchAllPixelsFromContract(
   // Read REAL pricing params from the contract — the constants in
   // src/constants/map.ts were placeholders from the v2 migration and
   // don't match what's actually deployed. config() returns:
-  //   [width, height, halvingTime, initialPrice, minPrice, deployTimestamp, feeRate]
+  //   [width, height, halvingTime, initialPrice, minPrice, halvingStartTimestamp, feeRate]
+  //
+  // halvingStartTimestamp is 0 until the first pixel sale; pixelPrice()
+  // handles that case internally by treating elapsed as 0, which yields
+  // initialPrice for every unowned pixel — the correct pre-launch display.
   try {
     const cfg = (await readContract({
       address: contractAddress,
@@ -97,13 +101,11 @@ export async function fetchAllPixelsFromContract(
       functionName: 'config',
       args: [],
     })) as readonly [number, number, bigint, bigint, bigint, bigint, bigint]
-    const [, , halvingTime, initialPrice, minPrice, deployTimestamp] = cfg
-    if (deployTimestamp > 0n) {
-      const now = BigInt(Math.floor(Date.now() / 1000))
-      const priceCfg = { initialPrice, minPrice, deployTimestamp, halvingTime }
-      for (const px of pixels) {
-        px.currentPrice = pixelPrice(px.saleCount, now, priceCfg)
-      }
+    const [, , halvingTime, initialPrice, minPrice, halvingStartTimestamp] = cfg
+    const now = BigInt(Math.floor(Date.now() / 1000))
+    const priceCfg = { initialPrice, minPrice, halvingStartTimestamp, halvingTime }
+    for (const px of pixels) {
+      px.currentPrice = pixelPrice(px.saleCount, now, priceCfg)
     }
   } catch (e) {
     console.warn('Failed to read pricing config from contract:', e)
