@@ -2,6 +2,18 @@ import { createPublicClient, fallback, http } from 'viem'
 import { celo, celoSepolia } from 'viem/chains'
 
 /**
+ * Optional authenticated Forno endpoint. When unset, viem falls back to
+ * the public Forno RPC (and from there to the dRPC/Ankr backups below).
+ *
+ * The URL ends up in the client bundle because wagmi/viem transports
+ * run in the browser — protect the key via a domain allowlist on the
+ * provider dashboard, not by hiding the env var. In Vercel, set this
+ * for Production only so preview deploys (which aren't on the allowed
+ * origin) automatically use the unauthenticated public endpoint.
+ */
+const fornoRpcUrl = process.env.NEXT_PUBLIC_FORNO_RPC_URL
+
+/**
  * Celo mainnet read transport with fallbacks.
  *
  * Forno (the chain's default RPC, fronted by Cloudflare) intermittently
@@ -11,12 +23,13 @@ import { celo, celoSepolia } from 'viem/chains'
  * the next transport when the active one fails, so a single misbehaving
  * provider doesn't take the map / leaderboard reads down.
  *
- * Order: Forno first (default, fastest when it works), then dRPC and
- * Ankr public endpoints — both respond from regions where Forno's
+ * Order: Forno first (default, fastest when it works; uses the
+ * authenticated URL when NEXT_PUBLIC_FORNO_RPC_URL is set), then dRPC
+ * and Ankr public endpoints — both respond from regions where Forno's
  * Cloudflare frontend gets throttled.
  */
 export const celoTransport = fallback([
-  http(),
+  http(fornoRpcUrl),
   http('https://celo.drpc.org'),
   http('https://rpc.ankr.com/celo'),
 ])
