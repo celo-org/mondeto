@@ -22,12 +22,15 @@ import { ChainGuard } from "./ChainGuard";
 // Privy docs require importing `createConfig` + `WagmiProvider` from
 // `@privy-io/wagmi`, not from `wagmi` directly. See
 // https://docs.privy.io/wallets/connectors/ethereum/integrations/wagmi
+// See wallet-provider.tsx for why this URL is public-by-design.
+const fornoRpcUrl = process.env.NEXT_PUBLIC_FORNO_RPC_URL;
+
 const privyWagmiConfig = createPrivyWagmiConfig({
   chains: [celo, celoSepolia],
   connectors: [injected()],
   ssr: true,
   transports: {
-    [celo.id]: http(),
+    [celo.id]: http(fornoRpcUrl),
     [celoSepolia.id]: http(),
   },
 });

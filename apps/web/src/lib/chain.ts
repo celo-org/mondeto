@@ -26,7 +26,13 @@ export const READ_CHAIN_ID = READ_CHAIN.id
  * — for example when Privy's WagmiProvider hasn't initialized yet, or
  * when wagmi can't resolve the chain from connector state.
  */
+// Optional authenticated Forno endpoint. When unset, viem falls back to
+// the public Forno RPC. The URL ends up in the client bundle for the
+// wagmi transports — protect the key via a domain allowlist on the
+// provider dashboard, not by hiding the env var.
+const fornoRpcUrl = process.env.NEXT_PUBLIC_FORNO_RPC_URL
+
 export const fallbackReadClient = createPublicClient({
   chain: READ_CHAIN,
-  transport: http(),
+  transport: http(READ_CHAIN.id === celo.id ? fornoRpcUrl : undefined),
 })

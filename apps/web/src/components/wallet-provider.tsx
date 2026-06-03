@@ -40,12 +40,19 @@ import { ChainGuard } from "./ChainGuard";
 // client while the SSR pass saw `undefined`. The mismatch trips React
 // error #418 and the downstream tree is replayed, which in our setup
 // then crashes the lazy Privy chunk mid-load.
+// Optional authenticated Forno endpoint for mainnet. NEXT_PUBLIC_ is
+// required so the value reaches the browser bundle — wagmi transports
+// run client-side, so the URL is visible to anyone in devtools. Defend
+// the key with a domain allowlist on the provider, not by env-var
+// secrecy. Unset → viem falls back to the public Forno.
+const fornoRpcUrl = process.env.NEXT_PUBLIC_FORNO_RPC_URL;
+
 const wagmiConfig = createConfig({
   chains: [celo, celoSepolia],
   connectors: [injected()],
   ssr: true,
   transports: {
-    [celo.id]: http(),
+    [celo.id]: http(fornoRpcUrl),
     [celoSepolia.id]: http(),
   },
 });
