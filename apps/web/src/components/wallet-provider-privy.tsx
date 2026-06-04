@@ -44,7 +44,7 @@ export function PrivyTree({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId="cmmxiatqc01fa0cjv4eg3b9kp"
       config={{
-        defaultChain: celo,
+        defaultChain: celoSepolia,
         supportedChains: [celo, celoSepolia],
         loginMethods: ["wallet"],
         embeddedWallets: { ethereum: { createOnLogin: "off" } },

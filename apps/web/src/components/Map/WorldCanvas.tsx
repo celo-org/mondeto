@@ -12,8 +12,9 @@ import {
   useTransformContext,
   useControls,
 } from 'react-zoom-pan-pinch'
-import { WIDTH, HEIGHT, PAINT_SCALE } from '@/constants/map'
+import { PAINT_SCALE } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 import type { LoadState } from '@/hooks/usePixelMap'
 import PixelLayer, { drawPixels } from './PixelLayer'
@@ -66,6 +67,7 @@ function InnerCanvas({
   profilesMap,
   onTapWhileZoomedOut,
 }: InnerCanvasProps) {
+  const { width, height, mask } = useCurrentMapMeta()
   const context = useTransformContext()
   const prevScaleRef = useRef(1)
 
@@ -90,11 +92,11 @@ function InnerCanvas({
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    drawPixels(ctx, pixelData, mapView, userAddress)
-  }, [pixelData, mapView, pixelCanvasRef, version, userAddress])
+    drawPixels(ctx, pixelData, mapView, width, height, mask, userAddress)
+  }, [pixelData, mapView, pixelCanvasRef, version, userAddress, width, height, mask])
 
   return (
-    <div style={{ position: 'relative', width: WIDTH, height: HEIGHT }}>
+    <div style={{ position: 'relative', width, height }}>
       <PixelLayer canvasRef={pixelCanvasRef} />
       <FlashLayer changedIds={changedIds ?? []} pixelData={pixelData} />
       {mapView === 'normal' && (
@@ -132,6 +134,7 @@ function getSavedZoom(): number {
 
 const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
   function WorldCanvas(props, ref) {
+    const { width, height } = useCurrentMapMeta()
     const savedZoom = useRef(getSavedZoom())
     const pixelCanvasRef = useRef<HTMLCanvasElement | null>(null)
     const selectionCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -164,7 +167,7 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
           if (!canvas) return false
           const wrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
           if (!wrapper) return false
-          const { x, y } = idToXY(pid)
+          const { x, y } = idToXY(pid, width)
           const s = scale ?? PAINT_SCALE + 1
           const tx = -x * s + wrapper.clientWidth / 2
           const ty = -y * s + wrapper.clientHeight / 2
@@ -191,8 +194,8 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
         const s = 3
         const ww = (wrapper as HTMLElement).clientWidth
         const wh = (wrapper as HTMLElement).clientHeight
-        const tx = (ww - WIDTH * s) / 2
-        const ty = (wh - HEIGHT * s) / 2
+        const tx = (ww - width * s) / 2
+        const ty = (wh - height * s) / 2
         ctrl.setTransform(tx, ty, s, 300)
       },
       drawInspectRing(pid: number) {
@@ -205,7 +208,7 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
           const { x, y } = inspectRingRef.current
           ctx.clearRect(x - 0.5, y - 0.5, 2, 2)
         }
-        const { x, y } = idToXY(pid)
+        const { x, y } = idToXY(pid, width)
         ctx.strokeStyle = '#ffffff'
         ctx.lineWidth = 0.2
         ctx.strokeRect(x + 0.05, y + 0.05, 0.9, 0.9)

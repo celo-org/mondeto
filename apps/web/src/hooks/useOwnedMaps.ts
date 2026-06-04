@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain, type ChainId } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
 import { READ_CHAIN_ID, fallbackReadClient } from '@/lib/chain'
 import type { MapId } from '@/lib/maps/types'
 
@@ -126,7 +127,14 @@ export function useOwnedMaps(): OwnedMapsResult {
       await Promise.all(
         maps.map(async (m) => {
           try {
-            const pixels = await fetchAllPixelsFromContract(read, m.address)
+            const { mask } = getMaskData(m.slug)
+            const pixels = await fetchAllPixelsFromContract(
+              read,
+              m.address,
+              m.width,
+              m.height,
+              mask,
+            )
             let owned = 0
             for (const px of pixels) {
               if (px.owner.toLowerCase() === addrLower) owned++

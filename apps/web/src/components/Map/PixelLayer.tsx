@@ -1,8 +1,9 @@
 'use client'
 import React from 'react'
-import { WIDTH, HEIGHT, TILE_GAP, TILE_RADIUS, ZERO_ADDRESS } from '@/constants/map'
+import { TILE_GAP, TILE_RADIUS, ZERO_ADDRESS } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
 import { isLand } from '@/lib/landMask'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
 export type MapView = 'normal' | 'heatmap' | 'myland'
@@ -36,9 +37,12 @@ export function drawPixels(
   ctx: CanvasRenderingContext2D,
   pixelData: PixelView[],
   mapView: MapView,
+  width: number,
+  height: number,
+  mask: Uint8Array,
   userAddress?: string,
 ) {
-  ctx.clearRect(0, 0, WIDTH, HEIGHT)
+  ctx.clearRect(0, 0, width, height)
 
   const gap = TILE_GAP
   const rad = TILE_RADIUS
@@ -55,9 +59,9 @@ export function drawPixels(
     }
 
     for (let i = 0; i < pixelData.length; i++) {
-      if (!isLand(i)) continue
+      if (!isLand(i, mask)) continue
       const pixel = pixelData[i]
-      const { x, y } = idToXY(i)
+      const { x, y } = idToXY(i, width)
 
       if (pixel.saleCount === 0) {
         ctx.fillStyle = unownedColor
@@ -72,17 +76,15 @@ export function drawPixels(
     }
   } else if (mapView === 'myland') {
     for (let i = 0; i < pixelData.length; i++) {
-      if (!isLand(i)) continue
+      if (!isLand(i, mask)) continue
       const pixel = pixelData[i]
-      const { x, y } = idToXY(i)
+      const { x, y } = idToXY(i, width)
       const isOwned = pixel.owner !== ZERO_ADDRESS
       const isMine = userAddr && isOwned && pixel.owner.toLowerCase() === userAddr
 
       if (isMine) {
-        // My pixels: full color
         ctx.fillStyle = pixel.color || '#888888'
       } else {
-        // Everything else: faded out
         ctx.fillStyle = fadedColor
       }
 
@@ -92,9 +94,9 @@ export function drawPixels(
     }
   } else {
     for (let i = 0; i < pixelData.length; i++) {
-      if (!isLand(i)) continue
+      if (!isLand(i, mask)) continue
       const pixel = pixelData[i]
-      const { x, y } = idToXY(i)
+      const { x, y } = idToXY(i, width)
       const isOwned = pixel.owner !== ZERO_ADDRESS
 
       if (isOwned) {
@@ -115,17 +117,18 @@ interface PixelLayerProps {
 }
 
 export default function PixelLayer({ canvasRef }: PixelLayerProps) {
+  const { width, height } = useCurrentMapMeta()
   return (
     <canvas
       ref={el => { canvasRef.current = el }}
-      width={WIDTH}
-      height={HEIGHT}
+      width={width}
+      height={height}
       style={{
         position: 'absolute',
         top: 0,
         left: 0,
-        width: WIDTH,
-        height: HEIGHT,
+        width,
+        height,
         pointerEvents: 'none',
         imageRendering: 'pixelated',
       }}

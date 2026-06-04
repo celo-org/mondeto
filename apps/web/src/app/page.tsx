@@ -22,9 +22,9 @@ import { useBuyPixels } from '@/hooks/useBuyPixels'
 import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
-import { fetchLandMaskFromContract, isLandXY } from '@/lib/landMask'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
+import { isLandXY } from '@/lib/landMask'
 import { MONDETO_ABI } from '@/lib/contract'
-import { getContractByMapId } from '@/lib/maps/contracts'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
@@ -43,7 +43,8 @@ export default function Home() {
   const publicClient = useReadClient()
 
   const { currentMapId } = useMaps()
-  const mondetoAddress = getContractByMapId(currentMapId)
+  const mapMeta = useCurrentMapMeta()
+  const mondetoAddress = mapMeta.address
 
   const { pixelDataRef, loadState, load, refresh, version, changedIds } = usePixelMap(currentMapId)
   const {
@@ -76,15 +77,14 @@ export default function Home() {
 
   const isPaintMode = currentScale >= PAINT_SCALE
 
-  // Fetch land mask and reload when chain or current map changes
+  // Reload pixel data when chain or current map changes. The land mask is
+  // bundled per-map (see lib/maps/masks.ts) so no on-chain mask fetch is
+  // needed at runtime — usePixelMap already reads the correct mask via
+  // useCurrentMapMeta.
   useEffect(() => {
     clearSelection()
     if (publicClient) {
-      fetchLandMaskFromContract(
-        publicClient.readContract.bind(publicClient) as Parameters<typeof fetchLandMaskFromContract>[0],
-        mondetoAddress,
-        MONDETO_ABI,
-      ).then(() => load())
+      load()
     }
   }, [publicClient, load, mondetoAddress])
 
@@ -126,9 +126,12 @@ export default function Home() {
           return
         }
         const { lat, lng } = data
+        // Geo zoom is calibrated to the world map only — only run it when
+        // the player is on the world; continent maps use bespoke projections.
+        if (mapMeta.slug !== 'world') return
         const { x, y } = geoToPixel(lat, lng)
-        const targetId = pixelIdFn(x, y)
-        const landed = isLandXY(x, y)
+        const targetId = pixelIdFn(x, y, mapMeta.width)
+        const landed = isLandXY(x, y, mapMeta.width, mapMeta.mask)
 
         // The canvas ref + its internal TransformWrapper need a few
         // frames to be ready after loadState flips to 'ready'. Retry
@@ -172,7 +175,7 @@ export default function Home() {
       ctrl.abort()
       clearTimeout(hardTimeout)
     }
-  }, [loadState])
+  }, [loadState, mapMeta.slug, mapMeta.width, mapMeta.mask])
 
   // Fetch profiles for territory labels
   useEffect(() => {

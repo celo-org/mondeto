@@ -1,26 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  WIDTH,
-  HEIGHT,
-  TOTAL_PIXELS,
   COLOR_PRESETS,
   DRAWER_SWATCHES,
   MAX_SELECT,
 } from '@/constants/map'
 
 describe('map constants', () => {
-  it('WIDTH is 170', () => {
-    expect(WIDTH).toBe(170)
-  })
-
-  it('HEIGHT is 100', () => {
-    expect(HEIGHT).toBe(100)
-  })
-
-  it('TOTAL_PIXELS is 17000', () => {
-    expect(TOTAL_PIXELS).toBe(17000)
-  })
-
   it('COLOR_PRESETS has 12 items', () => {
     expect(COLOR_PRESETS).toHaveLength(12)
   })
@@ -34,7 +19,12 @@ describe('map constants', () => {
   })
 
   it('contract addresses are in lib/contract.ts', () => {
-    // Addresses moved to auto-generated contract.ts
+    expect(true).toBe(true)
+  })
+
+  it('grid dimensions are per-map (sourced from useCurrentMapMeta)', () => {
+    // WIDTH/HEIGHT/TOTAL_PIXELS no longer exist as globals — see
+    // lib/maps/contracts.ts and hooks/useCurrentMapMeta for per-map dims.
     expect(true).toBe(true)
   })
 })

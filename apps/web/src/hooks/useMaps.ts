@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { celo } from 'viem/chains'
+import { celoSepolia } from 'viem/chains'
 import {
   getMapsForChain,
   isRevealedMapId,
@@ -40,7 +40,7 @@ export interface UseMapsResult {
  */
 export function useMaps(): UseMapsResult {
   const { address, chainId } = useAccount()
-  const effectiveChain = (chainId ?? celo.id) as ChainId
+  const effectiveChain = (chainId ?? celoSepolia.id) as ChainId
   const revealedMaps = useMemo(
     () => getMapsForChain(effectiveChain),
     [effectiveChain],

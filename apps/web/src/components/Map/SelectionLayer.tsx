@@ -1,8 +1,8 @@
 'use client'
 import React, { useRef, useEffect, useCallback } from 'react'
-import { WIDTH, HEIGHT } from '@/constants/map'
 import { idToXY, pixelId, screenToPixel } from '@/lib/pixelMath'
 import { isLandXY } from '@/lib/landMask'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 
 interface SelectionLayerProps {
   selectedIds: Set<number>
@@ -25,6 +25,7 @@ export default function SelectionLayer({
   onInspectPixel,
   onTapWhileZoomedOut,
 }: SelectionLayerProps) {
+  const { width: WIDTH, height: HEIGHT, mask } = useCurrentMapMeta()
   const interactionRef = useRef<HTMLCanvasElement | null>(null)
   const overlayRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number>(0)
@@ -48,7 +49,7 @@ export default function SelectionLayer({
     }
 
     // Pre-compute positions
-    const positions = Array.from(selectedIds).map(id => idToXY(id))
+    const positions = Array.from(selectedIds).map(id => idToXY(id, WIDTH))
 
     const animate = () => {
       ctx.clearRect(0, 0, WIDTH * S, HEIGHT * S)
@@ -98,13 +99,13 @@ export default function SelectionLayer({
       longPressFiredRef.current = false
       startPosRef.current = { x: e.clientX, y: e.clientY }
 
-      const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale)
+      const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale, WIDTH, HEIGHT)
       if (!pixel) return
 
       longPressTimerRef.current = setTimeout(() => {
         if (!movedRef.current && onInspectPixel) {
           longPressFiredRef.current = true
-          const pid = pixelId(pixel.x, pixel.y)
+          const pid = pixelId(pixel.x, pixel.y, WIDTH)
           onInspectPixel(pid)
         }
       }, 500)
@@ -149,9 +150,9 @@ export default function SelectionLayer({
       if (!longPressFiredRef.current && !movedRef.current) {
         const canvas = interactionRef.current
         if (canvas) {
-          const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale)
-          if (pixel && isLandXY(pixel.x, pixel.y)) {
-            onTogglePixel(pixelId(pixel.x, pixel.y))
+          const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale, WIDTH, HEIGHT)
+          if (pixel && isLandXY(pixel.x, pixel.y, WIDTH, mask)) {
+            onTogglePixel(pixelId(pixel.x, pixel.y, WIDTH))
           }
         }
       }

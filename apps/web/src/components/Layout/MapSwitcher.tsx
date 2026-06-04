@@ -1,20 +1,10 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
+import Link from 'next/link'
 import { useMaps } from '@/hooks/useMaps'
-import type { PixelView } from '@/lib/mock'
-import { ZERO_ADDRESS } from '@/constants/map'
-import { isLand } from '@/lib/landMask'
+import { useShouldOpenNextMap } from '@/hooks/useShouldOpenNextMap'
 import type { MapId } from '@/lib/maps/types'
-
-interface MapSwitcherProps {
-  /**
-   * Optional pixel data for the *current* map. We use it to compute a
-   * fill-percent for the currently selected map; other maps show "?" until
-   * Agent A wires per-map snapshots. Cheap inline calc — no fetching here.
-   */
-  currentMapPixels?: PixelView[]
-}
 
 /**
  * Top-bar map switcher.
@@ -22,35 +12,26 @@ interface MapSwitcherProps {
  * Renders a small "MAP N/M" pill in the TopBar. When only one map is
  * revealed, the component returns null so the launch single-map UI is
  * untouched. Tapping the pill opens a bottom sheet listing each revealed
- * map with id, fill percent (where known), and a home-map badge.
+ * map with id, display name, fill percent, and a home-map badge.
+ *
+ * Fill % per map is pulled from `useShouldOpenNextMap().perMap`, which
+ * already fetches and caches per-map pixel snapshots; no extra reads here.
  */
-export default function MapSwitcher({ currentMapPixels }: MapSwitcherProps) {
+export default function MapSwitcher() {
   const { revealedMaps, homeMapId, currentMapId, setCurrentMapId } = useMaps()
+  const { perMap } = useShouldOpenNextMap()
   const [open, setOpen] = useState(false)
 
-  // Compute land-pixel claim percentage for the current map only. Cheap:
-  // it iterates pixel data we already have in memory.
-  const currentFillPct = useMemo(() => {
-    if (!currentMapPixels || currentMapPixels.length === 0) return null
-    let land = 0
-    let claimed = 0
-    for (let i = 0; i < currentMapPixels.length; i++) {
-      if (!isLand(i)) continue
-      land += 1
-      if (currentMapPixels[i].owner && currentMapPixels[i].owner !== ZERO_ADDRESS) {
-        claimed += 1
-      }
-    }
-    if (land === 0) return null
-    return Math.round((claimed / land) * 100)
-  }, [currentMapPixels])
-
-  // Hide entirely while the launch lineup is single-map. The TopBar then
-  // looks identical to the original UI.
   if (revealedMaps.length <= 1) return null
 
   const currentIndex = revealedMaps.findIndex((m) => m.id === currentMapId)
   const displayIndex = currentIndex >= 0 ? currentIndex : 0
+
+  const fillFor = (id: MapId): string => {
+    const summary = perMap.find((p) => p.mapId === id)
+    if (!summary) return '?'
+    return `${Math.round(summary.fillPct)}% claimed`
+  }
 
   const handlePick = (id: MapId) => {
     setCurrentMapId(id)
@@ -122,15 +103,9 @@ export default function MapSwitcher({ currentMapPixels }: MapSwitcherProps) {
               PICK A MAP
             </div>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {revealedMaps.map((m, i) => {
+              {revealedMaps.map((m) => {
                 const isCurrent = m.id === currentMapId
                 const isHome = m.id === homeMapId
-                // Only the current map has a fill % at the moment. Per the
-                // spec, other maps show "?" — DAU and fill-per-map will be
-                // wired to the analytics events later. Computing it here
-                // would mean fetching N getPixelBatch calls on render,
-                // which is too expensive for a switcher sheet.
-                const fillLabel = isCurrent && currentFillPct !== null ? `${currentFillPct}% claimed` : '?'
                 return (
                   <li key={m.id}>
                     <button
@@ -154,7 +129,7 @@ export default function MapSwitcher({ currentMapPixels }: MapSwitcherProps) {
                       }}
                     >
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 9, letterSpacing: 2 }}>MAP {m.id}</span>
+                        <span style={{ fontSize: 9, letterSpacing: 2 }}>{m.displayName}</span>
                         {isHome && (
                           <span
                             style={{
@@ -169,17 +144,38 @@ export default function MapSwitcher({ currentMapPixels }: MapSwitcherProps) {
                           </span>
                         )}
                       </span>
-                      <span style={{ fontSize: 7, letterSpacing: 1, opacity: 0.85 }}>{fillLabel}</span>
+                      <span style={{ fontSize: 7, letterSpacing: 1, opacity: 0.85 }}>{fillFor(m.id)}</span>
                     </button>
                   </li>
                 )
               })}
             </ul>
+            <Link
+              href="/atlas"
+              onClick={() => setOpen(false)}
+              style={{
+                display: 'block',
+                marginTop: 14,
+                width: '100%',
+                padding: '10px',
+                background: 'transparent',
+                color: 'var(--text)',
+                border: '1px solid var(--text)',
+                borderRadius: 'var(--radius-md)',
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: 7,
+                letterSpacing: 2,
+                textAlign: 'center',
+                textDecoration: 'none',
+              }}
+            >
+              SEE ATLAS →
+            </Link>
             <button
               type="button"
               onClick={() => setOpen(false)}
               style={{
-                marginTop: 16,
+                marginTop: 8,
                 width: '100%',
                 padding: '10px',
                 background: 'transparent',

@@ -6,7 +6,8 @@ import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { allGlobalLeaderboards, allLeaderboards } from '@/lib/maps/leaderboards'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
-import { getRevealedMaps } from '@/lib/maps/contracts'
+import { getMapContractById, getRevealedMaps } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
 import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { generateUsername } from '@/lib/username'
 
@@ -155,10 +156,11 @@ export function useLeaderboard(
   const homeMapId = options.homeMapId ?? 0
   const publicClient = usePublicClient()
 
-  const localSnapshot = useMemo(
-    () => pixelViewToMapSnapshot(pixelData, homeMapId, true),
-    [pixelData, homeMapId],
-  )
+  const localSnapshot = useMemo(() => {
+    const home = getMapContractById(homeMapId)
+    const { mask } = getMaskData(home.slug)
+    return pixelViewToMapSnapshot(pixelData, homeMapId, true, home.width, mask)
+  }, [pixelData, homeMapId])
 
   const localBoards = useMemo<BoardSet>(() => {
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
@@ -212,12 +214,19 @@ export function useLeaderboard(
     Promise.all(
       revealed.map(async (m) => {
         try {
-          const data = await fetchAllPixelsFromContract(read, m.address)
-          return pixelViewToMapSnapshot(data, m.id, m.revealed)
+          const { mask } = getMaskData(m.slug)
+          const data = await fetchAllPixelsFromContract(
+            read,
+            m.address,
+            m.width,
+            m.height,
+            mask,
+          )
+          return pixelViewToMapSnapshot(data, m.id, m.revealed, m.width, mask)
         } catch (e) {
           console.warn(`Failed to load map ${m.id} for global board:`, e)
           // Empty snapshot so one bad map doesn't kill the whole board.
-          return pixelViewToMapSnapshot([], m.id, m.revealed)
+          return pixelViewToMapSnapshot([], m.id, m.revealed, m.width, getMaskData(m.slug).mask)
         }
       }),
     ).then((snapshots) => {

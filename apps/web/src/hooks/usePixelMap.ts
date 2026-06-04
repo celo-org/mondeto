@@ -2,7 +2,8 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
-import { getContractByMapId } from '@/lib/maps/contracts'
+import { getMapContractById } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
 import { useReadClient } from '@/hooks/useReadClient'
 import type { MapId } from '@/lib/maps/types'
 
@@ -19,7 +20,8 @@ const POLL_INTERVAL = 30_000
  */
 export function usePixelMap(mapId?: MapId) {
   const readClient = useReadClient()
-  const contractAddress = getContractByMapId(mapId ?? 0)
+  const contract = getMapContractById(mapId ?? 0)
+  const { mask } = getMaskData(contract.slug)
   const pixelDataRef = useRef<PixelView[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [version, setVersion] = useState(0)
@@ -28,9 +30,12 @@ export function usePixelMap(mapId?: MapId) {
   const fetchData = useCallback(async (): Promise<PixelView[]> => {
     return await fetchAllPixelsFromContract(
       readClient.readContract.bind(readClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
-      contractAddress,
+      contract.address,
+      contract.width,
+      contract.height,
+      mask,
     )
-  }, [readClient, contractAddress])
+  }, [readClient, contract.address, contract.width, contract.height, mask])
 
   const load = useCallback(async () => {
     try {

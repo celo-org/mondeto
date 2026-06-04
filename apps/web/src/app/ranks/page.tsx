@@ -14,7 +14,8 @@ import { useMaps } from '@/hooks/useMaps'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
-import { getContractByMapId } from '@/lib/maps/contracts'
+import { getMapContractById } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { uint24ToHex } from '@/lib/colorUtils'
@@ -27,7 +28,8 @@ export default function RanksPage() {
   // must populate for anonymous users.
   const publicClient = useReadClient()
   const { homeMapId, currentMapId } = useMaps()
-  const mondetoAddress = getContractByMapId(currentMapId)
+  const mondetoContract = getMapContractById(currentMapId)
+  const mondetoAddress = mondetoContract.address
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
@@ -40,9 +42,13 @@ export default function RanksPage() {
       let data: PixelView[] = []
       try {
         if (publicClient) {
+          const { mask } = getMaskData(mondetoContract.slug)
           data = await fetchAllPixelsFromContract(
             publicClient.readContract.bind(publicClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
             mondetoAddress,
+            mondetoContract.width,
+            mondetoContract.height,
+            mask,
           )
         }
       } catch (e) {
@@ -94,7 +100,7 @@ export default function RanksPage() {
       setLoading(false)
     }
     load()
-  }, [publicClient, mondetoAddress])
+  }, [publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
 
   // Global scope toggle removed — leaderboard is local-only for now.
   // Tracked as a follow-up in project memory; restore the ScopeToggle when

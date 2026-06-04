@@ -1,8 +1,14 @@
-import { WIDTH, HEIGHT, INITIAL_PRICE, ZERO_ADDRESS } from '@/constants/map'
+import { INITIAL_PRICE, ZERO_ADDRESS } from '@/constants/map'
 import { pixelId } from './pixelMath'
 import { isLandXY } from './landMask'
+import { getMaskData } from './maps/masks'
 
 export const MOCK_MODE = true
+
+// Mock data only models the world map; per-continent contracts live
+// on-chain and bypass this module entirely. Keep the world dims and mask
+// local so this stays a self-contained fixture.
+const { width: WIDTH, height: HEIGHT, mask: WORLD_MASK } = getMaskData('world')
 
 // Deterministic PRNG
 function seededRng(seed: number) {
@@ -74,10 +80,10 @@ function seedDemoData() {
     for (let y = cluster.startY; y < cluster.startY + cluster.h; y++) {
       for (let x = cluster.startX; x < cluster.startX + cluster.w; x++) {
         if (x >= WIDTH || y >= HEIGHT) continue
-        if (!isLandXY(x, y)) continue
+        if (!isLandXY(x, y, WIDTH, WORLD_MASK)) continue
         if (rng() > 0.4) continue
 
-        const id = pixelId(x, y)
+        const id = pixelId(x, y, WIDTH)
         const sales = Math.floor(rng() * 5) + 1
         pixelState[id] = {
           owner: demo.addr,
@@ -119,9 +125,9 @@ function seedDemoData() {
   for (let i = 0; i < 300; i++) {
     const x = Math.floor(rng() * WIDTH)
     const y = Math.floor(rng() * HEIGHT)
-    if (!isLandXY(x, y)) continue
+    if (!isLandXY(x, y, WIDTH, WORLD_MASK)) continue
 
-    const id = pixelId(x, y)
+    const id = pixelId(x, y, WIDTH)
     if (pixelState[id].owner !== ZERO_ADDRESS) continue
 
     const ownerIdx = Math.floor(rng() * allOwners.length)

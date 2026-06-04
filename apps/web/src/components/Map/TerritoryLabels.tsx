@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react'
 import { computeEmpires, idToXY } from '@/lib/pixelMath'
 import { ZERO_ADDRESS } from '@/constants/map'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
 interface TerritoryLabelsProps {
@@ -32,6 +33,7 @@ function labelBudget(scale: number): number {
 }
 
 export default function TerritoryLabels({ pixelData, scale, profilesMap }: TerritoryLabelsProps) {
+  const { width, height } = useCurrentMapMeta()
   const labels = useMemo(() => {
     if (scale < MIN_SCALE) return []
 
@@ -44,7 +46,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
       }
     }
 
-    const empires = computeEmpires(ownerMap)
+    const empires = computeEmpires(ownerMap, width, height)
 
     // Find largest cluster per owner
     const largestByOwner = new Map<string, typeof empires[0]>()
@@ -63,7 +65,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
       // Calculate centroid
       let sx = 0, sy = 0
       for (const id of emp.ids) {
-        const { x, y } = idToXY(id)
+        const { x, y } = idToXY(id, width)
         sx += x
         sy += y
       }
@@ -95,7 +97,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
     }
 
     return visible
-  }, [pixelData, scale, profilesMap])
+  }, [pixelData, scale, profilesMap, width, height])
 
   if (scale < MIN_SCALE) return null
   if (labels.length === 0) return null

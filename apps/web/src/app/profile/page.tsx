@@ -12,11 +12,10 @@ import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { MONDETO_ABI } from '@/lib/contract'
-import { getContractByMapId } from '@/lib/maps/contracts'
-import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
+import { getMapContractById } from '@/lib/maps/contracts'
+import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
-import { isLand } from '@/lib/landMask'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
@@ -28,7 +27,8 @@ export default function ProfilePage() {
   // setUrl is left wired but unused so existing useProfile callers keep
   // their shape; updateProfile is called below with an empty string for url.
   const { currentMapId } = useMaps()
-  const mondetoAddress = getContractByMapId(currentMapId)
+  const mondetoContract = getMapContractById(currentMapId)
+  const mondetoAddress = mondetoContract.address
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
@@ -53,7 +53,7 @@ export default function ProfilePage() {
           address: mondetoAddress,
           abi: MONDETO_ABI,
           functionName: 'getPixelBatch',
-          args: [0, 0, WIDTH, HEIGHT],
+          args: [0, 0, mondetoContract.width, mondetoContract.height],
         }) as `0x${string}`
 
         // Decode packed bytes: 24 bytes per land pixel
@@ -282,7 +282,7 @@ export default function ProfilePage() {
     }
 
     fetchPnL()
-  }, [publicClient, addrStr, mondetoAddress])
+  }, [publicClient, addrStr, mondetoAddress, mondetoContract.width, mondetoContract.height])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :
