@@ -2,7 +2,9 @@
 import React, {
   forwardRef,
   useImperativeHandle,
+  useMemo,
   useRef,
+  useState,
   useEffect,
   useCallback,
 } from 'react'
@@ -111,6 +113,20 @@ function InnerCanvas({
         onInspectPixel={onInspectPixel}
         onTapWhileZoomedOut={onTapWhileZoomedOut}
       />
+      {/* Frame — outlines the playable canvas area so the map's bounds
+          are obvious against the ocean fill. Lives inside the transform
+          target so it pans/zooms with the map; pointerEvents:none keeps
+          paint clicks routed to SelectionLayer. */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: -1,
+          border: '1px solid var(--text-muted)',
+          pointerEvents: 'none',
+          zIndex: 10,
+        }}
+      />
     </div>
   )
 }
@@ -124,18 +140,48 @@ function ZoomCapture({ controlsRef }: { controlsRef: React.MutableRefObject<{ zo
   return null
 }
 
-function getSavedZoom(): number {
-  try {
-    const v = sessionStorage.getItem('mondeto-zoom')
-    if (v) { const n = parseFloat(v); if (n >= 1 && n <= 40) return n }
-  } catch {}
-  return 3
-}
-
 const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
   function WorldCanvas(props, ref) {
-    const { width, height } = useCurrentMapMeta()
-    const savedZoom = useRef(getSavedZoom())
+    const { width, height, slug } = useCurrentMapMeta()
+
+    // Measure the wrapper so we can compute a per-map "fit" scale —
+    // the scale at which the map just fills the viewport. This becomes
+    // both the minimum scale (no zooming further out, so the map never
+    // shrinks into a tiny floating shape) and the initial scale (so
+    // each map opens at a comfortable, framed view). Re-measures on
+    // resize via ResizeObserver.
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null)
+
+    useEffect(() => {
+      const el = containerRef.current
+      if (!el) return
+      const measure = () => {
+        const w = el.clientWidth
+        const h = el.clientHeight
+        if (w > 0 && h > 0) setContainerSize({ w, h })
+      }
+      measure()
+      const ro = new ResizeObserver(measure)
+      ro.observe(el)
+      return () => ro.disconnect()
+    }, [])
+
+    const fitScale = useMemo(() => {
+      if (!containerSize) return 3
+      // 0.92 leaves a small margin so the border isn't kissing the
+      // viewport edges. Math.max keeps a floor at 1 in case the map
+      // is somehow larger than the viewport (shouldn't happen, but
+      // belts and braces).
+      const fit = Math.min(containerSize.w / width, containerSize.h / height) * 0.92
+      return Math.max(1, fit)
+    }, [containerSize, width, height])
+
+    // Remount the TransformWrapper when the active map slug changes or
+    // when the fit scale shifts meaningfully (e.g. desktop resize). A
+    // stable key for the same map keeps in-session pan/zoom state.
+    const transformKey = `${slug}:${Math.round(fitScale * 10)}`
+
     const pixelCanvasRef = useRef<HTMLCanvasElement | null>(null)
     const selectionCanvasRef = useRef<HTMLCanvasElement | null>(null)
     const zoomControlsRef = useRef<{ zoomIn: () => void; zoomOut: () => void; setTransform: (x: number, y: number, s: number, ms?: number) => void } | null>(null)
@@ -151,24 +197,21 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
         // Retry until both the zoom controls and the wrapper element are
         // ready. The geo-auto-zoom path calls this right after the map's
         // loadState flips to 'ready', which can be a few frames before
-        // <ZoomCapture>'s useEffect attaches zoomControlsRef. Default
-        // scale lands the user just inside paint mode; the geo path
-        // passes a smaller value so first-load shows the broader region.
+        // <ZoomCapture>'s useEffect attaches zoomControlsRef.
         const tryNow = (): boolean => {
           const ctrl = zoomControlsRef.current
           if (!ctrl) return false
           // IMPORTANT: read clientWidth/Height from the .react-transform-wrapper
           // (the OUTER element that has the viewport's dimensions), NOT from
-          // the inner transformed element. `parentElement.parentElement` lands
-          // on the latter — which is the canvas's own size — so dividing by it
-          // for the center math snaps the target to the canvas's top-left
-          // instead of the viewport center.
+          // the inner transformed element.
           const canvas = pixelCanvasRef.current
           if (!canvas) return false
           const wrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
           if (!wrapper) return false
           const { x, y } = idToXY(pid, width)
-          const s = scale ?? PAINT_SCALE + 1
+          // Clamp the target scale to the fit floor so callers can't
+          // request a zoom that drops below the map's framed view.
+          const s = Math.max(scale ?? PAINT_SCALE + 1, fitScale)
           const tx = -x * s + wrapper.clientWidth / 2
           const ty = -y * s + wrapper.clientHeight / 2
           ctrl.setTransform(tx, ty, s, 300)
@@ -186,12 +229,11 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
       recenter() {
         const ctrl = zoomControlsRef.current
         if (!ctrl) return
-        // Find the TransformWrapper's outer wrapper element
         const canvas = pixelCanvasRef.current
         if (!canvas) return
         const wrapper = canvas.closest('.react-transform-wrapper')
         if (!wrapper) return
-        const s = 3
+        const s = fitScale
         const ww = (wrapper as HTMLElement).clientWidth
         const wh = (wrapper as HTMLElement).clientHeight
         const tx = (ww - width * s) / 2
@@ -235,29 +277,32 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
     )
 
     return (
-      <TransformWrapper
-        minScale={1}
-        maxScale={40}
-        initialScale={savedZoom.current}
-        wheel={{ step: 2 }}
-        pinch={{ step: 5 }}
-        doubleClick={{ step: 0.7 }}
-        limitToBounds={false}
-        centerOnInit
-        smooth
-      >
-        <ZoomCapture controlsRef={zoomControlsRef} />
-        <TransformComponent
-          wrapperStyle={{ width: '100%', height: '100%' }}
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+        <TransformWrapper
+          key={transformKey}
+          minScale={fitScale}
+          maxScale={40}
+          initialScale={fitScale}
+          wheel={{ step: 2 }}
+          pinch={{ step: 5 }}
+          doubleClick={{ step: 0.7 }}
+          limitToBounds={false}
+          centerOnInit
+          smooth
         >
-          <InnerCanvas
-            {...props}
-            onScaleChange={handleScaleChange}
-            pixelCanvasRef={pixelCanvasRef}
-            selectionCanvasRef={selectionCanvasRef}
-          />
-        </TransformComponent>
-      </TransformWrapper>
+          <ZoomCapture controlsRef={zoomControlsRef} />
+          <TransformComponent
+            wrapperStyle={{ width: '100%', height: '100%' }}
+          >
+            <InnerCanvas
+              {...props}
+              onScaleChange={handleScaleChange}
+              pixelCanvasRef={pixelCanvasRef}
+              selectionCanvasRef={selectionCanvasRef}
+            />
+          </TransformComponent>
+        </TransformWrapper>
+      </div>
     )
   },
 )
