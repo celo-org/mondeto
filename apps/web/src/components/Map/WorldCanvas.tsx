@@ -113,20 +113,6 @@ function InnerCanvas({
         onInspectPixel={onInspectPixel}
         onTapWhileZoomedOut={onTapWhileZoomedOut}
       />
-      {/* Frame — outlines the playable canvas area so the map's bounds
-          are obvious against the ocean fill. Lives inside the transform
-          target so it pans/zooms with the map; pointerEvents:none keeps
-          paint clicks routed to SelectionLayer. */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: -1,
-          border: '1px solid var(--text-muted)',
-          pointerEvents: 'none',
-          zIndex: 10,
-        }}
-      />
     </div>
   )
 }
@@ -169,13 +155,16 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
 
     const fitScale = useMemo(() => {
       if (!containerSize) return 3
-      // 0.92 leaves a small margin so the border isn't kissing the
-      // viewport edges. Math.max keeps a floor at 1 in case the map
-      // is somehow larger than the viewport (shouldn't happen, but
-      // belts and braces).
+      // Scale at which the map exactly fills the viewport. 0.92 leaves
+      // a small margin so the map isn't kissing the screen edges.
       const fit = Math.min(containerSize.w / width, containerSize.h / height) * 0.92
       return Math.max(1, fit)
     }, [containerSize, width, height])
+
+    // Minimum allowed zoom: 75% of the fit scale, so the map can shrink
+    // a little for breathing room but never disappears into a tiny
+    // shape floating in the ocean.
+    const minScale = useMemo(() => Math.max(1, fitScale * 0.75), [fitScale])
 
     // Remount the TransformWrapper when the active map slug changes or
     // when the fit scale shifts meaningfully (e.g. desktop resize). A
@@ -209,9 +198,9 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
           const wrapper = canvas.closest('.react-transform-wrapper') as HTMLElement | null
           if (!wrapper) return false
           const { x, y } = idToXY(pid, width)
-          // Clamp the target scale to the fit floor so callers can't
-          // request a zoom that drops below the map's framed view.
-          const s = Math.max(scale ?? PAINT_SCALE + 1, fitScale)
+          // Clamp the target scale to the minScale floor so callers
+          // can't request a zoom that drops below the map's framed view.
+          const s = Math.max(scale ?? PAINT_SCALE + 1, minScale)
           const tx = -x * s + wrapper.clientWidth / 2
           const ty = -y * s + wrapper.clientHeight / 2
           ctrl.setTransform(tx, ty, s, 300)
@@ -280,7 +269,7 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
       <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
         <TransformWrapper
           key={transformKey}
-          minScale={fitScale}
+          minScale={minScale}
           maxScale={40}
           initialScale={fitScale}
           wheel={{ step: 2 }}
