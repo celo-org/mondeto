@@ -138,8 +138,21 @@ export default function RanksPage() {
           justifyContent: 'flex-start',
         }}
       >
-        {isLoading ? (
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        {isLoading || !hasOwned ? (
+          // Loading and empty states share one centered layout so the
+          // GIF lands at the exact same spot in both — the caption slot
+          // below is always reserved (rendered empty while loading) so
+          // the GIF doesn't jump up when the "no claims yet" text appears.
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
             <img
               src="/brand/mondeto-symbol.gif"
               alt=""
@@ -147,8 +160,24 @@ export default function RanksPage() {
               height={72}
               style={{ display: 'block', imageRendering: 'pixelated' }}
             />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 8,
+                minHeight: 32,
+              }}
+            >
+              {!isLoading && (
+                <>
+                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
+                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
+                </>
+              )}
+            </div>
           </div>
-        ) : hasOwned ? (
+        ) : (
           <>
             {displayData.map((entry) => (
               <LeaderboardRow key={entry.owner} entry={entry} />
@@ -175,27 +204,6 @@ export default function RanksPage() {
               </button>
             )}
           </>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '60%',
-              gap: 8,
-            }}
-          >
-            <img
-              src="/brand/mondeto-symbol.gif"
-              alt=""
-              width={72}
-              height={72}
-              style={{ display: 'block', imageRendering: 'pixelated', marginBottom: 6 }}
-            />
-            <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
-            <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
-          </div>
         )}
       </div>
       <BottomNav activeRoute="/ranks" />
