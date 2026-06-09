@@ -440,6 +440,7 @@ export default function Home() {
           version={version}
           loadState={loadState}
           userAddress={addrStr}
+          userColor={profile.color}
           changedIds={changedIds}
           profilesMap={mapProfiles}
         />

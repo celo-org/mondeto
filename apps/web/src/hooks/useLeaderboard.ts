@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { usePublicClient } from 'wagmi'
 import type { PixelView } from '@/lib/mock'
+import { useReadClient } from '@/hooks/useReadClient'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { allGlobalLeaderboards, allLeaderboards } from '@/lib/maps/leaderboards'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
@@ -105,7 +105,11 @@ export function useLeaderboard(
 ): BoardSet {
   const scope = options.scope ?? 'local'
   const homeMapId = options.homeMapId ?? 0
-  const publicClient = usePublicClient()
+  // Guaranteed-defined read client. The global board must populate for
+  // anonymous visitors and right after the app wakes — wagmi's
+  // usePublicClient is undefined in those windows, which previously left the
+  // GLOBAL board stuck on "no claims yet".
+  const publicClient = useReadClient()
 
   const localSnapshot = useMemo(() => {
     const home = getMapContractById(homeMapId)

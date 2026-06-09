@@ -5,14 +5,14 @@ import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import LeaderboardTabs from '@/components/Leaderboard/LeaderboardTabs'
 import LeaderboardRow from '@/components/Leaderboard/LeaderboardRow'
-import ScopeToggle from '@/components/Leaderboard/ScopeToggle'
+import BoardSelector from '@/components/Leaderboard/BoardSelector'
 import {
   useLeaderboard,
-  type LeaderboardScope,
   type LeaderboardTab,
   type OwnerProfileData,
 } from '@/hooks/useLeaderboard'
 import { useMaps } from '@/hooks/useMaps'
+import type { MapId } from '@/lib/maps/types'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
@@ -30,18 +30,29 @@ export default function RanksPage() {
   // must populate for anonymous users.
   const publicClient = useReadClient()
   const { revealedMaps, currentMapId } = useMaps()
-  const mondetoContract = getMapContractById(currentMapId)
+  // Which board to show: a specific map id, or 'global'. Defaults to the map
+  // the player is currently on, but they can view any map's board (or the
+  // cross-map board) without leaving /ranks.
+  const [boardSel, setBoardSel] = useState<MapId | 'global'>(currentMapId)
+  const isGlobal = boardSel === 'global'
+  // The map whose pixel data + profiles we load. For the global board we still
+  // load the current map (its owners' profiles decorate rows; the global hook
+  // fetches all maps' pixel snapshots itself).
+  const selectedMapId: MapId = isGlobal ? currentMapId : boardSel
+  const mondetoContract = getMapContractById(selectedMapId)
   const mondetoAddress = mondetoContract.address
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
-  const [scope, setScope] = useState<LeaderboardScope>('local')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Only offer the LOCAL/GLOBAL switch once there's more than one map to
-  // compare; with a single map the two scopes are identical.
-  const showScopeToggle = revealedMaps.length > 1
+  // Offer the board selector once there's more than one map to compare.
+  const showSelector = revealedMaps.length > 1
+  const selectorOptions = [
+    ...revealedMaps.map((m) => ({ key: String(m.id), label: m.displayName })),
+    { key: 'global', label: 'GLOBAL' },
+  ]
 
   useEffect(() => {
     async function load() {
@@ -109,14 +120,13 @@ export default function RanksPage() {
     load()
   }, [publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
 
-  // LOCAL ranks the current map (from the pixelData loaded above); GLOBAL
-  // ranks the normalized cross-map board. `homeMapId` here is the id the
-  // loaded pixelData belongs to — the current map — so the local snapshot
-  // uses the right per-map dimensions.
+  // A specific map shows that map's board (from the pixelData loaded above);
+  // GLOBAL shows the normalized cross-map board. `homeMapId` is the id the
+  // loaded pixelData belongs to so the local snapshot uses the right dims.
   const { area, empire, tycoons, loading: boardsLoading } = useLeaderboard(
     pixelData,
     profilesMap,
-    { scope, homeMapId: currentMapId },
+    { scope: isGlobal ? 'global' : 'local', homeMapId: selectedMapId },
   )
 
   const dataMap: Record<LeaderboardTab, typeof area> = {
@@ -133,14 +143,17 @@ export default function RanksPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
       <TopBar title="MONDETO" />
-      {showScopeToggle && (
-        <ScopeToggle
-          scope={scope}
-          onChange={(s) => { setScope(s); setShowAll(false) }}
-          localLabel={mondetoContract.displayName}
+      {showSelector && (
+        <BoardSelector
+          options={selectorOptions}
+          value={isGlobal ? 'global' : String(boardSel)}
+          onChange={(key) => {
+            setBoardSel(key === 'global' ? 'global' : (Number(key) as MapId))
+            setShowAll(false)
+          }}
         />
       )}
-      <LeaderboardTabs activeTab={activeTab} scope={scope} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      <LeaderboardTabs activeTab={activeTab} scope={isGlobal ? 'global' : 'local'} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
       <div
         style={{
           flex: 1,
@@ -201,7 +214,7 @@ export default function RanksPage() {
                 // The reigning "Ruler of <map>" is rank-1 of a single map's
                 // LAND board. The global board is cross-map, so no per-map
                 // crown there.
-                isRuler={scope === 'local' && activeTab === 'AREA' && entry.rank === 1}
+                isRuler={!isGlobal && activeTab === 'AREA' && entry.rank === 1}
               />
             ))}
             {!showAll && currentData.length > 20 && (

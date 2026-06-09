@@ -10,6 +10,9 @@ import type { MapId } from '@/lib/maps/types'
 export type LoadState = 'loading' | 'ready' | 'error'
 
 const POLL_INTERVAL = 30_000
+// Bounded auto-retry so a single RPC hiccup (common right after iOS wakes a
+// suspended tab) doesn't leave the map permanently blank.
+const RETRY_DELAYS_MS = [1500, 4000, 8000]
 
 /**
  * Pixel map state for a single map.
@@ -26,22 +29,26 @@ export function usePixelMap(mapId?: MapId) {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [version, setVersion] = useState(0)
   const [changedIds, setChangedIds] = useState<number[]>([])
+  const retryCountRef = useRef(0)
+
+  const contractAddress = contract.address
 
   const fetchData = useCallback(async (): Promise<PixelView[]> => {
     return await fetchAllPixelsFromContract(
       readClient.readContract.bind(readClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
-      contract.address,
+      contractAddress,
       contract.width,
       contract.height,
       mask,
     )
-  }, [readClient, contract.address, contract.width, contract.height, mask])
+  }, [readClient, contractAddress, contract.width, contract.height, mask])
 
   const load = useCallback(async () => {
     try {
       setLoadState('loading')
       const data = await fetchData()
       pixelDataRef.current = data
+      retryCountRef.current = 0
       setLoadState('ready')
       setVersion(v => v + 1)
     } catch (e) {
@@ -50,7 +57,18 @@ export function usePixelMap(mapId?: MapId) {
     }
   }, [fetchData])
 
-  // Auto-load on mount and when client changes
+  // Reset state the instant the map (contract) changes, BEFORE the new
+  // map's data arrives. Without this the previous map's pixels keep
+  // rendering on the new map's grid for a beat — e.g. World pixels showing
+  // on the Africa canvas until the Africa read resolves.
+  useEffect(() => {
+    pixelDataRef.current = []
+    retryCountRef.current = 0
+    setLoadState('loading')
+    setVersion(v => v + 1)
+  }, [contractAddress])
+
+  // Auto-load on mount and whenever the fetch target changes.
   useEffect(() => {
     load()
   }, [load])
@@ -95,6 +113,41 @@ export function usePixelMap(mapId?: MapId) {
     const interval = setInterval(poll, POLL_INTERVAL)
     return () => clearInterval(interval)
   }, [loadState, poll])
+
+  // Bounded retry after a failed load. iOS Safari suspends background tabs;
+  // the first read after the app is reopened often errors on a stale
+  // connection, which previously left the map blank until the user manually
+  // switched maps. Retry a few times with backoff instead.
+  useEffect(() => {
+    if (loadState !== 'error') return
+    if (retryCountRef.current >= RETRY_DELAYS_MS.length) return
+    const delay = RETRY_DELAYS_MS[retryCountRef.current]
+    retryCountRef.current += 1
+    const t = setTimeout(() => {
+      load()
+    }, delay)
+    return () => clearTimeout(t)
+  }, [loadState, load])
+
+  // Refetch when the tab/app returns to the foreground. Covers the iOS
+  // "left my phone for a while" case where timers are frozen and the
+  // existing data may be stale or the connection dropped.
+  useEffect(() => {
+    function onForeground() {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      // refresh keeps the current pixels on screen while re-reading, so
+      // there's no flash; if there's nothing yet, load() shows the proper
+      // loading state.
+      if (pixelDataRef.current.length > 0) refresh()
+      else load()
+    }
+    document.addEventListener('visibilitychange', onForeground)
+    window.addEventListener('focus', onForeground)
+    return () => {
+      document.removeEventListener('visibilitychange', onForeground)
+      window.removeEventListener('focus', onForeground)
+    }
+  }, [refresh, load])
 
   return { pixelDataRef, loadState, load, refresh, version, changedIds }
 }

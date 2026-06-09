@@ -42,6 +42,10 @@ export function drawPixels(
   height: number,
   mask: Uint8Array,
   userAddress?: string,
+  /** The connected wallet's current (possibly unsaved) profile color, used
+   *  for their own pixels so the map matches what they see on the profile
+   *  screen even before they save it on-chain. */
+  userColor?: string,
 ) {
   ctx.clearRect(0, 0, width, height)
 
@@ -51,15 +55,20 @@ export function drawPixels(
   const unownedColor = '#dddddd'
   const fadedColor = 'rgba(221,221,221,0.25)'
 
-  // Resolve an owned pixel's fill. On-chain color wins; when it's unset
-  // (owner hasn't saved a profile color, so the contract returns 0) fall
-  // back to the deterministic per-address color instead of a dead grey,
-  // matching the seed the profile screen shows. Cached per owner so the
-  // hash isn't recomputed for every pixel of a large territory.
+  // Resolve an owned pixel's fill:
+  //   1. on-chain per-owner color (what everyone agrees on) wins;
+  //   2. else, for the connected user's OWN pixels, their live profile color
+  //      so their view matches the profile screen even before they save;
+  //   3. else, a deterministic per-address color (so unclaimed-looking grey
+  //      never shows and every viewer computes the same hue).
+  // Cached per owner so the hash isn't recomputed for every pixel.
   const ownerColorCache = new Map<string, string>()
   const ownedFill = (pixel: PixelView): string => {
     if (pixel.color) return pixel.color
     const owner = pixel.owner
+    if (userColor && userAddr && owner.toLowerCase() === userAddr) {
+      return userColor
+    }
     let c = ownerColorCache.get(owner)
     if (!c) {
       c = ownerDefaultColor(owner)
