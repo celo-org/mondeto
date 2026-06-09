@@ -3,28 +3,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
 import { MONDETO_ABI } from '@/lib/contract'
-import { uint24ToHex, hexToUint24 } from '@/lib/colorUtils'
+import { uint24ToHex, hexToUint24, ownerDefaultColor } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { getBuilderCodeSuffix } from '@/lib/builderCode'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { generateUsername } from '@/lib/username'
-import { PROFILE_DEFAULT_PALETTE } from '@/constants/map'
 import type { MapId } from '@/lib/maps/types'
 
-/**
- * Pick a deterministic default profile color from the user's address so the
- * same wallet always lands on the same starting color, without colliding
- * with the map's ocean-blue or land-cream tones.
- */
-function defaultColorFor(address: string | undefined): string {
-  if (!address) return PROFILE_DEFAULT_PALETTE[0]
-  let hash = 0
-  for (let i = 2; i < address.length; i++) {
-    hash = (hash * 31 + address.charCodeAt(i)) | 0
-  }
-  const idx = Math.abs(hash) % PROFILE_DEFAULT_PALETTE.length
-  return PROFILE_DEFAULT_PALETTE[idx]
-}
+// Deterministic per-address default color, shared with the map renderer so
+// the profile seed and the on-map fallback stay in sync. See
+// `ownerDefaultColor` in lib/colorUtils.
+const defaultColorFor = ownerDefaultColor
 
 export type ProfileSaveState = 'idle' | 'saving' | 'confirming' | 'saved' | 'error'
 

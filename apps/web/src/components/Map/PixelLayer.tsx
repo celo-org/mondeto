@@ -3,6 +3,7 @@ import React from 'react'
 import { TILE_GAP, TILE_RADIUS, ZERO_ADDRESS } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
 import { isLand } from '@/lib/landMask'
+import { ownerDefaultColor } from '@/lib/colorUtils'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
@@ -50,6 +51,23 @@ export function drawPixels(
   const unownedColor = '#dddddd'
   const fadedColor = 'rgba(221,221,221,0.25)'
 
+  // Resolve an owned pixel's fill. On-chain color wins; when it's unset
+  // (owner hasn't saved a profile color, so the contract returns 0) fall
+  // back to the deterministic per-address color instead of a dead grey,
+  // matching the seed the profile screen shows. Cached per owner so the
+  // hash isn't recomputed for every pixel of a large territory.
+  const ownerColorCache = new Map<string, string>()
+  const ownedFill = (pixel: PixelView): string => {
+    if (pixel.color) return pixel.color
+    const owner = pixel.owner
+    let c = ownerColorCache.get(owner)
+    if (!c) {
+      c = ownerDefaultColor(owner)
+      ownerColorCache.set(owner, c)
+    }
+    return c
+  }
+
   if (mapView === 'heatmap') {
     let maxSales = 0
     for (let i = 0; i < pixelData.length; i++) {
@@ -83,7 +101,7 @@ export function drawPixels(
       const isMine = userAddr && isOwned && pixel.owner.toLowerCase() === userAddr
 
       if (isMine) {
-        ctx.fillStyle = pixel.color || '#888888'
+        ctx.fillStyle = ownedFill(pixel)
       } else {
         ctx.fillStyle = fadedColor
       }
@@ -100,7 +118,7 @@ export function drawPixels(
       const isOwned = pixel.owner !== ZERO_ADDRESS
 
       if (isOwned) {
-        ctx.fillStyle = pixel.color || '#888888'
+        ctx.fillStyle = ownedFill(pixel)
       } else {
         ctx.fillStyle = unownedColor
       }

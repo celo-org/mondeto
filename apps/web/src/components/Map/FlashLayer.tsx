@@ -2,6 +2,7 @@
 import React, { useRef, useEffect } from 'react'
 import { TILE_GAP, TILE_RADIUS } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
+import { ownerDefaultColor } from '@/lib/colorUtils'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
@@ -32,7 +33,7 @@ export default function FlashLayer({ changedIds, pixelData }: FlashLayerProps) {
     const targets = changedIds.map(id => {
       const { x, y } = idToXY(id, WIDTH)
       const px = pixelData[id]
-      const color = px?.color || '#888888'
+      const color = px?.color || ownerDefaultColor(px?.owner)
       // Parse target color to RGB
       const m = color.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
       const tr = m ? parseInt(m[1], 16) : 136

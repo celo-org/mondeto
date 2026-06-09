@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react'
 import { computeEmpires, idToXY } from '@/lib/pixelMath'
 import { ZERO_ADDRESS } from '@/constants/map'
+import { ownerDefaultColor } from '@/lib/colorUtils'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
@@ -76,7 +77,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
       const profile = profilesMap?.get(owner)
       if (!profile?.label) continue
       const label = profile.label
-      const color = profile?.color || pixelData[Array.from(emp.ids)[0]]?.color || '#888888'
+      const color = profile?.color || pixelData[Array.from(emp.ids)[0]]?.color || ownerDefaultColor(owner)
 
       result.push({ owner, label, color, cx, cy, size: emp.size })
     }
