@@ -8,6 +8,10 @@ import { allGlobalLeaderboards, allLeaderboards } from '@/lib/maps/leaderboards'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
 import { getMapContractById, getRevealedMaps } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
+import {
+  readGlobalSnapshotCache,
+  writeGlobalSnapshotCache,
+} from '@/lib/maps/snapshots'
 import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { generateUsername } from '@/lib/username'
 
@@ -44,70 +48,6 @@ interface BoardSet {
   loading: boolean
 }
 
-// 30s TTL avoids hammering Forno when the user flips local/global tabs.
-const GLOBAL_CACHE_TTL_MS = 30_000
-const GLOBAL_CACHE_KEY = 'mondeto:global-snapshots:v1'
-
-interface CachedSnapshot {
-  mapId: MapId
-  open: boolean
-  // Each pixel encoded as a tuple to keep storage tight.
-  // [id, x, y, owner|null, currentPrice, isLand(0|1)]
-  pixels: Array<[number, number, number, string | null, number, 0 | 1]>
-}
-
-interface CacheEntry {
-  storedAt: number
-  snapshots: CachedSnapshot[]
-}
-
-function readGlobalCache(): MapSnapshot[] | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.sessionStorage.getItem(GLOBAL_CACHE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as CacheEntry
-    if (Date.now() - parsed.storedAt > GLOBAL_CACHE_TTL_MS) return null
-    return parsed.snapshots.map((s) => ({
-      meta: { id: s.mapId, open: s.open },
-      pixels: s.pixels.map(([id, x, y, owner, currentPrice, isLand]) => ({
-        id,
-        x,
-        y,
-        owner,
-        currentPrice,
-        isLand: isLand === 1,
-      })),
-    }))
-  } catch {
-    return null
-  }
-}
-
-function writeGlobalCache(snapshots: MapSnapshot[]): void {
-  if (typeof window === 'undefined') return
-  try {
-    const entry: CacheEntry = {
-      storedAt: Date.now(),
-      snapshots: snapshots.map((s) => ({
-        mapId: s.meta.id,
-        open: s.meta.open,
-        pixels: s.pixels.map((p) => [
-          p.id,
-          p.x,
-          p.y,
-          p.owner,
-          p.currentPrice,
-          p.isLand ? 1 : 0,
-        ]),
-      })),
-    }
-    window.sessionStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(entry))
-  } catch {
-    // sessionStorage may be full or unavailable; not fatal.
-  }
-}
-
 function formatUSDTFromNumber(value: number): string {
   if (value === 0) return '0.00'
   if (value >= 1) return value.toFixed(2)
@@ -115,6 +55,17 @@ function formatUSDTFromNumber(value: number): string {
   const str = value.toFixed(6)
   const trimmed = str.replace(/0+$/, '').replace(/\.$/, '')
   return trimmed.length === 0 ? '0.00' : trimmed
+}
+
+/**
+ * Global AREA values are a sum of per-map ownership fractions (0..N for N
+ * maps). Render as a percentage so "owns 22% of total territory" reads
+ * naturally; can exceed 100% for a wallet dominating several maps. One
+ * decimal under 10% so small-but-real holdings aren't shown as "0%".
+ */
+function formatPercent(value: number): string {
+  const pct = value * 100
+  return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`
 }
 
 function decorate(
@@ -198,7 +149,7 @@ export function useLeaderboard(
       return
     }
 
-    const cached = readGlobalCache()
+    const cached = readGlobalSnapshotCache()
     if (cached && cached.length === revealed.length) {
       setGlobalSnapshots(cached)
       setGlobalLoading(false)
@@ -231,7 +182,7 @@ export function useLeaderboard(
       }),
     ).then((snapshots) => {
       if (cancelled) return
-      writeGlobalCache(snapshots)
+      writeGlobalSnapshotCache(snapshots)
       setGlobalSnapshots(snapshots)
       setGlobalLoading(false)
     })
@@ -249,7 +200,9 @@ export function useLeaderboard(
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
       allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
     return {
-      area: decorate(mostPixels, 'px', (v) => String(v), profilesMap),
+      // Global AREA is the normalized territory-share board, so its value is
+      // a fraction rendered as a percentage (not a raw pixel count).
+      area: decorate(mostPixels, '', formatPercent, profilesMap),
       empire: decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap),
       tycoons: decorate(
         mostExpensivePixel,

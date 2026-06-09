@@ -5,11 +5,17 @@ import { generateUsername } from '@/lib/username'
 
 interface LeaderboardRowProps {
   entry: LeaderboardEntry
+  /** Render a KING badge on this row — the parent sets it for the rank-1
+   *  holder of a map's LAND board (the reigning "King of <map>"). */
+  isKing?: boolean
+  /** Optional per-map breakdown chip (global board), e.g. "W·AF·EU". */
+  breakdown?: string
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
 const BRAND_ORANGE = '#FF4C00'
 const BRAND_PURPLE = '#B430FF'
+const BRAND_LIME = '#A7FF05'
 
 // Top-5 highlight: 1-3 in brand orange (podium), 4-5 in brand purple
 // (runners-up). Everything below 5 falls back to the muted defaults.
@@ -39,7 +45,7 @@ const DEFAULT_RANK_FS = 9
 const FIRST_RANK_FS = 16
 const RANK_WIDTH = 60
 
-export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
+export default function LeaderboardRow({ entry, isKing, breakdown }: LeaderboardRowProps) {
   // URL field hidden — unverified user-entered URLs are an injection /
   // phishing vector. Re-enable once URL verification is in place.
   const isFirst = entry.rank === 1
@@ -80,17 +86,52 @@ export default function LeaderboardRow({ entry }: LeaderboardRowProps) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
             fontSize: ROW_NAME_FS,
             fontFamily: PIXEL_FONT,
             letterSpacing: 2,
             color: '#FFFFFF',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
           }}
         >
-          {entry.label || generateUsername(entry.owner)}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {entry.label || generateUsername(entry.owner)}
+          </span>
+          {isKing && (
+            <span
+              style={{
+                flexShrink: 0,
+                fontSize: 6,
+                letterSpacing: 1,
+                padding: '2px 5px',
+                borderRadius: 4,
+                color: BRAND_LIME,
+                border: `1px solid ${BRAND_LIME}`,
+              }}
+            >
+              KING
+            </span>
+          )}
         </div>
+        {breakdown && (
+          <div
+            style={{
+              marginTop: 3,
+              fontSize: 6,
+              letterSpacing: 1,
+              color: 'rgba(255,255,255,0.4)',
+              fontFamily: PIXEL_FONT,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {breakdown}
+          </div>
+        )}
       </div>
 
       {/* Score */}

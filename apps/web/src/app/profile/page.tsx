@@ -11,6 +11,7 @@ import ColorPicker from '@/components/Profile/ColorPicker'
 import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
+import { useMapKings } from '@/hooks/useMapKings'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { ZERO_ADDRESS } from '@/constants/map'
@@ -26,9 +27,19 @@ export default function ProfilePage() {
   // URL input removed — unverified user URLs are an injection vector.
   // setUrl is left wired but unused so existing useProfile callers keep
   // their shape; updateProfile is called below with an empty string for url.
-  const { currentMapId } = useMaps()
+  const { revealedMaps, currentMapId } = useMaps()
   const mondetoContract = getMapContractById(currentMapId)
   const mondetoAddress = mondetoContract.address
+  const { kings } = useMapKings()
+
+  // Maps where the connected wallet currently owns the most land — the
+  // reigning "King of <map>". Sourced from the shared kings resolver so the
+  // badge can't drift from the leaderboard.
+  const ruledMaps = useMemo(() => {
+    if (!addrStr) return []
+    const me = addrStr.toLowerCase()
+    return revealedMaps.filter((m) => kings[m.id] === me)
+  }, [addrStr, revealedMaps, kings])
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
@@ -347,6 +358,35 @@ export default function ProfilePage() {
           </div>
         )}
         <AvatarBlock color={color} name={name} />
+        {ruledMaps.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              gap: 6,
+              margin: '0 16px 10px',
+            }}
+          >
+            {ruledMaps.map((m) => (
+              <span
+                key={m.id}
+                style={{
+                  fontFamily: "'Press Start 2P', monospace",
+                  fontSize: 7,
+                  letterSpacing: 1.5,
+                  padding: '5px 9px',
+                  borderRadius: 999,
+                  color: '#A7FF05',
+                  border: '1px solid #A7FF05',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                KING OF {m.displayName}
+              </span>
+            ))}
+          </div>
+        )}
         <StatsRow
           pixels={pixelCount}
           balance={formatBalanceForDisplay(walletBalance.preferred?.amount ?? walletBalance.totalAmount)}

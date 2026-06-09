@@ -5,8 +5,10 @@ import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import LeaderboardTabs from '@/components/Leaderboard/LeaderboardTabs'
 import LeaderboardRow from '@/components/Leaderboard/LeaderboardRow'
+import ScopeToggle from '@/components/Leaderboard/ScopeToggle'
 import {
   useLeaderboard,
+  type LeaderboardScope,
   type LeaderboardTab,
   type OwnerProfileData,
 } from '@/hooks/useLeaderboard'
@@ -27,14 +29,19 @@ export default function RanksPage() {
   // Guaranteed-defined read client. Leaderboard is a read-only view and
   // must populate for anonymous users.
   const publicClient = useReadClient()
-  const { homeMapId, currentMapId } = useMaps()
+  const { revealedMaps, currentMapId } = useMaps()
   const mondetoContract = getMapContractById(currentMapId)
   const mondetoAddress = mondetoContract.address
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
+  const [scope, setScope] = useState<LeaderboardScope>('local')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Only offer the LOCAL/GLOBAL switch once there's more than one map to
+  // compare; with a single map the two scopes are identical.
+  const showScopeToggle = revealedMaps.length > 1
 
   useEffect(() => {
     async function load() {
@@ -102,13 +109,14 @@ export default function RanksPage() {
     load()
   }, [publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
 
-  // Global scope toggle removed — leaderboard is local-only for now.
-  // Tracked as a follow-up in project memory; restore the ScopeToggle when
-  // re-introducing cross-map rankings.
+  // LOCAL ranks the current map (from the pixelData loaded above); GLOBAL
+  // ranks the normalized cross-map board. `homeMapId` here is the id the
+  // loaded pixelData belongs to — the current map — so the local snapshot
+  // uses the right per-map dimensions.
   const { area, empire, tycoons, loading: boardsLoading } = useLeaderboard(
     pixelData,
     profilesMap,
-    { scope: 'local', homeMapId: homeMapId ?? undefined },
+    { scope, homeMapId: currentMapId },
   )
 
   const dataMap: Record<LeaderboardTab, typeof area> = {
@@ -125,7 +133,14 @@ export default function RanksPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
       <TopBar title="MONDETO" />
-      <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      {showScopeToggle && (
+        <ScopeToggle
+          scope={scope}
+          onChange={(s) => { setScope(s); setShowAll(false) }}
+          localLabel={mondetoContract.displayName}
+        />
+      )}
+      <LeaderboardTabs activeTab={activeTab} scope={scope} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
       <div
         style={{
           flex: 1,
@@ -180,7 +195,14 @@ export default function RanksPage() {
         ) : (
           <>
             {displayData.map((entry) => (
-              <LeaderboardRow key={entry.owner} entry={entry} />
+              <LeaderboardRow
+                key={entry.owner}
+                entry={entry}
+                // The reigning "King of <map>" is rank-1 of a single map's
+                // LAND board. The global board is cross-map, so no per-map
+                // crown there.
+                isKing={scope === 'local' && activeTab === 'AREA' && entry.rank === 1}
+              />
             ))}
             {!showAll && currentData.length > 20 && (
               <button
