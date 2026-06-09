@@ -198,10 +198,10 @@ export default function RanksPage() {
               <LeaderboardRow
                 key={entry.owner}
                 entry={entry}
-                // The reigning "King of <map>" is rank-1 of a single map's
+                // The reigning "Ruler of <map>" is rank-1 of a single map's
                 // LAND board. The global board is cross-map, so no per-map
                 // crown there.
-                isKing={scope === 'local' && activeTab === 'AREA' && entry.rank === 1}
+                isRuler={scope === 'local' && activeTab === 'AREA' && entry.rank === 1}
               />
             ))}
             {!showAll && currentData.length > 20 && (

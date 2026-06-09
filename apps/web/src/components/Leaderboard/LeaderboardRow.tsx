@@ -5,9 +5,9 @@ import { generateUsername } from '@/lib/username'
 
 interface LeaderboardRowProps {
   entry: LeaderboardEntry
-  /** Render a KING badge on this row — the parent sets it for the rank-1
-   *  holder of a map's LAND board (the reigning "King of <map>"). */
-  isKing?: boolean
+  /** Render a RULER badge on this row — the parent sets it for the rank-1
+   *  holder of a map's LAND board (the reigning "Ruler of <map>"). */
+  isRuler?: boolean
   /** Optional per-map breakdown chip (global board), e.g. "W·AF·EU". */
   breakdown?: string
 }
@@ -45,7 +45,7 @@ const DEFAULT_RANK_FS = 9
 const FIRST_RANK_FS = 16
 const RANK_WIDTH = 60
 
-export default function LeaderboardRow({ entry, isKing, breakdown }: LeaderboardRowProps) {
+export default function LeaderboardRow({ entry, isRuler, breakdown }: LeaderboardRowProps) {
   // URL field hidden — unverified user-entered URLs are an injection /
   // phishing vector. Re-enable once URL verification is in place.
   const isFirst = entry.rank === 1
@@ -100,7 +100,7 @@ export default function LeaderboardRow({ entry, isKing, breakdown }: Leaderboard
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {entry.label || generateUsername(entry.owner)}
           </span>
-          {isKing && (
+          {isRuler && (
             <span
               style={{
                 flexShrink: 0,
@@ -112,7 +112,7 @@ export default function LeaderboardRow({ entry, isKing, breakdown }: Leaderboard
                 border: `1px solid ${BRAND_LIME}`,
               }}
             >
-              KING
+              RULER
             </span>
           )}
         </div>

@@ -9,24 +9,25 @@ import type { Address, MapId } from '@/lib/maps/types'
 
 type ReadContractFn = Parameters<typeof fetchAllPixelsFromContract>[0]
 
-export interface MapKingsResult {
-  /** mapId -> the rank-1 holder of that map's AREA board, lowercased, or
+export interface MapRulersResult {
+  /** mapId -> the rank-1 holder of that map's LAND board, lowercased, or
    *  null when the map has no claims yet. */
-  kings: Record<MapId, Address | null>
+  rulers: Record<MapId, Address | null>
   loading: boolean
 }
 
 /**
- * Resolve the "King of <map>" — the wallet that owns the most land pixels on
- * each map (rank-1 of the AREA board). Used for the live crown on the profile
- * and anywhere a map's current leader is shown.
+ * Resolve the "Ruler of <map>" — the wallet that owns the most land pixels on
+ * each map (rank-1 of the LAND board). Gender-neutral by design (a leader may
+ * be a king, queen, empress, …). Used for the live crown on the profile and
+ * anywhere a map's current leader is shown.
  *
  * Reuses the shared 30s cross-map snapshot cache (`fetchGlobalSnapshots`), so
  * this piggybacks on the global leaderboard's fetch when both are on screen.
  */
-export function useMapKings(): MapKingsResult {
+export function useMapRulers(): MapRulersResult {
   const publicClient = usePublicClient()
-  const [kings, setKings] = useState<Record<MapId, Address | null>>({})
+  const [rulers, setRulers] = useState<Record<MapId, Address | null>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function useMapKings(): MapKingsResult {
           const top = leaderboardMostPixels(snap, 1)
           next[snap.meta.id] = top.length > 0 ? top[0].address.toLowerCase() : null
         }
-        setKings(next)
+        setRulers(next)
         setLoading(false)
       })
       .catch(() => {
@@ -59,5 +60,5 @@ export function useMapKings(): MapKingsResult {
     }
   }, [publicClient])
 
-  return { kings, loading }
+  return { rulers, loading }
 }

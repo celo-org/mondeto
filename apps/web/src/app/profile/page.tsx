@@ -11,7 +11,7 @@ import ColorPicker from '@/components/Profile/ColorPicker'
 import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
-import { useMapKings } from '@/hooks/useMapKings'
+import { useMapRulers } from '@/hooks/useMapRulers'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { ZERO_ADDRESS } from '@/constants/map'
@@ -30,16 +30,16 @@ export default function ProfilePage() {
   const { revealedMaps, currentMapId } = useMaps()
   const mondetoContract = getMapContractById(currentMapId)
   const mondetoAddress = mondetoContract.address
-  const { kings } = useMapKings()
+  const { rulers } = useMapRulers()
 
   // Maps where the connected wallet currently owns the most land — the
-  // reigning "King of <map>". Sourced from the shared kings resolver so the
+  // reigning "Ruler of <map>". Sourced from the shared rulers resolver so the
   // badge can't drift from the leaderboard.
   const ruledMaps = useMemo(() => {
     if (!addrStr) return []
     const me = addrStr.toLowerCase()
-    return revealedMaps.filter((m) => kings[m.id] === me)
-  }, [addrStr, revealedMaps, kings])
+    return revealedMaps.filter((m) => rulers[m.id] === me)
+  }, [addrStr, revealedMaps, rulers])
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
@@ -382,7 +382,7 @@ export default function ProfilePage() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                KING OF {m.displayName}
+                RULER OF {m.displayName}
               </span>
             ))}
           </div>

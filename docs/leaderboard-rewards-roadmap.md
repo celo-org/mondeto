@@ -30,10 +30,11 @@ yield/payout product.
 
 ### Phase 1 — Cosmetic / status (now)
 
-- **King of <map>**: the rank-1 LAND holder of each map. Shown as a live
-  `KING` badge on the leaderboard row and a `KING OF <MAP>` badge on the
-  player's profile (one per map ruled). Sourced from `useMapKings` so the
-  badge can't drift from the board.
+- **Ruler of <map>**: the rank-1 LAND holder of each map. Shown as a live
+  `RULER` badge on the leaderboard row and a `RULER OF <MAP>` badge on the
+  player's profile (one per map ruled). Gender-neutral by design — a leader may
+  be a king, queen, empress, … Sourced from `useMapRulers` so the badge can't
+  drift from the board.
 - Pure bragging rights, zero cost, instant. This is what most territory games
   (r/place flags, territorial.io clans) lean on.
 - Future cosmetic adds: colored name for current leaders, a crown on the map
@@ -100,12 +101,12 @@ truth.
 
 ## Defining "the winner" of a map
 
-- **Default / King**: most land pixels owned (rank-1 LAND board). Simple,
+- **Default / Ruler**: most land pixels owned (rank-1 LAND board). Simple,
   intuitive, live.
 - **Most thematic**: biggest contiguous empire (Monopoly-like). More expensive
   (connected-component analysis) — already implemented per-map.
 - **Season winner** (Phase 4): whoever leads the chosen metric at the
   season-end snapshot, then reset.
 
-The current product crowns the **King = most-pixels holder** per map, live, no
+The current product crowns the **Ruler = most-pixels holder** per map, live, no
 end — which fits the always-on board.

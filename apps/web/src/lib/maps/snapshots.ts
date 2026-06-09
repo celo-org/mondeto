@@ -1,8 +1,8 @@
 /**
  * Shared cross-map snapshot fetch + cache.
  *
- * Both the global leaderboard (`useLeaderboard`) and the per-map "king"
- * resolver (`useMapKings`) need the full pixel state of every revealed map.
+ * Both the global leaderboard (`useLeaderboard`) and the per-map "ruler"
+ * resolver (`useMapRulers`) need the full pixel state of every revealed map.
  * Fetching all maps is a handful of `getPixelBatch` reads, so the result is
  * cached in sessionStorage for 30s and shared between the two — flipping the
  * leaderboard scope or opening the profile reuses one fetch.
