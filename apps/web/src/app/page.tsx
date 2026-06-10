@@ -71,11 +71,26 @@ export default function Home() {
   const [activeOverlay, setActiveOverlay] = useState<'none' | 'drawer' | 'info'>('none')
   const [tappedPixelId, setTappedPixelId] = useState<number | null>(null)
   const [userBalance, setUserBalance] = useState(0n)
+  // Transient "zoom in to select" hint, shown when the player taps the map
+  // while it's too zoomed out to target an individual pixel.
+  const [showZoomToSelectHint, setShowZoomToSelectHint] = useState(false)
+  const zoomHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const canvasRef = useRef<WorldCanvasRef | null>(null)
   const hasZoomedPast4xRef = useRef(false)
 
   const isPaintMode = currentScale >= PAINT_SCALE
+
+  // Once the player has zoomed into paint mode, the "zoom in to select" hint
+  // has done its job — clear it (and its timer) so it doesn't linger.
+  useEffect(() => {
+    if (!isPaintMode) return
+    setShowZoomToSelectHint(false)
+    if (zoomHintTimerRef.current) {
+      clearTimeout(zoomHintTimerRef.current)
+      zoomHintTimerRef.current = null
+    }
+  }, [isPaintMode])
 
   // Reload pixel data when chain or current map changes. The land mask is
   // bundled per-map (see lib/maps/masks.ts) so no on-chain mask fetch is
@@ -261,7 +276,12 @@ export default function Home() {
   }, [togglePixel])
 
   const handleTapWhileZoomedOut = useCallback((id: number) => {
+    // One tap zooms toward the tapped area (no double-click needed) and we
+    // surface a brief hint so it's clear you select after zooming in.
     canvasRef.current?.zoomToPixel(id)
+    setShowZoomToSelectHint(true)
+    if (zoomHintTimerRef.current) clearTimeout(zoomHintTimerRef.current)
+    zoomHintTimerRef.current = setTimeout(() => setShowZoomToSelectHint(false), 2600)
   }, [])
 
   const handleInspectPixel = useCallback((id: number) => {
@@ -495,6 +515,32 @@ export default function Home() {
 
       {/* Zoom hint toast */}
       <ZoomHintToast hasZoomedPast4x={hasZoomedPast4xRef.current} />
+
+      {/* Tap-while-zoomed-out hint: explains that selection needs paint-mode
+          zoom. Shown briefly after a tap zooms the player in. */}
+      {showZoomToSelectHint && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 92,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--brand-lime)',
+            color: 'var(--text)',
+            fontFamily: "'Press Start 2P', monospace",
+            fontSize: 7,
+            letterSpacing: 1,
+            borderRadius: 12,
+            padding: '8px 14px',
+            zIndex: 16,
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}
+        >
+          ZOOM IN TO SELECT A PIXEL
+        </div>
+      )}
       {/* <CampaignBanner /> */}
       {/* Browser-only — points users with empty Celo wallets at Squid to
           bridge in. The component self-hides in MiniPay (where the in-drawer

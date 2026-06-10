@@ -277,7 +277,10 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
           initialScale={fitScale}
           wheel={{ step: 2 }}
           pinch={{ step: 5 }}
-          doubleClick={{ step: 0.7 }}
+          // A single tap now zooms in toward the tapped point (see
+          // SelectionLayer / handleTapWhileZoomedOut), so the library's
+          // double-click zoom is disabled to avoid a double-zoom.
+          doubleClick={{ disabled: true }}
           limitToBounds={false}
           centerOnInit
           smooth

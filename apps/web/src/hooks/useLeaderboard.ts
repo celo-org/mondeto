@@ -162,9 +162,13 @@ export function useLeaderboard(
   }, [scope, publicClient])
 
   const globalBoards = useMemo<BoardSet>(() => {
+    // Treat "haven't fetched yet" as loading too, so a slow cross-map read
+    // (8 maps over a constrained RPC) reads as loading rather than flashing
+    // the empty "no claims yet" state before the snapshots arrive.
+    const stillLoading = globalLoading || globalSnapshots === null
     const snapshots = globalSnapshots ?? []
     if (snapshots.length === 0) {
-      return { area: [], empire: [], tycoons: [], loading: globalLoading }
+      return { area: [], empire: [], tycoons: [], loading: stillLoading }
     }
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
       allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
@@ -179,7 +183,7 @@ export function useLeaderboard(
         formatUSDTFromNumber,
         profilesMap,
       ),
-      loading: globalLoading,
+      loading: stillLoading,
     }
   }, [globalSnapshots, globalLoading, profilesMap])
 

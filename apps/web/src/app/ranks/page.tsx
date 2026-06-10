@@ -198,6 +198,9 @@ export default function RanksPage() {
                 minHeight: 32,
               }}
             >
+              {isLoading && isGlobal && (
+                <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>loading global board…</span>
+              )}
               {!isLoading && (
                 <>
                   <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
