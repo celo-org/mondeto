@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { celoSepolia } from "viem/chains";
+import { celo } from "viem/chains";
 
-// TEST BRANCH: force Celo Sepolia. The three continent contracts wired in
-// `lib/maps/contracts.ts` live on Sepolia. Production mainnet must be
-// restored before merging.
-const TARGET_CHAIN = celoSepolia;
+// Force Celo mainnet. The world + continent contracts wired in
+// `lib/maps/contracts.ts` are deployed there.
+const TARGET_CHAIN = celo;
 
 /** Chains the wallet is allowed to sit on without being prompted. */
 function allowedChainIds(): number[] {
-  return [celoSepolia.id as number];
+  return [celo.id as number];
 }
 
 interface EthereumProvider {
@@ -69,7 +68,7 @@ async function requestSwitchChain(eth: EthereumProvider): Promise<void> {
 }
 
 /**
- * Forces every connected wallet onto Celo Sepolia on this test branch.
+ * Forces every connected wallet onto Celo mainnet.
  *
  * We bypass wagmi's `useSwitchChain` and talk to `window.ethereum`
  * directly. Privy's `WagmiProvider` doesn't reliably propagate

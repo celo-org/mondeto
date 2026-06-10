@@ -1,11 +1,9 @@
 /**
  * Multi-map contract registry.
  *
- * TEST BRANCH: this branch points the FE at three Celo Sepolia continent
- * contracts (world / africa / europe) so we can validate the multi-map UX
- * end-to-end on continents with non-170x100 grids. The production /
- * staging env split is intentionally collapsed for the duration of the
- * test; do not merge to main without reinstating it.
+ * The FE points at the world + seven-continent contracts on Celo mainnet.
+ * There's a single registry (no production/staging env split) — staging was
+ * retired; testnet work happens on feature-branch preview deploys.
  *
  * Mondeto runs N map contracts. The "active map" — the one new wallets
  * get assigned to — auto-advances when the current active map's average
@@ -50,7 +48,7 @@ export interface MapContract {
   revealed: boolean
 }
 
-// Full continent lineup deployed by the SC dev on Celo Sepolia: world + the
+// Full continent lineup deployed by the SC dev on Celo mainnet: world + the
 // seven continents. Grid dimensions baked at deploy time match the mask JSON
 // in apps/contracts/map/ (and the generated masks in src/data/masks/).
 const MAPS: readonly MapContract[] = [
@@ -59,7 +57,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'world',
     displayName: 'WORLD',
     address: '0x44bA167119355C8397C855756C2581B0771393D7',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 170,
     height: 100,
     revealed: true,
@@ -69,7 +67,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'africa',
     displayName: 'AFRICA',
     address: '0x67F48829b8CaA06C89Ea010521548CF67E4F5c09',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 127,
     height: 134,
     revealed: true,
@@ -79,7 +77,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'asia',
     displayName: 'ASIA',
     address: '0xc489709234A9a847C56a6248E6A7e51d5AC4f78F',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 158,
     height: 107,
     revealed: true,
@@ -89,7 +87,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'europe',
     displayName: 'EUROPE',
     address: '0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 160,
     height: 107,
     revealed: true,
@@ -99,7 +97,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'north-america',
     displayName: 'NORTH AMERICA',
     address: '0x7eDC67EA2925510512242A8e0985B4db1D001163',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 159,
     height: 107,
     revealed: true,
@@ -109,7 +107,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'south-america',
     displayName: 'SOUTH AMERICA',
     address: '0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 115,
     height: 147,
     revealed: true,
@@ -119,7 +117,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'oceania',
     displayName: 'OCEANIA',
     address: '0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 158,
     height: 107,
     revealed: true,
@@ -129,7 +127,7 @@ const MAPS: readonly MapContract[] = [
     slug: 'antarctica',
     displayName: 'ANTARCTICA',
     address: '0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2',
-    chainId: celoSepolia.id,
+    chainId: celo.id,
     width: 145,
     height: 117,
     revealed: true,
@@ -149,7 +147,7 @@ export function getRegistry(): readonly MapContract[] {
  * connected chainId.
  */
 export function getMapsForChain(chainId: ChainId | undefined): MapContract[] {
-  const effective = chainId ?? celoSepolia.id
+  const effective = chainId ?? celo.id
   return getRegistry()
     .filter((m) => m.chainId === effective && m.revealed)
     .sort((a, b) => a.id - b.id)
@@ -201,8 +199,8 @@ export function isRevealedMapId(id: MapId, chainId?: ChainId): boolean {
 
 /**
  * Legacy alias for callers that haven't been chain-ified yet. Returns
- * the default chain's list (Celo Sepolia on this test branch).
+ * the default chain's list (Celo mainnet).
  */
 export function getRevealedMaps(): MapContract[] {
-  return getMapsForChain(celoSepolia.id)
+  return getMapsForChain(celo.id)
 }

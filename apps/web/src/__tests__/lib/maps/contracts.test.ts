@@ -9,8 +9,8 @@ import {
 } from '@/lib/maps/contracts'
 
 describe('contracts registry', () => {
-  it('exposes the full world + continent lineup on Sepolia', () => {
-    const list = getMapsForChain(celoSepolia.id)
+  it('exposes the full world + continent lineup on Celo mainnet', () => {
+    const list = getMapsForChain(celo.id)
     expect(list).toHaveLength(8)
     expect(list.map((m) => m.slug)).toEqual([
       'world',
@@ -24,8 +24,8 @@ describe('contracts registry', () => {
     ])
   })
 
-  it('returns Sepolia maps in ascending id order', () => {
-    const list = getMapsForChain(celoSepolia.id)
+  it('returns mainnet maps in ascending id order', () => {
+    const list = getMapsForChain(celo.id)
     const ids = list.map((m) => m.id)
     const sorted = [...ids].sort((a, b) => a - b)
     expect(ids).toEqual(sorted)
@@ -34,16 +34,16 @@ describe('contracts registry', () => {
   it('only returns maps for the requested chain', () => {
     const mainnet = getMapsForChain(celo.id)
     const sepolia = getMapsForChain(celoSepolia.id)
-    expect(mainnet).toHaveLength(0) // test branch is Sepolia-only
-    for (const m of sepolia) expect(m.chainId).toBe(celoSepolia.id)
+    expect(sepolia).toHaveLength(0) // all maps live on mainnet
+    for (const m of mainnet) expect(m.chainId).toBe(celo.id)
   })
 
   it('omits unrevealed maps from getMapsForChain', () => {
-    for (const m of getMapsForChain(celoSepolia.id)) expect(m.revealed).toBe(true)
+    for (const m of getMapsForChain(celo.id)) expect(m.revealed).toBe(true)
   })
 
   it('carries per-map dimensions matching the deployed continent grids', () => {
-    const byId = (id: number) => getMapsForChain(celoSepolia.id).find((m) => m.id === id)!
+    const byId = (id: number) => getMapsForChain(celo.id).find((m) => m.id === id)!
     expect(byId(0).width).toBe(170)
     expect(byId(0).height).toBe(100)
     expect(byId(1).width).toBe(127)
@@ -54,26 +54,26 @@ describe('contracts registry', () => {
   })
 
   it('getContractByMapId returns the matching address for a known map', () => {
-    const first = getMapsForChain(celoSepolia.id)[0]
-    expect(getContractByMapId(first.id, celoSepolia.id)).toBe(first.address)
+    const first = getMapsForChain(celo.id)[0]
+    expect(getContractByMapId(first.id, celo.id)).toBe(first.address)
   })
 
   it('getContractByMapId falls back to the first revealed map for unknown ids', () => {
-    const fallback = getMapsForChain(celoSepolia.id)[0]
-    expect(getContractByMapId(999, celoSepolia.id)).toBe(fallback.address)
+    const fallback = getMapsForChain(celo.id)[0]
+    expect(getContractByMapId(999, celo.id)).toBe(fallback.address)
   })
 
   it('getMapContractById returns the full record with dims and slug', () => {
-    const m = getMapContractById(1, celoSepolia.id)
+    const m = getMapContractById(1, celo.id)
     expect(m.slug).toBe('africa')
     expect(m.width).toBe(127)
     expect(m.height).toBe(134)
   })
 
   it('isRevealedMapId is true for live maps and false for unrevealed/unknown ids', () => {
-    const first = getMapsForChain(celoSepolia.id)[0]
-    expect(isRevealedMapId(first.id, celoSepolia.id)).toBe(true)
-    expect(isRevealedMapId(999, celoSepolia.id)).toBe(false)
+    const first = getMapsForChain(celo.id)[0]
+    expect(isRevealedMapId(first.id, celo.id)).toBe(true)
+    expect(isRevealedMapId(999, celo.id)).toBe(false)
   })
 
   it('addresses are 0x-prefixed 20-byte hex strings', () => {

@@ -81,22 +81,20 @@ scripts/
 
 ## Deployments
 
-Mondeto runs one map contract per continent (plus the whole world). Each map is its own canvas with a different grid size and land area. New wallets are auto-assigned to the current "active" map (the lowest-id map whose average pixel price is below `NEXT_PUBLIC_MAP_THRESHOLD_USD`, default `$2`); the pointer advances automatically as each map fills. Existing wallets keep their sticky home (persisted to `localStorage`). All contracts and their grid dimensions live in [`apps/web/src/lib/maps/contracts.ts`](apps/web/src/lib/maps/contracts.ts); the matching land masks are generated into `apps/web/src/data/masks/` by `pnpm -F web build:masks`.
+Mondeto runs one map contract per continent (plus the whole world) on **Celo mainnet**. Each map is its own canvas with a different grid size and land area. New wallets are auto-assigned to the current "active" map (the lowest-id map whose average pixel price is below `NEXT_PUBLIC_MAP_THRESHOLD_USD`, default `$2`); the pointer advances automatically as each map fills. Existing wallets keep their sticky home (persisted to `localStorage`). All contracts and their grid dimensions live in [`apps/web/src/lib/maps/contracts.ts`](apps/web/src/lib/maps/contracts.ts); the matching land masks are generated into `apps/web/src/data/masks/` by `pnpm -F web build:masks`. `ChainGuard` keeps wallets on Celo mainnet.
 
-> **Test branch:** this branch points the app at the full continent lineup on **Celo Sepolia** and pins `ChainGuard` / read client to Sepolia. The production (Celo mainnet) registry and the production/staging split must be restored before merging to `main`.
-
-### Celo Sepolia — world + continents
+### Celo mainnet — world + continents
 
 | ID | Map | Grid | Land px | Proxy |
 |----|-----|------|---------|-------|
-| 0 | World | 170×100 | 5,622 | [`0x44bA167119355C8397C855756C2581B0771393D7`](https://celo-sepolia.blockscout.com/address/0x44bA167119355C8397C855756C2581B0771393D7) |
-| 1 | Africa | 127×134 | 8,806 | [`0x67F48829b8CaA06C89Ea010521548CF67E4F5c09`](https://celo-sepolia.blockscout.com/address/0x67F48829b8CaA06C89Ea010521548CF67E4F5c09) |
-| 2 | Asia | 158×107 | 6,208 | [`0xc489709234A9a847C56a6248E6A7e51d5AC4f78F`](https://celo-sepolia.blockscout.com/address/0xc489709234A9a847C56a6248E6A7e51d5AC4f78F) |
-| 3 | Europe | 160×107 | 7,293 | [`0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9`](https://celo-sepolia.blockscout.com/address/0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9) |
-| 4 | North America | 159×107 | 5,497 | [`0x7eDC67EA2925510512242A8e0985B4db1D001163`](https://celo-sepolia.blockscout.com/address/0x7eDC67EA2925510512242A8e0985B4db1D001163) |
-| 5 | South America | 115×147 | 6,865 | [`0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2`](https://celo-sepolia.blockscout.com/address/0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2) |
-| 6 | Oceania | 158×107 | 4,425 | [`0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D`](https://celo-sepolia.blockscout.com/address/0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D) |
-| 7 | Antarctica | 145×117 | 9,115 | [`0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2`](https://celo-sepolia.blockscout.com/address/0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2) |
+| 0 | World | 170×100 | 5,622 | [`0x44bA167119355C8397C855756C2581B0771393D7`](https://celoscan.io/address/0x44bA167119355C8397C855756C2581B0771393D7) |
+| 1 | Africa | 127×134 | 8,806 | [`0x67F48829b8CaA06C89Ea010521548CF67E4F5c09`](https://celoscan.io/address/0x67F48829b8CaA06C89Ea010521548CF67E4F5c09) |
+| 2 | Asia | 158×107 | 6,208 | [`0xc489709234A9a847C56a6248E6A7e51d5AC4f78F`](https://celoscan.io/address/0xc489709234A9a847C56a6248E6A7e51d5AC4f78F) |
+| 3 | Europe | 160×107 | 7,293 | [`0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9`](https://celoscan.io/address/0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9) |
+| 4 | North America | 159×107 | 5,497 | [`0x7eDC67EA2925510512242A8e0985B4db1D001163`](https://celoscan.io/address/0x7eDC67EA2925510512242A8e0985B4db1D001163) |
+| 5 | South America | 115×147 | 6,865 | [`0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2`](https://celoscan.io/address/0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2) |
+| 6 | Oceania | 158×107 | 4,425 | [`0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D`](https://celoscan.io/address/0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D) |
+| 7 | Antarctica | 145×117 | 9,115 | [`0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2`](https://celoscan.io/address/0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2) |
 
 Implementation (logic) contracts behind each UUPS proxy:
 

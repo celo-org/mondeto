@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { useAccount } from 'wagmi'
-import { celoSepolia } from 'viem/chains'
+import { celo } from 'viem/chains'
 import { useMaps } from '@/hooks/useMaps'
 import { getMapContractById, type ChainId, type MapSlug } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
@@ -30,7 +30,7 @@ export interface MapMeta {
 export function useCurrentMapMeta(): MapMeta {
   const { currentMapId } = useMaps()
   const { chainId } = useAccount()
-  const effectiveChain = (chainId ?? celoSepolia.id) as ChainId
+  const effectiveChain = (chainId ?? celo.id) as ChainId
 
   return useMemo<MapMeta>(() => {
     const contract = getMapContractById(currentMapId, effectiveChain)

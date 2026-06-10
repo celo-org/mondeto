@@ -1,5 +1,5 @@
 import { createPublicClient, fallback, http } from 'viem'
-import { celoSepolia } from 'viem/chains'
+import { celo } from 'viem/chains'
 
 /**
  * Optional authenticated Forno endpoint. When unset, viem falls back to
@@ -39,14 +39,13 @@ export const celoSepoliaTransport = http()
 /**
  * The chain we read from for public (no-wallet) on-chain calls.
  *
- * TEST BRANCH: pinned to Celo Sepolia to match the continent registry in
- * `lib/maps/contracts.ts`. Hooks call
+ * Pinned to Celo mainnet, where the continent registry in
+ * `lib/maps/contracts.ts` is deployed. Hooks call
  * `usePublicClient({ chainId: READ_CHAIN_ID })` so a read client is always
  * available — even when no wallet is connected — which keeps the map,
  * leaderboard, and analytics queries working for anonymous visitors.
- * Production mainnet must be restored before merging.
  */
-export const READ_CHAIN = celoSepolia
+export const READ_CHAIN = celo
 export const READ_CHAIN_ID = READ_CHAIN.id
 
 /**
@@ -54,5 +53,5 @@ export const READ_CHAIN_ID = READ_CHAIN.id
  */
 export const fallbackReadClient = createPublicClient({
   chain: READ_CHAIN,
-  transport: celoSepoliaTransport,
+  transport: celoTransport,
 })
