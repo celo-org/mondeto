@@ -22,9 +22,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '../../..')
 
 const SOURCES = [
-  { slug: 'world',  path: 'apps/contracts/map/land_mask.json' },
-  { slug: 'africa', path: 'apps/contracts/map/continents/africa.json' },
-  { slug: 'europe', path: 'apps/contracts/map/continents/europe.json' },
+  { slug: 'world',         path: 'apps/contracts/map/land_mask.json' },
+  { slug: 'africa',        path: 'apps/contracts/map/continents/africa.json' },
+  { slug: 'antarctica',    path: 'apps/contracts/map/continents/antarctica.json' },
+  { slug: 'asia',          path: 'apps/contracts/map/continents/asia.json' },
+  { slug: 'europe',        path: 'apps/contracts/map/continents/europe.json' },
+  { slug: 'north-america', path: 'apps/contracts/map/continents/north-america.json' },
+  { slug: 'oceania',       path: 'apps/contracts/map/continents/oceania.json' },
+  { slug: 'south-america', path: 'apps/contracts/map/continents/south-america.json' },
 ]
 
 /**

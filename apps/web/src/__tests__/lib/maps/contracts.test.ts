@@ -9,10 +9,19 @@ import {
 } from '@/lib/maps/contracts'
 
 describe('contracts registry', () => {
-  it('exposes the three Sepolia continent maps', () => {
+  it('exposes the full world + continent lineup on Sepolia', () => {
     const list = getMapsForChain(celoSepolia.id)
-    expect(list).toHaveLength(3)
-    expect(list.map((m) => m.slug)).toEqual(['world', 'africa', 'europe'])
+    expect(list).toHaveLength(8)
+    expect(list.map((m) => m.slug)).toEqual([
+      'world',
+      'africa',
+      'asia',
+      'europe',
+      'north-america',
+      'south-america',
+      'oceania',
+      'antarctica',
+    ])
   })
 
   it('returns Sepolia maps in ascending id order', () => {
@@ -39,8 +48,9 @@ describe('contracts registry', () => {
     expect(byId(0).height).toBe(100)
     expect(byId(1).width).toBe(127)
     expect(byId(1).height).toBe(134)
-    expect(byId(2).width).toBe(160)
-    expect(byId(2).height).toBe(107)
+    expect(byId(7).slug).toBe('antarctica')
+    expect(byId(7).width).toBe(145)
+    expect(byId(7).height).toBe(117)
   })
 
   it('getContractByMapId returns the matching address for a known map', () => {

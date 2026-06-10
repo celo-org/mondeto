@@ -4,12 +4,17 @@
  * Each entry is a pre-expanded Uint8Array (1 = land, 0 = water) plus the
  * map's grid width/height/land count. The masks are generated from
  * apps/contracts/map/*.json by `apps/web/scripts/build-masks.mjs`; re-run
- * the script when the SC dev regenerates a continent.
+ * the script (`pnpm -F web build:masks`) when the SC dev regenerates a map.
  */
 
-import * as worldData  from '@/data/masks/world'
-import * as africaData from '@/data/masks/africa'
-import * as europeData from '@/data/masks/europe'
+import * as worldData        from '@/data/masks/world'
+import * as africaData       from '@/data/masks/africa'
+import * as antarcticaData   from '@/data/masks/antarctica'
+import * as asiaData         from '@/data/masks/asia'
+import * as europeData       from '@/data/masks/europe'
+import * as northAmericaData from '@/data/masks/north-america'
+import * as oceaniaData      from '@/data/masks/oceania'
+import * as southAmericaData from '@/data/masks/south-america'
 import type { MapSlug } from './contracts'
 
 export interface MaskData {
@@ -19,32 +24,31 @@ export interface MaskData {
   mask: Uint8Array
 }
 
+function toMaskData(d: {
+  WIDTH: number
+  HEIGHT: number
+  LAND_COUNT: number
+  LAND_MASK: Uint8Array
+}): MaskData {
+  return { width: d.WIDTH, height: d.HEIGHT, landCount: d.LAND_COUNT, mask: d.LAND_MASK }
+}
+
 const REGISTRY: Partial<Record<MapSlug, MaskData>> = {
-  world: {
-    width: worldData.WIDTH,
-    height: worldData.HEIGHT,
-    landCount: worldData.LAND_COUNT,
-    mask: worldData.LAND_MASK,
-  },
-  africa: {
-    width: africaData.WIDTH,
-    height: africaData.HEIGHT,
-    landCount: africaData.LAND_COUNT,
-    mask: africaData.LAND_MASK,
-  },
-  europe: {
-    width: europeData.WIDTH,
-    height: europeData.HEIGHT,
-    landCount: europeData.LAND_COUNT,
-    mask: europeData.LAND_MASK,
-  },
+  world: toMaskData(worldData),
+  africa: toMaskData(africaData),
+  antarctica: toMaskData(antarcticaData),
+  asia: toMaskData(asiaData),
+  europe: toMaskData(europeData),
+  'north-america': toMaskData(northAmericaData),
+  oceania: toMaskData(oceaniaData),
+  'south-america': toMaskData(southAmericaData),
 }
 
 /**
  * Look up the land mask data for a given map slug.
  *
- * Throws when the slug isn't registered. Add the SC dev's next continent
- * here once they ship its deploy + JSON.
+ * Throws when the slug isn't registered — add the SC dev's next map here
+ * once they ship its deploy + JSON.
  */
 export function getMaskData(slug: MapSlug): MaskData {
   const data = REGISTRY[slug]
