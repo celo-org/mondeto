@@ -169,10 +169,21 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
     // shape floating in the ocean.
     const minScale = useMemo(() => Math.max(1, fitScale * 0.75), [fitScale])
 
+    // Open already zoomed in far enough to select pixels (paint mode), so
+    // the player can start claiming immediately instead of having to zoom
+    // first. We open a notch past PAINT_SCALE for a comfortable tap target;
+    // if the whole map already fills the screen above that (small map on a
+    // big viewport), keep the fit view. They can pinch out to minScale for
+    // the overview.
+    const initialScale = useMemo(
+      () => Math.max(fitScale, PAINT_SCALE + 1),
+      [fitScale],
+    )
+
     // Remount the TransformWrapper when the active map slug changes or
-    // when the fit scale shifts meaningfully (e.g. desktop resize). A
+    // when the initial scale shifts meaningfully (e.g. desktop resize). A
     // stable key for the same map keeps in-session pan/zoom state.
-    const transformKey = `${slug}:${Math.round(fitScale * 10)}`
+    const transformKey = `${slug}:${Math.round(initialScale * 10)}`
 
     const pixelCanvasRef = useRef<HTMLCanvasElement | null>(null)
     const selectionCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -274,7 +285,7 @@ const WorldCanvas = forwardRef<WorldCanvasRef, WorldCanvasProps>(
           key={transformKey}
           minScale={minScale}
           maxScale={40}
-          initialScale={fitScale}
+          initialScale={initialScale}
           wheel={{ step: 2 }}
           pinch={{ step: 5 }}
           // A single tap now zooms in toward the tapped point (see

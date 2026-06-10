@@ -79,10 +79,16 @@ export function writeGlobalSnapshotCache(snapshots: MapSnapshot[]): void {
 }
 
 // Read at most this many maps at once. Each getPixelBatch returns every land
-// pixel of a ~17k-cell grid, so firing all maps in parallel can overwhelm a
+// pixel of a ~17k-cell grid (the bigger continents return a few hundred KB
+// of packed records), so firing all maps in parallel can overwhelm a
 // constrained RPC (notably MiniPay's injected provider) and make them all
-// fail. Batching keeps peak pressure bounded.
-const READ_CONCURRENCY = 4
+// fail. A low concurrency + per-map retry keeps peak pressure bounded while
+// still getting every map to load.
+const READ_CONCURRENCY = 3
+const PER_MAP_ATTEMPTS = 3
+const RETRY_DELAY_MS = 700
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -103,9 +109,11 @@ async function mapWithConcurrency<T, R>(
 }
 
 /**
- * Fetch every revealed map's snapshot (cache-first). One bad map yields an
- * empty snapshot for that map (so a single failure doesn't blank the whole
- * board), but the result is only cached when ALL maps loaded cleanly — a
+ * Fetch every revealed map's snapshot (cache-first). Each map is retried a
+ * few times before giving up (so a transient RPC hiccup on one of the heavy
+ * reads doesn't drop that map's owners from the board), and one map that
+ * ultimately fails yields an empty snapshot rather than blanking the whole
+ * board. The result is only cached when ALL maps loaded cleanly — a
  * partial/failed read must not poison the 30s cache and leave the global
  * board empty even after the user's purchases have landed. Returns the
  * snapshots in revealed-map order.
@@ -120,20 +128,27 @@ export async function fetchGlobalSnapshots(
   let anyFailed = false
   const snapshots = await mapWithConcurrency(revealed, READ_CONCURRENCY, async (m) => {
     const { mask } = getMaskData(m.slug)
-    try {
-      const data = await fetchAllPixelsFromContract(
-        read,
-        m.address,
-        m.width,
-        m.height,
-        mask,
-      )
-      return pixelViewToMapSnapshot(data, m.id, m.revealed, m.width, mask)
-    } catch (e) {
-      anyFailed = true
-      console.warn(`Failed to load map ${m.id} for cross-map board:`, e)
-      return pixelViewToMapSnapshot([], m.id, m.revealed, m.width, mask)
+    for (let attempt = 1; attempt <= PER_MAP_ATTEMPTS; attempt++) {
+      try {
+        const data = await fetchAllPixelsFromContract(
+          read,
+          m.address,
+          m.width,
+          m.height,
+          mask,
+        )
+        return pixelViewToMapSnapshot(data, m.id, m.revealed, m.width, mask)
+      } catch (e) {
+        if (attempt === PER_MAP_ATTEMPTS) {
+          anyFailed = true
+          console.warn(`Failed to load map ${m.id} for cross-map board after ${attempt} tries:`, e)
+          return pixelViewToMapSnapshot([], m.id, m.revealed, m.width, mask)
+        }
+        await delay(RETRY_DELAY_MS * attempt)
+      }
     }
+    // Unreachable, but satisfies the return type.
+    return pixelViewToMapSnapshot([], m.id, m.revealed, m.width, mask)
   })
 
   // Only cache a complete, clean read. A partial set is shown once but
