@@ -56,6 +56,14 @@ export default function RanksPage() {
   ]
 
   useEffect(() => {
+    // The GLOBAL board comes from /api/global-board (server-side), so it does
+    // NOT need this on-device single-map read. Skipping it for global is also
+    // important: that read can hang on MiniPay's RPC, and the board display
+    // must not be gated behind it.
+    if (isGlobal) {
+      setLoading(false)
+      return
+    }
     async function load() {
       setLoading(true)
       let data: PixelView[] = []
@@ -119,7 +127,7 @@ export default function RanksPage() {
       setLoading(false)
     }
     load()
-  }, [publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
+  }, [isGlobal, publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
 
   // A specific map shows that map's board (from the pixelData loaded above);
   // GLOBAL shows the normalized cross-map board. `homeMapId` is the id the
@@ -139,7 +147,9 @@ export default function RanksPage() {
   const currentData = dataMap[activeTab]
   const displayData = showAll ? currentData : currentData.slice(0, 20)
   const hasOwned = currentData.length > 0
-  const isLoading = loading || boardsLoading
+  // The global board never waits on the local single-map read (it comes from
+  // the server endpoint), so don't let a slow/hanging local read block it.
+  const isLoading = (isGlobal ? false : loading) || boardsLoading
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
