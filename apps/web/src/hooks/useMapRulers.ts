@@ -1,13 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePublicClient } from 'wagmi'
-import { fetchAllPixelsFromContract } from '@/lib/contractReads'
-import { leaderboardMostPixels } from '@/lib/maps/leaderboards'
-import { fetchGlobalSnapshots } from '@/lib/maps/snapshots'
 import type { Address, MapId } from '@/lib/maps/types'
-
-type ReadContractFn = Parameters<typeof fetchAllPixelsFromContract>[0]
 
 export interface MapRulersResult {
   /** mapId -> the rank-1 holder of that map's LAND board, lowercased, or
@@ -22,32 +16,23 @@ export interface MapRulersResult {
  * be a king, queen, empress, …). Used for the live crown on the profile and
  * anywhere a map's current leader is shown.
  *
- * Reuses the shared 30s cross-map snapshot cache (`fetchGlobalSnapshots`), so
- * this piggybacks on the global leaderboard's fetch when both are on screen.
+ * Reads from the server-side cross-map endpoint (`/api/global-board`), which
+ * already computes per-map rulers — reliable even on MiniPay, where reading
+ * every map from the device was failing.
  */
 export function useMapRulers(): MapRulersResult {
-  const publicClient = usePublicClient()
   const [rulers, setRulers] = useState<Record<MapId, Address | null>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!publicClient) return
     let cancelled = false
     setLoading(true)
 
-    const read = publicClient.readContract.bind(
-      publicClient,
-    ) as ReadContractFn
-
-    fetchGlobalSnapshots(read)
-      .then((snapshots) => {
+    fetch('/api/global-board')
+      .then((r) => r.json())
+      .then((d) => {
         if (cancelled) return
-        const next: Record<MapId, Address | null> = {}
-        for (const snap of snapshots) {
-          const top = leaderboardMostPixels(snap, 1)
-          next[snap.meta.id] = top.length > 0 ? top[0].address.toLowerCase() : null
-        }
-        setRulers(next)
+        setRulers((d.rulers ?? {}) as Record<MapId, Address | null>)
         setLoading(false)
       })
       .catch(() => {
@@ -58,7 +43,7 @@ export function useMapRulers(): MapRulersResult {
     return () => {
       cancelled = true
     }
-  }, [publicClient])
+  }, [])
 
   return { rulers, loading }
 }

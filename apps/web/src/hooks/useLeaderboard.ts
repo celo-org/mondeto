@@ -2,14 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PixelView } from '@/lib/mock'
-import { useReadClient } from '@/hooks/useReadClient'
-import { fetchAllPixelsFromContract } from '@/lib/contractReads'
-import { allGlobalLeaderboards, allLeaderboards } from '@/lib/maps/leaderboards'
+import { allLeaderboards } from '@/lib/maps/leaderboards'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
-import { fetchGlobalSnapshots } from '@/lib/maps/snapshots'
-import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
+import type { LeaderEntry, MapId } from '@/lib/maps/types'
 import { generateUsername } from '@/lib/username'
 
 export type LeaderboardTab = 'AREA' | 'EMPIRE' | 'TYCOONS'
@@ -102,11 +99,6 @@ export function useLeaderboard(
 ): BoardSet {
   const scope = options.scope ?? 'local'
   const homeMapId = options.homeMapId ?? 0
-  // Guaranteed-defined read client. The global board must populate for
-  // anonymous visitors and right after the app wakes — wagmi's
-  // usePublicClient is undefined in those windows, which previously left the
-  // GLOBAL board stuck on "no claims yet".
-  const publicClient = useReadClient()
 
   const localSnapshot = useMemo(() => {
     const home = getMapContractById(homeMapId)
@@ -131,9 +123,15 @@ export function useLeaderboard(
   }, [localSnapshot, profilesMap])
 
   // --- Global path -------------------------------------------------------
-  const [globalSnapshots, setGlobalSnapshots] = useState<MapSnapshot[] | null>(
-    null,
-  )
+  // The cross-map board is computed server-side (/api/global-board) — reading
+  // every map's full pixel state from the phone was unreliable on MiniPay's
+  // RPC. The client just fetches the ranked entries and decorates them.
+  interface GlobalRaw {
+    area: LeaderEntry[]
+    empire: LeaderEntry[]
+    tycoons: LeaderEntry[]
+  }
+  const [globalRaw, setGlobalRaw] = useState<GlobalRaw | null>(null)
   const [globalLoading, setGlobalLoading] = useState(false)
 
   useEffect(() => {
@@ -141,14 +139,15 @@ export function useLeaderboard(
     let cancelled = false
 
     setGlobalLoading(true)
-    const read = publicClient.readContract.bind(
-      publicClient,
-    ) as Parameters<typeof fetchAllPixelsFromContract>[0]
-
-    fetchGlobalSnapshots(read)
-      .then((snapshots) => {
+    fetch('/api/global-board')
+      .then((r) => r.json())
+      .then((d) => {
         if (cancelled) return
-        setGlobalSnapshots(snapshots)
+        setGlobalRaw({
+          area: d.area ?? [],
+          empire: d.empire ?? [],
+          tycoons: d.tycoons ?? [],
+        })
         setGlobalLoading(false)
       })
       .catch(() => {
@@ -159,33 +158,29 @@ export function useLeaderboard(
     return () => {
       cancelled = true
     }
-  }, [scope, publicClient])
+  }, [scope])
 
   const globalBoards = useMemo<BoardSet>(() => {
-    // Treat "haven't fetched yet" as loading too, so a slow cross-map read
-    // (8 maps over a constrained RPC) reads as loading rather than flashing
-    // the empty "no claims yet" state before the snapshots arrive.
-    const stillLoading = globalLoading || globalSnapshots === null
-    const snapshots = globalSnapshots ?? []
-    if (snapshots.length === 0) {
+    // Treat "haven't fetched yet" as loading too, so the first fetch reads as
+    // loading rather than flashing the empty "no claims yet" state.
+    const stillLoading = globalLoading || globalRaw === null
+    if (!globalRaw) {
       return { area: [], empire: [], tycoons: [], loading: stillLoading }
     }
-    const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
-      allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
     return {
       // Global AREA is the normalized territory-share board, so its value is
       // a fraction rendered as a percentage (not a raw pixel count).
-      area: decorate(mostPixels, '', formatPercent, profilesMap),
-      empire: decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap),
+      area: decorate(globalRaw.area, '', formatPercent, profilesMap),
+      empire: decorate(globalRaw.empire, 'px', (v) => String(v), profilesMap),
       tycoons: decorate(
-        mostExpensivePixel,
+        globalRaw.tycoons,
         'USDT',
         formatUSDTFromNumber,
         profilesMap,
       ),
       loading: stillLoading,
     }
-  }, [globalSnapshots, globalLoading, profilesMap])
+  }, [globalRaw, globalLoading, profilesMap])
 
   return scope === 'global' ? globalBoards : localBoards
 }
