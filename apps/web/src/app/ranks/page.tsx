@@ -30,10 +30,10 @@ export default function RanksPage() {
   // must populate for anonymous users.
   const publicClient = useReadClient()
   const { revealedMaps, currentMapId } = useMaps()
-  // Which board to show: a specific map id, or 'global'. Defaults to the map
-  // the player is currently on, but they can view any map's board (or the
-  // cross-map board) without leaving /ranks.
-  const [boardSel, setBoardSel] = useState<MapId | 'global'>(currentMapId)
+  // Which board to show: 'global' (the cross-map board) or a specific map id.
+  // Defaults to GLOBAL — the headline "who's winning overall" view — and the
+  // player can drill into any single map's board without leaving /ranks.
+  const [boardSel, setBoardSel] = useState<MapId | 'global'>('global')
   const isGlobal = boardSel === 'global'
   // The map whose pixel data + profiles we load. For the global board we still
   // load the current map (its owners' profiles decorate rows; the global hook
@@ -48,10 +48,11 @@ export default function RanksPage() {
   const [loading, setLoading] = useState(true)
 
   // Offer the board selector once there's more than one map to compare.
+  // GLOBAL leads (the default), then each individual map.
   const showSelector = revealedMaps.length > 1
   const selectorOptions = [
-    ...revealedMaps.map((m) => ({ key: String(m.id), label: m.displayName })),
     { key: 'global', label: 'GLOBAL' },
+    ...revealedMaps.map((m) => ({ key: String(m.id), label: m.displayName })),
   ]
 
   useEffect(() => {

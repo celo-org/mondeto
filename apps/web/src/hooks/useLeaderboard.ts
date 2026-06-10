@@ -6,12 +6,9 @@ import { useReadClient } from '@/hooks/useReadClient'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { allGlobalLeaderboards, allLeaderboards } from '@/lib/maps/leaderboards'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
-import { getMapContractById, getRevealedMaps } from '@/lib/maps/contracts'
+import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
-import {
-  readGlobalSnapshotCache,
-  writeGlobalSnapshotCache,
-} from '@/lib/maps/snapshots'
+import { fetchGlobalSnapshots } from '@/lib/maps/snapshots'
 import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { generateUsername } from '@/lib/username'
 
@@ -143,58 +140,26 @@ export function useLeaderboard(
     if (scope !== 'global') return
     let cancelled = false
 
-    const revealed = getRevealedMaps()
-    // If only one map is revealed there's nothing extra to fetch — the local
-    // snapshot IS the global snapshot. Caller is expected to hide the toggle
-    // in that case, but we stay correct either way.
-    if (revealed.length <= 1) {
-      setGlobalSnapshots([localSnapshot])
-      setGlobalLoading(false)
-      return
-    }
-
-    const cached = readGlobalSnapshotCache()
-    if (cached && cached.length === revealed.length) {
-      setGlobalSnapshots(cached)
-      setGlobalLoading(false)
-      return
-    }
-
-    if (!publicClient) return
     setGlobalLoading(true)
     const read = publicClient.readContract.bind(
       publicClient,
     ) as Parameters<typeof fetchAllPixelsFromContract>[0]
 
-    Promise.all(
-      revealed.map(async (m) => {
-        try {
-          const { mask } = getMaskData(m.slug)
-          const data = await fetchAllPixelsFromContract(
-            read,
-            m.address,
-            m.width,
-            m.height,
-            mask,
-          )
-          return pixelViewToMapSnapshot(data, m.id, m.revealed, m.width, mask)
-        } catch (e) {
-          console.warn(`Failed to load map ${m.id} for global board:`, e)
-          // Empty snapshot so one bad map doesn't kill the whole board.
-          return pixelViewToMapSnapshot([], m.id, m.revealed, m.width, getMaskData(m.slug).mask)
-        }
-      }),
-    ).then((snapshots) => {
-      if (cancelled) return
-      writeGlobalSnapshotCache(snapshots)
-      setGlobalSnapshots(snapshots)
-      setGlobalLoading(false)
-    })
+    fetchGlobalSnapshots(read)
+      .then((snapshots) => {
+        if (cancelled) return
+        setGlobalSnapshots(snapshots)
+        setGlobalLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setGlobalLoading(false)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [scope, publicClient, localSnapshot])
+  }, [scope, publicClient])
 
   const globalBoards = useMemo<BoardSet>(() => {
     const snapshots = globalSnapshots ?? []

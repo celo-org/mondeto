@@ -78,10 +78,37 @@ export function writeGlobalSnapshotCache(snapshots: MapSnapshot[]): void {
   }
 }
 
+// Read at most this many maps at once. Each getPixelBatch returns every land
+// pixel of a ~17k-cell grid, so firing all maps in parallel can overwhelm a
+// constrained RPC (notably MiniPay's injected provider) and make them all
+// fail. Batching keeps peak pressure bounded.
+const READ_CONCURRENCY = 4
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i])
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, worker)
+  await Promise.all(workers)
+  return out
+}
+
 /**
  * Fetch every revealed map's snapshot (cache-first). One bad map yields an
- * empty snapshot rather than failing the whole set. Returns the snapshots
- * in revealed-map order.
+ * empty snapshot for that map (so a single failure doesn't blank the whole
+ * board), but the result is only cached when ALL maps loaded cleanly — a
+ * partial/failed read must not poison the 30s cache and leave the global
+ * board empty even after the user's purchases have landed. Returns the
+ * snapshots in revealed-map order.
  */
 export async function fetchGlobalSnapshots(
   read: ReadContractFn,
@@ -90,24 +117,27 @@ export async function fetchGlobalSnapshots(
   const revealed = getRevealedMaps()
   if (cached && cached.length === revealed.length) return cached
 
-  const snapshots = await Promise.all(
-    revealed.map(async (m) => {
-      const { mask } = getMaskData(m.slug)
-      try {
-        const data = await fetchAllPixelsFromContract(
-          read,
-          m.address,
-          m.width,
-          m.height,
-          mask,
-        )
-        return pixelViewToMapSnapshot(data, m.id, m.revealed, m.width, mask)
-      } catch (e) {
-        console.warn(`Failed to load map ${m.id} for cross-map board:`, e)
-        return pixelViewToMapSnapshot([], m.id, m.revealed, m.width, mask)
-      }
-    }),
-  )
-  writeGlobalSnapshotCache(snapshots)
+  let anyFailed = false
+  const snapshots = await mapWithConcurrency(revealed, READ_CONCURRENCY, async (m) => {
+    const { mask } = getMaskData(m.slug)
+    try {
+      const data = await fetchAllPixelsFromContract(
+        read,
+        m.address,
+        m.width,
+        m.height,
+        mask,
+      )
+      return pixelViewToMapSnapshot(data, m.id, m.revealed, m.width, mask)
+    } catch (e) {
+      anyFailed = true
+      console.warn(`Failed to load map ${m.id} for cross-map board:`, e)
+      return pixelViewToMapSnapshot([], m.id, m.revealed, m.width, mask)
+    }
+  })
+
+  // Only cache a complete, clean read. A partial set is shown once but
+  // re-fetched on the next attempt instead of being frozen for 30s.
+  if (!anyFailed) writeGlobalSnapshotCache(snapshots)
   return snapshots
 }
