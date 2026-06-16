@@ -13,8 +13,13 @@
  * sticky home (persisted to localStorage); only new wallets follow the
  * pointer.
  *
- * The `revealed: false` flag is kept for future paid-access maps and for
- * emergency takedowns.
+ * Which maps are visible is gradual and marketing-driven: the launch shows
+ * only WORLD, and continents open over time. The hardcoded `revealed` flag
+ * is the baseline (WORLD only). It can be overridden at deploy time by the
+ * NEXT_PUBLIC_REVEALED_MAP_IDS env var (comma-separated ids, e.g. "0,1,2"
+ * reveals World + Africa + Asia) so a continent can be opened by changing one
+ * Vercel setting and redeploying — no code change. A future admin board will
+ * manage this; the env var is the bridge until then.
  */
 
 import { celo, celoSepolia } from 'viem/chains'
@@ -70,7 +75,7 @@ const MAPS: readonly MapContract[] = [
     chainId: celo.id,
     width: 127,
     height: 134,
-    revealed: true,
+    revealed: false,
   },
   {
     id: 2,
@@ -80,7 +85,7 @@ const MAPS: readonly MapContract[] = [
     chainId: celo.id,
     width: 158,
     height: 107,
-    revealed: true,
+    revealed: false,
   },
   {
     id: 3,
@@ -90,7 +95,7 @@ const MAPS: readonly MapContract[] = [
     chainId: celo.id,
     width: 160,
     height: 107,
-    revealed: true,
+    revealed: false,
   },
   {
     id: 4,
@@ -100,7 +105,7 @@ const MAPS: readonly MapContract[] = [
     chainId: celo.id,
     width: 159,
     height: 107,
-    revealed: true,
+    revealed: false,
   },
   {
     id: 5,
@@ -110,7 +115,7 @@ const MAPS: readonly MapContract[] = [
     chainId: celo.id,
     width: 115,
     height: 147,
-    revealed: true,
+    revealed: false,
   },
   {
     id: 6,
@@ -120,7 +125,7 @@ const MAPS: readonly MapContract[] = [
     chainId: celo.id,
     width: 158,
     height: 107,
-    revealed: true,
+    revealed: false,
   },
   {
     id: 7,
@@ -130,7 +135,7 @@ const MAPS: readonly MapContract[] = [
     chainId: celo.id,
     width: 145,
     height: 117,
-    revealed: true,
+    revealed: false,
   },
 ] as const
 
@@ -143,13 +148,34 @@ export function getRegistry(): readonly MapContract[] {
 }
 
 /**
+ * Optional deploy-time override for which map ids are revealed. When
+ * NEXT_PUBLIC_REVEALED_MAP_IDS is set (e.g. "0,1"), it is the source of
+ * truth and the per-map `revealed` flags are ignored; when unset, the
+ * hardcoded flags apply (WORLD only). Returns null when unset/empty.
+ */
+function revealedIdOverride(): Set<number> | null {
+  const raw =
+    typeof process !== 'undefined'
+      ? process.env.NEXT_PUBLIC_REVEALED_MAP_IDS
+      : undefined
+  if (!raw || raw.trim() === '') return null
+  const ids = raw
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 0)
+  return new Set(ids)
+}
+
+/**
  * Maps visible on the given chain, in stable id order. Pass the wallet's
- * connected chainId.
+ * connected chainId. Honors the NEXT_PUBLIC_REVEALED_MAP_IDS override.
  */
 export function getMapsForChain(chainId: ChainId | undefined): MapContract[] {
   const effective = chainId ?? celo.id
+  const override = revealedIdOverride()
   return getRegistry()
-    .filter((m) => m.chainId === effective && m.revealed)
+    .filter((m) => m.chainId === effective)
+    .filter((m) => (override ? override.has(m.id) : m.revealed))
     .sort((a, b) => a.id - b.id)
 }
 
