@@ -1,8 +1,8 @@
 'use client'
 import React, { useRef, useEffect, useCallback } from 'react'
-import { WIDTH, HEIGHT } from '@/constants/map'
 import { idToXY, pixelId, screenToPixel } from '@/lib/pixelMath'
 import { isLandXY } from '@/lib/landMask'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 
 interface SelectionLayerProps {
   selectedIds: Set<number>
@@ -25,6 +25,7 @@ export default function SelectionLayer({
   onInspectPixel,
   onTapWhileZoomedOut,
 }: SelectionLayerProps) {
+  const { width: WIDTH, height: HEIGHT, mask } = useCurrentMapMeta()
   const interactionRef = useRef<HTMLCanvasElement | null>(null)
   const overlayRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number>(0)
@@ -48,7 +49,7 @@ export default function SelectionLayer({
     }
 
     // Pre-compute positions
-    const positions = Array.from(selectedIds).map(id => idToXY(id))
+    const positions = Array.from(selectedIds).map(id => idToXY(id, WIDTH))
 
     const animate = () => {
       ctx.clearRect(0, 0, WIDTH * S, HEIGHT * S)
@@ -89,7 +90,6 @@ export default function SelectionLayer({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!isPaintMode) return
       const canvas = interactionRef.current
       if (!canvas) return
 
@@ -98,13 +98,15 @@ export default function SelectionLayer({
       longPressFiredRef.current = false
       startPosRef.current = { x: e.clientX, y: e.clientY }
 
-      const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale)
+      // Long-press to inspect only applies once zoomed in (paint mode).
+      if (!isPaintMode) return
+      const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale, WIDTH, HEIGHT)
       if (!pixel) return
 
       longPressTimerRef.current = setTimeout(() => {
         if (!movedRef.current && onInspectPixel) {
           longPressFiredRef.current = true
-          const pid = pixelId(pixel.x, pixel.y)
+          const pid = pixelId(pixel.x, pixel.y, WIDTH)
           onInspectPixel(pid)
         }
       }, 500)
@@ -114,9 +116,7 @@ export default function SelectionLayer({
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!isPaintingRef.current || !isPaintMode) return
-      const canvas = interactionRef.current
-      if (!canvas) return
+      if (!isPaintingRef.current) return
 
       const start = startPosRef.current
       if (start) {
@@ -131,27 +131,34 @@ export default function SelectionLayer({
         }
       }
 
-      // Dragging only marks movement — no pixel selection on drag
-      // Users must click individual pixels to select
+      // Dragging only marks movement — pan is handled by the zoom wrapper.
     },
-    [isPaintMode, scale, onAddPixel],
+    [],
   )
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!isPaintMode) return
-
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current)
         longPressTimerRef.current = null
       }
 
-      if (!longPressFiredRef.current && !movedRef.current) {
-        const canvas = interactionRef.current
-        if (canvas) {
-          const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale)
-          if (pixel && isLandXY(pixel.x, pixel.y)) {
-            onTogglePixel(pixelId(pixel.x, pixel.y))
+      const cleanTap = !longPressFiredRef.current && !movedRef.current
+      const canvas = interactionRef.current
+
+      if (cleanTap && canvas) {
+        const pixel = screenToPixel(e.clientX, e.clientY, canvas, scale, WIDTH, HEIGHT)
+        if (pixel) {
+          if (isPaintMode) {
+            // Zoomed in: a tap selects the land pixel.
+            if (isLandXY(pixel.x, pixel.y, WIDTH, mask)) {
+              onTogglePixel(pixelId(pixel.x, pixel.y, WIDTH))
+            }
+          } else {
+            // Zoomed out: pixels are too small to target, so a tap zooms in
+            // toward that point (one tap instead of double-click) and the
+            // page surfaces a "zoom in to select" hint.
+            onTapWhileZoomedOut?.(pixelId(pixel.x, pixel.y, WIDTH))
           }
         }
       }
@@ -159,7 +166,7 @@ export default function SelectionLayer({
       isPaintingRef.current = false
       startPosRef.current = null
     },
-    [isPaintMode, scale, onTogglePixel],
+    [isPaintMode, scale, onTogglePixel, onTapWhileZoomedOut, mask, WIDTH, HEIGHT],
   )
 
   return (
@@ -178,7 +185,10 @@ export default function SelectionLayer({
           pointerEvents: 'none',
         }}
       />
-      {/* Interaction canvas (handles pointer events) */}
+      {/* Interaction canvas (handles pointer events). Always captures so a
+          tap while zoomed out can trigger the zoom-in hint; clean taps vs
+          pans are distinguished by movement, and pan/pinch still reach the
+          zoom wrapper (we never stopPropagation). */}
       <canvas
         ref={interactionRef}
         width={WIDTH}
@@ -189,7 +199,7 @@ export default function SelectionLayer({
           left: 0,
           width: WIDTH,
           height: HEIGHT,
-          pointerEvents: isPaintMode ? 'auto' : 'none',
+          pointerEvents: 'auto',
           opacity: 0,
         }}
         onPointerDown={handlePointerDown}

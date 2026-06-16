@@ -2,8 +2,9 @@
 
 import React from 'react'
 import type { PixelView } from '@/lib/mock'
-import { formatUSDT } from '@/lib/colorUtils'
+import { formatUSDT, ownerDefaultColor } from '@/lib/colorUtils'
 import { generateUsername } from '@/lib/username'
+import { ZERO_ADDRESS } from '@/constants/map'
 
 interface PixelInfoPanelProps {
   visible: boolean
@@ -30,6 +31,12 @@ export default function PixelInfoPanel({
   const firstLetterColor = pixel.label ? 'white' : 'var(--text-muted)'
   const prevPrice = pixel.currentPrice / 2n
   const ownerDisplay = pixel.label || generateUsername(pixel.owner)
+  const isOwned = pixel.owner !== ZERO_ADDRESS
+  // Owned pixels show the owner's color (on-chain, or the deterministic
+  // per-address fallback when unset); truly unowned land stays cream.
+  const avatarColor = isOwned
+    ? pixel.color || ownerDefaultColor(pixel.owner)
+    : '#e0d8ce'
 
   return (
     <div
@@ -73,7 +80,7 @@ export default function PixelInfoPanel({
             width: 40,
             height: 40,
             borderRadius: 11,
-            background: pixel.color || '#e0d8ce',
+            background: avatarColor,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

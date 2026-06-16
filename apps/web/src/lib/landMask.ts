@@ -1,66 +1,71 @@
-import { LAND_MASK as STATIC_MASK } from '@/data/landMask'
-import { WIDTH, TOTAL_PIXELS } from '@/constants/map'
+/**
+ * Per-map land-mask lookups.
+ *
+ * `isLand(id, mask)` checks the bit-packed Uint8Array (1 = land, 0 = water)
+ * returned by `getMaskData(slug)` in `@/lib/maps/masks`. Components should
+ * source the mask from `useCurrentMapMeta()` instead of importing a global.
+ *
+ * `fetchLandMaskFromContract` is kept for the dev/test-contract page,
+ * which reads the on-chain mask for an arbitrary deployed contract to
+ * cross-check the bundled mask against the deployed bytes.
+ */
 
-// Live mask from contract (populated by fetchLandMaskFromContract)
-let liveMask: Uint8Array | null = null
-
-export function isLand(id: number): boolean {
-  const mask = liveMask ?? STATIC_MASK
+export function isLand(id: number, mask: Uint8Array): boolean {
   return mask[id] === 1
 }
 
-export function isLandXY(x: number, y: number): boolean {
-  const mask = liveMask ?? STATIC_MASK
-  return mask[y * WIDTH + x] === 1
+export function isLandXY(
+  x: number,
+  y: number,
+  width: number,
+  mask: Uint8Array,
+): boolean {
+  return mask[y * width + x] === 1
 }
 
 /**
- * Fetch the land mask from the deployed contract.
- * Reads all 67 uint256 words via landMask(i) and decodes the bit-packed format.
- * Call once at app startup. Falls back to static mask on failure.
+ * Fetch the land mask from a deployed contract. Returns the unpacked
+ * Uint8Array. Falls back to throwing on failure — callers can decide
+ * whether to use the bundled mask instead.
  */
 export async function fetchLandMaskFromContract(
   readContract: (args: { address: `0x${string}`; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }) => Promise<unknown>,
   contractAddress: `0x${string}`,
   abi: readonly unknown[],
-): Promise<void> {
-  try {
-    const wordCount = Math.ceil(TOTAL_PIXELS / 256)
-    const mask = new Uint8Array(TOTAL_PIXELS)
+  width: number,
+  height: number,
+): Promise<Uint8Array> {
+  const totalPixels = width * height
+  const wordCount = Math.ceil(totalPixels / 256)
+  const mask = new Uint8Array(totalPixels)
 
-    // Try getLandMask() first (single call), fall back to per-word reads
-    let words: bigint[]
-    try {
-      const result = await readContract({
+  let words: bigint[]
+  try {
+    const result = await readContract({
+      address: contractAddress,
+      abi,
+      functionName: 'getLandMask',
+      args: [],
+    }) as bigint[]
+    words = result
+  } catch {
+    const promises = Array.from({ length: wordCount }, (_, i) =>
+      readContract({
         address: contractAddress,
         abi,
-        functionName: 'getLandMask',
-        args: [],
-      }) as bigint[]
-      words = result
-    } catch {
-      const promises = Array.from({ length: wordCount }, (_, i) =>
-        readContract({
-          address: contractAddress,
-          abi,
-          functionName: 'landMask',
-          args: [BigInt(i)],
-        }) as Promise<bigint>
-      )
-      words = await Promise.all(promises)
-    }
-
-    // Decode bit-packed words into per-pixel boolean array
-    for (let pixelId = 0; pixelId < TOTAL_PIXELS; pixelId++) {
-      const wordIdx = Math.floor(pixelId / 256)
-      const bitIdx = pixelId % 256
-      if (wordIdx < words.length && (words[wordIdx] >> BigInt(bitIdx)) & 1n) {
-        mask[pixelId] = 1
-      }
-    }
-
-    liveMask = mask
-  } catch (e) {
-    console.warn('Failed to fetch land mask from contract, using static fallback:', e)
+        functionName: 'landMask',
+        args: [BigInt(i)],
+      }) as Promise<bigint>
+    )
+    words = await Promise.all(promises)
   }
+
+  for (let pixelId = 0; pixelId < totalPixels; pixelId++) {
+    const wordIdx = Math.floor(pixelId / 256)
+    const bitIdx = pixelId % 256
+    if (wordIdx < words.length && (words[wordIdx] >> BigInt(bitIdx)) & 1n) {
+      mask[pixelId] = 1
+    }
+  }
+  return mask
 }

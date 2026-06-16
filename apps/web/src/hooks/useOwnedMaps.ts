@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain, type ChainId } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
 import { READ_CHAIN_ID, fallbackReadClient } from '@/lib/chain'
 import type { MapId } from '@/lib/maps/types'
 
@@ -65,8 +66,8 @@ function writeCache(key: string, counts: Record<MapId, number>): void {
 /**
  * Per-map pixel ownership count for the connected wallet.
  *
- * Scans every registered map on the env's primary read chain
- * (`READ_CHAIN_ID` — mainnet in production, Sepolia on staging), counting
+ * Scans every registered map on the primary read chain (`READ_CHAIN_ID` —
+ * Celo mainnet), counting
  * pixels owned by the wallet. Used by `useMaps` to drop returning players
  * back on the map where they own the most pixels — the "1 user -> 1 map"
  * UX without a server-side index.
@@ -126,7 +127,14 @@ export function useOwnedMaps(): OwnedMapsResult {
       await Promise.all(
         maps.map(async (m) => {
           try {
-            const pixels = await fetchAllPixelsFromContract(read, m.address)
+            const { mask } = getMaskData(m.slug)
+            const pixels = await fetchAllPixelsFromContract(
+              read,
+              m.address,
+              m.width,
+              m.height,
+              mask,
+            )
             let owned = 0
             for (const px of pixels) {
               if (px.owner.toLowerCase() === addrLower) owned++

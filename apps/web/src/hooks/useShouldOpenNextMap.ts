@@ -5,7 +5,9 @@ import { useAccount, usePublicClient } from 'wagmi'
 import type { PublicClient } from 'viem'
 import { celo } from 'viem/chains'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
-import { getMapsForChain, type ChainId } from '@/lib/maps/contracts'
+import { getMapsForChain, type ChainId, type MapContract } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
+import { useRevealedMapIds } from '@/hooks/useRevealedMapIds'
 import { shouldOpenNextMap } from '@/lib/maps/assignment'
 import type {
   MapId,
@@ -13,7 +15,6 @@ import type {
   OpenNextDecision,
   PixelState,
 } from '@/lib/maps/types'
-import { WIDTH } from '@/constants/map'
 import { isLand } from '@/lib/landMask'
 
 const PIXEL_PRICE_USDT_DECIMALS = 6
@@ -70,17 +71,21 @@ function readThresholdUsd(): number {
 }
 
 /**
- * Adapter: PixelView[] (row-major over the WIDTH×HEIGHT grid) -> PixelState[].
+ * Adapter: PixelView[] (row-major over the map's grid) -> PixelState[].
+ * The map's grid width and bundled mask come from the per-map MapContract
+ * + MaskData so x/y math matches each continent's deployed dimensions.
  */
 export function pixelViewsToStates(
   views: Array<{ owner: string; currentPrice: bigint }>,
+  width: number,
+  mask: Uint8Array,
 ): PixelState[] {
   const out: PixelState[] = []
   for (let i = 0; i < views.length; i++) {
     const v = views[i]
-    const x = i % WIDTH
-    const y = Math.floor(i / WIDTH)
-    const land = isLand(i)
+    const x = i % width
+    const y = Math.floor(i / width)
+    const land = isLand(i, mask)
     out.push({
       id: i,
       x,
@@ -128,17 +133,25 @@ function parseCache(raw: string | null): CachedShape | null {
 
 async function fetchSnapshotForMap(
   publicClient: PublicClient,
-  address: `0x${string}`,
+  contract: MapContract,
 ): Promise<Array<{ owner: string; currentPrice: bigint }>> {
   const readContract = publicClient.readContract.bind(publicClient) as Parameters<
     typeof fetchAllPixelsFromContract
   >[0]
-  return fetchAllPixelsFromContract(readContract, address)
+  const { mask } = getMaskData(contract.slug)
+  return fetchAllPixelsFromContract(
+    readContract,
+    contract.address,
+    contract.width,
+    contract.height,
+    mask,
+  )
 }
 
 export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
   const publicClient = usePublicClient()
   const { chainId } = useAccount()
+  const revealedIds = useRevealedMapIds()
   const [state, setState] = useState<ShouldOpenNextMapResult>({
     loading: true,
     error: null,
@@ -175,13 +188,14 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
       } catch {}
 
       try {
-        const maps = getMapsForChain(effectiveChain)
+        const maps = getMapsForChain(effectiveChain, revealedIds)
         const snapshots: MapSnapshot[] = []
         const summaries: MapFillSummary[] = []
 
         for (const m of maps) {
-          const views = await fetchSnapshotForMap(publicClient!, m.address)
-          const pixels = pixelViewsToStates(views)
+          const views = await fetchSnapshotForMap(publicClient!, m)
+          const { mask } = getMaskData(m.slug)
+          const pixels = pixelViewsToStates(views, m.width, mask)
           snapshots.push({
             meta: { id: m.id, open: true },
             pixels,
@@ -229,7 +243,7 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
     return () => {
       cancelled = true
     }
-  }, [publicClient, chainId])
+  }, [publicClient, chainId, revealedIds])
 
   return state
 }

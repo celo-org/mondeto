@@ -1,35 +1,46 @@
 'use client'
 
-import type { LeaderboardTab } from '@/hooks/useLeaderboard'
+import type { LeaderboardScope, LeaderboardTab } from '@/hooks/useLeaderboard'
 
 interface LeaderboardTabsProps {
   activeTab: LeaderboardTab
   onTabChange: (tab: LeaderboardTab) => void
+  scope?: LeaderboardScope
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
 const BRAND_LIME = '#A7FF05'
 
-const tabConfig: { key: LeaderboardTab; label: string; description: string }[] = [
+const tabConfig: {
+  key: LeaderboardTab
+  label: string
+  description: string
+  globalDescription: string
+}[] = [
   {
     key: 'AREA',
     label: 'LAND',
     description: 'Who owns the most pixels on the map.',
+    globalDescription: 'Most territory owned across all maps (share of each board).',
   },
   {
     key: 'EMPIRE',
     label: 'EMPIRE',
     description: 'Biggest connected empire.',
+    globalDescription: 'Biggest connected empire on any single map.',
   },
   {
     key: 'TYCOONS',
     label: 'TYCOONS',
     description: 'Who holds the single most valuable pixel.',
+    globalDescription: 'Single most valuable pixel held anywhere.',
   },
 ]
 
-export default function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardTabsProps) {
+export default function LeaderboardTabs({ activeTab, onTabChange, scope = 'local' }: LeaderboardTabsProps) {
   const active = tabConfig.find(t => t.key === activeTab)
+  const activeDescription =
+    active && (scope === 'global' ? active.globalDescription : active.description)
 
   return (
     <div>
@@ -70,7 +81,7 @@ export default function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardT
           )
         })}
       </div>
-      {active && (
+      {activeDescription && (
         <div
           style={{
             padding: '12px 14px',
@@ -83,7 +94,7 @@ export default function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardT
             background: 'var(--card-bg)',
           }}
         >
-          {active.description}
+          {activeDescription}
         </div>
       )}
     </div>

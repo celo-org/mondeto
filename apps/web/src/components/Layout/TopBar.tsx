@@ -3,6 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { ConnectButton } from '@/components/connect-button'
+import MapSwitcher from '@/components/Layout/MapSwitcher'
 
 interface TopBarProps {
   title: string
@@ -56,6 +57,7 @@ export default function TopBar({ title, children }: TopBarProps) {
       </Link>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <MapSwitcher />
         {children}
         <ConnectButton />
       </div>

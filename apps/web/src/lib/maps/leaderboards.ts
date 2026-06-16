@@ -153,11 +153,54 @@ function mergeSum(boards: LeaderEntry[][], limit: number): LeaderEntry[] {
   return rank(total, limit);
 }
 
-/** Global board 1 — total land pixels owned across every map. */
+/**
+ * Global board 1 — total land pixels owned across every map.
+ *
+ * @deprecated Raw pixel sums are unfair across different-sized maps (Africa
+ * has ~8,800 claimable land pixels, World ~5,600), so this just rewards
+ * whoever plays the biggest map. The UI ranks the global AREA board with
+ * `globalTerritoryShare` instead. Kept for any caller that still wants the
+ * raw cross-map count.
+ */
 export function globalMostPixels(maps: MapSnapshot[], limit = 10): LeaderEntry[] {
   // Per-map full boards (limit large enough to not truncate before summing).
   const per = maps.map((m) => leaderboardMostPixels(m, Number.MAX_SAFE_INTEGER));
   return mergeSum(per, limit);
+}
+
+/**
+ * Global AREA board (normalized) — sum of per-map ownership fractions.
+ *
+ * For each map a wallet's contribution is `ownedLand / claimableLand`, so a
+ * map's size cancels out: owning 10% of the World map and 10% of Africa both
+ * count as 0.10. Summing the fractions across maps gives a size-independent
+ * "territory dominance" score (0..N for N maps). Render the value as a
+ * percentage. Claimable land is derived from the snapshot itself
+ * (`pixels.filter(isLand)`), matching `getMaskData(slug).landCount`.
+ *
+ * This is the fair cross-map answer to the normalization problem — a small
+ * but dominant holding beats a larger raw count on a bigger board.
+ */
+export function globalTerritoryShare(
+  maps: MapSnapshot[],
+  limit = 10
+): LeaderEntry[] {
+  const share = new Map<Address, number>();
+  for (const m of maps) {
+    const land = m.pixels.filter((p) => p.isLand);
+    const total = land.length;
+    if (total === 0) continue;
+    const counts = new Map<Address, number>();
+    for (const p of land) {
+      if (p.owner !== null) {
+        counts.set(p.owner, (counts.get(p.owner) ?? 0) + 1);
+      }
+    }
+    for (const [addr, c] of counts) {
+      share.set(addr, (share.get(addr) ?? 0) + c / total);
+    }
+  }
+  return rank(share, limit);
 }
 
 /** Global board 3 — single most expensive pixel owned anywhere. */
@@ -182,10 +225,12 @@ export function globalBiggestConnectedArea(
   return mergeMax(per, limit);
 }
 
-/** Convenience: all three global boards in one call. */
+/** Convenience: all three global boards in one call. AREA is normalized by
+ *  board size (`globalTerritoryShare`), so its value is a fraction (sum of
+ *  per-map ownership shares) rather than a raw pixel count. */
 export function allGlobalLeaderboards(maps: MapSnapshot[], limit = 10) {
   return {
-    mostPixels: globalMostPixels(maps, limit),
+    mostPixels: globalTerritoryShare(maps, limit),
     biggestConnectedArea: globalBiggestConnectedArea(maps, limit),
     mostExpensivePixel: globalMostExpensivePixel(maps, limit),
   };

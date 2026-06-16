@@ -10,7 +10,6 @@
  * ranking, so a float is fine and avoids dragging bigint into pure code.
  */
 
-import { WIDTH } from '@/constants/map'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { isLand } from '@/lib/landMask'
 import type { PixelView } from '@/lib/mock'
@@ -30,13 +29,15 @@ export function pixelViewToMapSnapshot(
   pixelData: PixelView[],
   mapId: MapId,
   open: boolean,
+  width: number,
+  mask: Uint8Array,
 ): MapSnapshot {
   const pixels: PixelState[] = new Array(pixelData.length)
 
   for (let id = 0; id < pixelData.length; id++) {
     const px = pixelData[id]
-    const x = id % WIDTH
-    const y = Math.floor(id / WIDTH)
+    const x = id % width
+    const y = Math.floor(id / width)
     const ownerRaw = px?.owner
     const owner =
       !ownerRaw || ownerRaw === ZERO_ADDRESS
@@ -48,7 +49,7 @@ export function pixelViewToMapSnapshot(
       y,
       owner,
       currentPrice: priceToNumber(px?.currentPrice ?? 0n),
-      isLand: isLand(id),
+      isLand: isLand(id, mask),
     }
   }
 

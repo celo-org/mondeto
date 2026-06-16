@@ -9,7 +9,11 @@ import {
 } from '@/lib/mock'
 import type { PixelView } from '@/lib/mock'
 import { isLand } from '@/lib/landMask'
-import { ZERO_ADDRESS, INITIAL_PRICE, TOTAL_PIXELS } from '@/constants/map'
+import { ZERO_ADDRESS } from '@/constants/map'
+import { getMaskData } from '@/lib/maps/masks'
+
+const WORLD = getMaskData('world')
+const TOTAL_PIXELS = WORLD.width * WORLD.height
 
 let pixels: PixelView[]
 
@@ -18,7 +22,7 @@ beforeAll(async () => {
 })
 
 describe('getAllPixels', () => {
-  it('returns TOTAL_PIXELS items', () => {
+  it('returns world-sized pixel array', () => {
     expect(pixels).toHaveLength(TOTAL_PIXELS)
   })
 
@@ -47,7 +51,6 @@ describe('selectionPrice', () => {
 
 describe('buyPixels', () => {
   it('changes ownership and increments saleCount', async () => {
-    // Find an unowned pixel
     const idx = pixels.findIndex(p => p.owner === ZERO_ADDRESS)
     const prevSaleCount = pixels[idx].saleCount
     const prevPrice = pixels[idx].currentPrice
@@ -56,7 +59,6 @@ describe('buyPixels', () => {
     const txHash = await buyPixels([idx], '#ff0000', 'Tester', 'https://test.com', buyer)
     expect(txHash).toMatch(/^0x[0-9a-f]{64}$/)
 
-    // Re-fetch to verify
     const updated = await getAllPixels()
     expect(updated[idx].owner).toBe(buyer)
     expect(updated[idx].saleCount).toBe(prevSaleCount + 1)
@@ -91,7 +93,7 @@ describe('demo data seeds on land only', () => {
   it('all owned pixels are on land', () => {
     for (let i = 0; i < pixels.length; i++) {
       if (pixels[i].owner !== ZERO_ADDRESS) {
-        expect(isLand(i)).toBe(true)
+        expect(isLand(i, WORLD.mask)).toBe(true)
       }
     }
   })

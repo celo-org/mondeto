@@ -11,12 +11,12 @@ import ColorPicker from '@/components/Profile/ColorPicker'
 import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
+import { useMapRulers } from '@/hooks/useMapRulers'
 import { MONDETO_ABI } from '@/lib/contract'
-import { getContractByMapId } from '@/lib/maps/contracts'
-import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
+import { getMapContractById } from '@/lib/maps/contracts'
+import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
-import { isLand } from '@/lib/landMask'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
@@ -27,8 +27,19 @@ export default function ProfilePage() {
   // URL input removed — unverified user URLs are an injection vector.
   // setUrl is left wired but unused so existing useProfile callers keep
   // their shape; updateProfile is called below with an empty string for url.
-  const { currentMapId } = useMaps()
-  const mondetoAddress = getContractByMapId(currentMapId)
+  const { revealedMaps, currentMapId } = useMaps()
+  const mondetoContract = getMapContractById(currentMapId)
+  const mondetoAddress = mondetoContract.address
+  const { rulers } = useMapRulers()
+
+  // Maps where the connected wallet currently owns the most land — the
+  // reigning "Ruler of <map>". Sourced from the shared rulers resolver so the
+  // badge can't drift from the leaderboard.
+  const ruledMaps = useMemo(() => {
+    if (!addrStr) return []
+    const me = addrStr.toLowerCase()
+    return revealedMaps.filter((m) => rulers[m.id] === me)
+  }, [addrStr, revealedMaps, rulers])
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
@@ -53,7 +64,7 @@ export default function ProfilePage() {
           address: mondetoAddress,
           abi: MONDETO_ABI,
           functionName: 'getPixelBatch',
-          args: [0, 0, WIDTH, HEIGHT],
+          args: [0, 0, mondetoContract.width, mondetoContract.height],
         }) as `0x${string}`
 
         // Decode packed bytes: 24 bytes per land pixel
@@ -282,7 +293,7 @@ export default function ProfilePage() {
     }
 
     fetchPnL()
-  }, [publicClient, addrStr, mondetoAddress])
+  }, [publicClient, addrStr, mondetoAddress, mondetoContract.width, mondetoContract.height])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :
@@ -347,6 +358,35 @@ export default function ProfilePage() {
           </div>
         )}
         <AvatarBlock color={color} name={name} />
+        {ruledMaps.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              gap: 6,
+              margin: '0 16px 10px',
+            }}
+          >
+            {ruledMaps.map((m) => (
+              <span
+                key={m.id}
+                style={{
+                  fontFamily: "'Press Start 2P', monospace",
+                  fontSize: 7,
+                  letterSpacing: 1.5,
+                  padding: '5px 9px',
+                  borderRadius: 999,
+                  color: '#A7FF05',
+                  border: '1px solid #A7FF05',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                RULER OF {m.displayName}
+              </span>
+            ))}
+          </div>
+        )}
         <StatsRow
           pixels={pixelCount}
           balance={formatBalanceForDisplay(walletBalance.preferred?.amount ?? walletBalance.totalAmount)}

@@ -1,7 +1,7 @@
-// Grid dimensions — must match smart contract
-export const WIDTH = 170
-export const HEIGHT = 100
-export const TOTAL_PIXELS = WIDTH * HEIGHT // 17,000
+// Grid dimensions are per-map. Use `useCurrentMapMeta()` for the active
+// map's width/height/totalPixels/mask. Static WIDTH/HEIGHT/TOTAL_PIXELS
+// exports were removed when continent maps (with non-170x100 grids) were
+// wired in.
 
 // Contract pricing (USDT 6 decimals)
 export const INITIAL_PRICE = 100000n // 0.10 USDT

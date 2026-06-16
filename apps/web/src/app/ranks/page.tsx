@@ -5,16 +5,19 @@ import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import LeaderboardTabs from '@/components/Leaderboard/LeaderboardTabs'
 import LeaderboardRow from '@/components/Leaderboard/LeaderboardRow'
+import BoardSelector from '@/components/Leaderboard/BoardSelector'
 import {
   useLeaderboard,
   type LeaderboardTab,
   type OwnerProfileData,
 } from '@/hooks/useLeaderboard'
 import { useMaps } from '@/hooks/useMaps'
+import type { MapId } from '@/lib/maps/types'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
-import { getContractByMapId } from '@/lib/maps/contracts'
+import { getMapContractById } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { uint24ToHex } from '@/lib/colorUtils'
@@ -26,23 +29,53 @@ export default function RanksPage() {
   // Guaranteed-defined read client. Leaderboard is a read-only view and
   // must populate for anonymous users.
   const publicClient = useReadClient()
-  const { homeMapId, currentMapId } = useMaps()
-  const mondetoAddress = getContractByMapId(currentMapId)
+  const { revealedMaps, currentMapId } = useMaps()
+  // Which board to show: 'global' (the cross-map board) or a specific map id.
+  // Defaults to GLOBAL — the headline "who's winning overall" view — and the
+  // player can drill into any single map's board without leaving /ranks.
+  const [boardSel, setBoardSel] = useState<MapId | 'global'>('global')
+  const isGlobal = boardSel === 'global'
+  // The map whose pixel data + profiles we load. For the global board we still
+  // load the current map (its owners' profiles decorate rows; the global hook
+  // fetches all maps' pixel snapshots itself).
+  const selectedMapId: MapId = isGlobal ? currentMapId : boardSel
+  const mondetoContract = getMapContractById(selectedMapId)
+  const mondetoAddress = mondetoContract.address
   const [pixelData, setPixelData] = useState<PixelView[]>([])
   const [profilesMap, setProfilesMap] = useState<Map<string, OwnerProfileData>>(new Map())
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // Offer the board selector once there's more than one map to compare.
+  // GLOBAL leads (the default), then each individual map.
+  const showSelector = revealedMaps.length > 1
+  const selectorOptions = [
+    { key: 'global', label: 'GLOBAL' },
+    ...revealedMaps.map((m) => ({ key: String(m.id), label: m.displayName })),
+  ]
+
   useEffect(() => {
+    // The GLOBAL board comes from /api/global-board (server-side), so it does
+    // NOT need this on-device single-map read. Skipping it for global is also
+    // important: that read can hang on MiniPay's RPC, and the board display
+    // must not be gated behind it.
+    if (isGlobal) {
+      setLoading(false)
+      return
+    }
     async function load() {
       setLoading(true)
       let data: PixelView[] = []
       try {
         if (publicClient) {
+          const { mask } = getMaskData(mondetoContract.slug)
           data = await fetchAllPixelsFromContract(
             publicClient.readContract.bind(publicClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
             mondetoAddress,
+            mondetoContract.width,
+            mondetoContract.height,
+            mask,
           )
         }
       } catch (e) {
@@ -94,15 +127,15 @@ export default function RanksPage() {
       setLoading(false)
     }
     load()
-  }, [publicClient, mondetoAddress])
+  }, [isGlobal, publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
 
-  // Global scope toggle removed — leaderboard is local-only for now.
-  // Tracked as a follow-up in project memory; restore the ScopeToggle when
-  // re-introducing cross-map rankings.
+  // A specific map shows that map's board (from the pixelData loaded above);
+  // GLOBAL shows the normalized cross-map board. `homeMapId` is the id the
+  // loaded pixelData belongs to so the local snapshot uses the right dims.
   const { area, empire, tycoons, loading: boardsLoading } = useLeaderboard(
     pixelData,
     profilesMap,
-    { scope: 'local', homeMapId: homeMapId ?? undefined },
+    { scope: isGlobal ? 'global' : 'local', homeMapId: selectedMapId },
   )
 
   const dataMap: Record<LeaderboardTab, typeof area> = {
@@ -114,12 +147,24 @@ export default function RanksPage() {
   const currentData = dataMap[activeTab]
   const displayData = showAll ? currentData : currentData.slice(0, 20)
   const hasOwned = currentData.length > 0
-  const isLoading = loading || boardsLoading
+  // The global board never waits on the local single-map read (it comes from
+  // the server endpoint), so don't let a slow/hanging local read block it.
+  const isLoading = (isGlobal ? false : loading) || boardsLoading
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
       <TopBar title="MONDETO" />
-      <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      {showSelector && (
+        <BoardSelector
+          options={selectorOptions}
+          value={isGlobal ? 'global' : String(boardSel)}
+          onChange={(key) => {
+            setBoardSel(key === 'global' ? 'global' : (Number(key) as MapId))
+            setShowAll(false)
+          }}
+        />
+      )}
+      <LeaderboardTabs activeTab={activeTab} scope={isGlobal ? 'global' : 'local'} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
       <div
         style={{
           flex: 1,
@@ -132,8 +177,21 @@ export default function RanksPage() {
           justifyContent: 'flex-start',
         }}
       >
-        {isLoading ? (
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        {isLoading || !hasOwned ? (
+          // Loading and empty states share one centered layout so the
+          // GIF lands at the exact same spot in both — the caption slot
+          // below is always reserved (rendered empty while loading) so
+          // the GIF doesn't jump up when the "no claims yet" text appears.
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
             <img
               src="/brand/mondeto-symbol.gif"
               alt=""
@@ -141,11 +199,37 @@ export default function RanksPage() {
               height={72}
               style={{ display: 'block', imageRendering: 'pixelated' }}
             />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 8,
+                minHeight: 32,
+              }}
+            >
+              {isLoading && isGlobal && (
+                <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>loading global board…</span>
+              )}
+              {!isLoading && (
+                <>
+                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
+                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
+                </>
+              )}
+            </div>
           </div>
-        ) : hasOwned ? (
+        ) : (
           <>
             {displayData.map((entry) => (
-              <LeaderboardRow key={entry.owner} entry={entry} />
+              <LeaderboardRow
+                key={entry.owner}
+                entry={entry}
+                // The reigning "Ruler of <map>" is rank-1 of a single map's
+                // LAND board. The global board is cross-map, so no per-map
+                // crown there.
+                isRuler={!isGlobal && activeTab === 'AREA' && entry.rank === 1}
+              />
             ))}
             {!showAll && currentData.length > 20 && (
               <button
@@ -169,27 +253,6 @@ export default function RanksPage() {
               </button>
             )}
           </>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '60%',
-              gap: 8,
-            }}
-          >
-            <img
-              src="/brand/mondeto-symbol.gif"
-              alt=""
-              width={72}
-              height={72}
-              style={{ display: 'block', imageRendering: 'pixelated', marginBottom: 6 }}
-            />
-            <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
-            <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
-          </div>
         )}
       </div>
       <BottomNav activeRoute="/ranks" />

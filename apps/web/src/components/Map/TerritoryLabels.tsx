@@ -2,6 +2,8 @@
 import React, { useMemo } from 'react'
 import { computeEmpires, idToXY } from '@/lib/pixelMath'
 import { ZERO_ADDRESS } from '@/constants/map'
+import { ownerDefaultColor } from '@/lib/colorUtils'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
 interface TerritoryLabelsProps {
@@ -32,6 +34,7 @@ function labelBudget(scale: number): number {
 }
 
 export default function TerritoryLabels({ pixelData, scale, profilesMap }: TerritoryLabelsProps) {
+  const { width, height } = useCurrentMapMeta()
   const labels = useMemo(() => {
     if (scale < MIN_SCALE) return []
 
@@ -44,7 +47,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
       }
     }
 
-    const empires = computeEmpires(ownerMap)
+    const empires = computeEmpires(ownerMap, width, height)
 
     // Find largest cluster per owner
     const largestByOwner = new Map<string, typeof empires[0]>()
@@ -63,7 +66,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
       // Calculate centroid
       let sx = 0, sy = 0
       for (const id of emp.ids) {
-        const { x, y } = idToXY(id)
+        const { x, y } = idToXY(id, width)
         sx += x
         sy += y
       }
@@ -74,7 +77,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
       const profile = profilesMap?.get(owner)
       if (!profile?.label) continue
       const label = profile.label
-      const color = profile?.color || pixelData[Array.from(emp.ids)[0]]?.color || '#888888'
+      const color = profile?.color || pixelData[Array.from(emp.ids)[0]]?.color || ownerDefaultColor(owner)
 
       result.push({ owner, label, color, cx, cy, size: emp.size })
     }
@@ -95,7 +98,7 @@ export default function TerritoryLabels({ pixelData, scale, profilesMap }: Terri
     }
 
     return visible
-  }, [pixelData, scale, profilesMap])
+  }, [pixelData, scale, profilesMap, width, height])
 
   if (scale < MIN_SCALE) return null
   if (labels.length === 0) return null
