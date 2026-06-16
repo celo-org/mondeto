@@ -14,10 +14,10 @@ import { useAccount } from 'wagmi'
 import { celo } from 'viem/chains'
 import {
   getMapsForChain,
-  isRevealedMapId,
   type ChainId,
   type MapContract,
 } from '@/lib/maps/contracts'
+import { useRevealedMapIds } from '@/hooks/useRevealedMapIds'
 import type { MapId } from '@/lib/maps/types'
 
 export interface UseMapsResult {
@@ -112,9 +112,16 @@ export function CurrentMapProvider({ children }: { children: ReactNode }) {
 export function useMaps(): UseMapsResult {
   const { address, chainId } = useAccount()
   const effectiveChain = (chainId ?? celo.id) as ChainId
+  const revealedIds = useRevealedMapIds()
   const revealedMaps = useMemo(
-    () => getMapsForChain(effectiveChain),
-    [effectiveChain],
+    () => getMapsForChain(effectiveChain, revealedIds),
+    [effectiveChain, revealedIds],
+  )
+
+  // Validate against the currently-revealed set (runtime, reveal-aware).
+  const isRevealed = useCallback(
+    (id: MapId) => revealedMaps.some((m) => m.id === id),
+    [revealedMaps],
   )
 
   const homeMapId = useMemo<MapId | null>(() => {
@@ -129,34 +136,29 @@ export function useMaps(): UseMapsResult {
   const currentRaw = ctx ? ctx.currentMapId : localId
   const setRaw = ctx ? ctx.setCurrentMapId : setLocalId
 
-  // If the stored id isn't revealed on the active chain (e.g. user came
-  // back on a chain where that map doesn't exist), fall back to the
-  // first revealed map. Doesn't write back to storage — the original id
-  // stays parked for when the user reconnects on the right chain.
+  // If the stored id isn't revealed (e.g. a continent that hasn't opened, or
+  // a chain mismatch), fall back to the first revealed map. Doesn't write
+  // back to storage — the original id stays parked.
   const currentMapId = useMemo<MapId>(() => {
     if (revealedMaps.length === 0) return currentRaw
-    return isRevealedMapId(currentRaw, effectiveChain)
-      ? currentRaw
-      : revealedMaps[0].id
-  }, [currentRaw, effectiveChain, revealedMaps])
+    return isRevealed(currentRaw) ? currentRaw : revealedMaps[0].id
+  }, [currentRaw, revealedMaps, isRevealed])
 
-  // Snap the persisted id forward if revealed maps appear after first
-  // render with the default 0. This only fires when the persisted id is
-  // exactly the initial default and the first revealed map happens to
-  // have a different id — otherwise leave the user's pick alone.
+  // Snap the persisted id forward when the revealed set changes (e.g. reveals
+  // load after first render, or a map the user was on gets hidden).
   useEffect(() => {
     if (revealedMaps.length === 0) return
-    if (!isRevealedMapId(currentRaw, effectiveChain)) {
+    if (!isRevealed(currentRaw)) {
       setRaw(revealedMaps[0].id)
     }
-  }, [currentRaw, effectiveChain, revealedMaps, setRaw])
+  }, [currentRaw, revealedMaps, isRevealed, setRaw])
 
   const setCurrentMapId = useCallback(
     (id: MapId) => {
-      if (!isRevealedMapId(id, effectiveChain)) return
+      if (!isRevealed(id)) return
       setRaw(id)
     },
-    [effectiveChain, setRaw],
+    [isRevealed, setRaw],
   )
 
   return { revealedMaps, homeMapId, currentMapId, setCurrentMapId }

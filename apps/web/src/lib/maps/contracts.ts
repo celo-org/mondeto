@@ -168,11 +168,21 @@ function revealedIdOverride(): Set<number> | null {
 
 /**
  * Maps visible on the given chain, in stable id order. Pass the wallet's
- * connected chainId. Honors the NEXT_PUBLIC_REVEALED_MAP_IDS override.
+ * connected chainId.
+ *
+ * Reveal precedence: an explicit `revealedIds` (runtime, from the
+ * `/api/reveals` → Edge Config source) wins; else the
+ * NEXT_PUBLIC_REVEALED_MAP_IDS env override; else the static `revealed`
+ * flags (WORLD only). Callers inside React should pass the ids from
+ * `useRevealedMapIds()`; non-React/sync callers may omit it and get the
+ * env/static fallback.
  */
-export function getMapsForChain(chainId: ChainId | undefined): MapContract[] {
+export function getMapsForChain(
+  chainId: ChainId | undefined,
+  revealedIds?: number[],
+): MapContract[] {
   const effective = chainId ?? celo.id
-  const override = revealedIdOverride()
+  const override = revealedIds ? new Set(revealedIds) : revealedIdOverride()
   return getRegistry()
     .filter((m) => m.chainId === effective)
     .filter((m) => (override ? override.has(m.id) : m.revealed))

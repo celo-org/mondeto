@@ -7,6 +7,7 @@ import { celo } from 'viem/chains'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain, type ChainId, type MapContract } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
+import { useRevealedMapIds } from '@/hooks/useRevealedMapIds'
 import { shouldOpenNextMap } from '@/lib/maps/assignment'
 import type {
   MapId,
@@ -150,6 +151,7 @@ async function fetchSnapshotForMap(
 export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
   const publicClient = usePublicClient()
   const { chainId } = useAccount()
+  const revealedIds = useRevealedMapIds()
   const [state, setState] = useState<ShouldOpenNextMapResult>({
     loading: true,
     error: null,
@@ -186,7 +188,7 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
       } catch {}
 
       try {
-        const maps = getMapsForChain(effectiveChain)
+        const maps = getMapsForChain(effectiveChain, revealedIds)
         const snapshots: MapSnapshot[] = []
         const summaries: MapFillSummary[] = []
 
@@ -241,7 +243,7 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
     return () => {
       cancelled = true
     }
-  }, [publicClient, chainId])
+  }, [publicClient, chainId, revealedIds])
 
   return state
 }

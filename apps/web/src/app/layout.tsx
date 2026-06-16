@@ -4,6 +4,7 @@ import './globals.css';
 import { WalletProvider } from "@/components/wallet-provider"
 import { PostHogProvider } from "@/components/posthog-provider"
 import { CurrentMapProvider } from "@/hooks/useMaps"
+import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 
 export const metadata: Metadata = {
   title: 'Mondeto',
@@ -66,11 +67,13 @@ export default function RootLayout({
         <PostHogProvider>
           <div className="relative flex min-h-screen flex-col">
             <WalletProvider>
-                <CurrentMapProvider>
-                  <main className="flex-1">
-                    {children}
-                  </main>
-                </CurrentMapProvider>
+                <RevealsProvider>
+                  <CurrentMapProvider>
+                    <main className="flex-1">
+                      {children}
+                    </main>
+                  </CurrentMapProvider>
+                </RevealsProvider>
             </WalletProvider>
           </div>
         </PostHogProvider>

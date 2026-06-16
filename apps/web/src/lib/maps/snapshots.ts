@@ -10,7 +10,7 @@
 
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
-import { getRevealedMaps } from '@/lib/maps/contracts'
+import { getRevealedMaps, type MapContract } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
 import type { MapId, MapSnapshot } from '@/lib/maps/types'
 
@@ -120,9 +120,10 @@ async function mapWithConcurrency<T, R>(
  */
 export async function fetchGlobalSnapshots(
   read: ReadContractFn,
+  maps?: MapContract[],
 ): Promise<MapSnapshot[]> {
+  const revealed = maps ?? getRevealedMaps()
   const cached = readGlobalSnapshotCache()
-  const revealed = getRevealedMaps()
   if (cached && cached.length === revealed.length) return cached
 
   let anyFailed = false

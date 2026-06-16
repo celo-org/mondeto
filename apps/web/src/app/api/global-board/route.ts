@@ -6,6 +6,9 @@ import {
   leaderboardMostPixels,
 } from '@/lib/maps/leaderboards'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
+import { getMapsForChain } from '@/lib/maps/contracts'
+import { readRevealedMapIdsServer } from '@/lib/maps/reveals'
+import { celo } from 'viem/chains'
 import type { LeaderEntry, MapId } from '@/lib/maps/types'
 import { logger } from '@/lib/logger'
 
@@ -54,7 +57,10 @@ export async function GET() {
       fallbackReadClient,
     ) as Parameters<typeof fetchAllPixelsFromContract>[0]
 
-    const snapshots = await fetchGlobalSnapshots(read)
+    // Aggregate only the currently-revealed maps (Edge Config / env / WORLD).
+    const revealedIds = await readRevealedMapIdsServer()
+    const maps = getMapsForChain(celo.id, revealedIds)
+    const snapshots = await fetchGlobalSnapshots(read, maps)
 
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
       allGlobalLeaderboards(snapshots, TOP_N)
