@@ -497,6 +497,25 @@ contract MondetoTest is Test {
         new ERC1967Proxy(address(impl), initData);
     }
 
+    function test_constructorRejectsZeroHalvingTime() public {
+        vm.expectRevert(Mondeto.InvalidHalvingTime.selector);
+        new Mondeto(300, 200, 0);
+    }
+
+    function test_initializeRejectsMinPriceAboveInitialPrice() public {
+        MockUSDT usdt2 = new MockUSDT();
+        Mondeto impl = new Mondeto(300, 200, 14 days);
+        uint256[] memory mask = new uint256[](235);
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(usdt2);
+        bytes memory initData = abi.encodeCall(
+            Mondeto.initialize,
+            (tokens, INITIAL_PRICE, INITIAL_PRICE + 1, INITIAL_FEE_RATE, mask)
+        );
+        vm.expectRevert(Mondeto.InvalidPrice.selector);
+        new ERC1967Proxy(address(impl), initData);
+    }
+
     function test_getPixelBatchSkipsWater() public view {
         // Batch at (123, 3) width 3: pixels 1023 (land), 1024 (water), 1025 (water)
         bytes memory batch = mondeto.getPixelBatch(123, 3, 3, 1);

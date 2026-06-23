@@ -85,9 +85,13 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     error NoTokens();
     error TokenNotAccepted(address token);
     error TokenAlreadyAccepted(address token);
+    error InvalidHalvingTime();
+    error InvalidPrice();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint16 _width, uint16 _height, uint256 _halvingTime) {
+        // HALVING_TIME is a divisor in the price formula — zero would panic.
+        if (_halvingTime == 0) revert InvalidHalvingTime();
         WIDTH = _width;
         HEIGHT = _height;
         TOTAL_PIXELS = uint256(_width) * _height;
@@ -108,6 +112,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         if (_landMask.length != LAND_MASK_LENGTH) revert InvalidMaskLength();
         if (_feeRate > 10000) revert InvalidFeeRate();
         if (_tokens.length == 0) revert NoTokens();
+        if (_minPrice > _initialPrice) revert InvalidPrice();
 
         initialPrice = _initialPrice;
         minPrice = _minPrice;
