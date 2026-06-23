@@ -87,6 +87,8 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     error TokenAlreadyAccepted(address token);
     error InvalidHalvingTime();
     error InvalidPrice();
+    error DeadlineExpired(uint256 deadline);
+    error SlippageExceeded(uint256 totalCost, uint256 maxTotalCost);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint16 _width, uint16 _height, uint256 _halvingTime) {
@@ -127,7 +129,16 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     // --- Core ---
 
-    function buyPixels(uint256[] calldata ids, address token) external nonReentrant {
+    /// @param maxTotalCost Upper bound (in PRICE_DECIMALS base units) the buyer will accept for the
+    ///        whole batch. Reverts if the execution-time total exceeds it, protecting buyers from
+    ///        price increases (e.g. another buyer front-running and bumping saleCount) between the
+    ///        off-chain quote and execution. Pass `type(uint256).max` to opt out.
+    /// @param deadline Unix timestamp after which the transaction must not execute. Protects against
+    ///        a stale transaction landing at a worse price long after it was signed. Pass
+    ///        `type(uint256).max` to opt out.
+    function buyPixels(uint256[] calldata ids, address token, uint256 maxTotalCost, uint256 deadline) external nonReentrant {
+        if (block.timestamp > deadline) revert DeadlineExpired(deadline);
+
         TokenConfig memory tc = tokenConfig[token];
         if (!tc.accepted) revert TokenNotAccepted(token);
 
@@ -210,6 +221,8 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
             unchecked { ++i; }
         }
+
+        if (totalCost > maxTotalCost) revert SlippageExceeded(totalCost, maxTotalCost);
 
         // Execute transfers, scaling each aggregated (base-unit) amount to the chosen
         // token's decimals. Scaling is linear, so per-recipient scaling == scaling the sum.

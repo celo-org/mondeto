@@ -45,7 +45,7 @@ contract GasBench is Test {
         uint256[] memory ids = new uint256[](n);
         for (uint256 i; i < n; ++i) ids[i] = i;
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
     }
 
     function test_buyPixels_1() public { _buyN(1); }
@@ -60,7 +60,7 @@ contract GasBench is Test {
         uint256[] memory ids = new uint256[](100);
         for (uint256 i; i < 100; ++i) ids[i] = i;
         vm.prank(bob);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
     }
 
     // ========== getPixelBatch ==========

@@ -164,6 +164,16 @@ export const MONDETO_ABI = [
         "name": "token",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "maxTotalCost",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
