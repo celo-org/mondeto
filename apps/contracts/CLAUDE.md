@@ -55,9 +55,10 @@ The actual price linearly interpolates between adjacent discrete price levels wi
 
 ## Payment Flow
 
-- Buying an **unowned** pixel: USDT goes to the **contract itself** (treasury). Owner withdraws via `withdraw()`.
-- Buying an **owned** pixel: USDT goes to the **previous owner**. There is no royalty/fee — 100% goes to the seller.
-- **Self-buy** is allowed (saleCount increments, net zero transfer).
+- Buying an **unowned** pixel: payment goes to the **contract itself** (treasury). Owner withdraws via `withdraw()`/`withdrawAll()`.
+- Buying an **owned** pixel: a fee (`feeRate`, in basis points) is deducted to the treasury and the **remainder goes to the previous owner**. `feeRate` is set in `initialize()`, changeable by the owner via `setFeeRate()`, and capped at 10000 (100%).
+- **Blocked seller payments**: seller payouts use `SafeERC20.trySafeTransferFrom` (non-reverting). If the payment token blocks a transfer to a previous owner (e.g. a stablecoin blacklist), that seller's share is **retained by the contract** and a `SellerPaymentRedirected` event is emitted, rather than reverting the whole batch. The blocked address could not withdraw anyway, and the buyer's total cost is unchanged. The treasury (unowned proceeds + fees + any redirected funds) is paid last in one transfer, still reverting if the *buyer* cannot pay. (See Q-01.)
+- **Self-buy** is allowed (saleCount increments; buyer pays only the fee, which lands in the treasury — the post-fee remainder is a net-zero self transfer).
 - **Bulk buys** aggregate payments per unique recipient before executing transfers. This means buying 50 pixels from the same owner does 1 transfer, not 50. The aggregation uses O(n²) linear scan — fine for expected batch sizes (<100), would be expensive for thousands.
 
 ## Land Mask
