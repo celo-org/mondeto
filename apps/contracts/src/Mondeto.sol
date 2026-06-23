@@ -139,7 +139,10 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     /// @param deadline Unix timestamp after which the transaction must not execute. Protects against
     ///        a stale transaction landing at a worse price long after it was signed. Pass
     ///        `type(uint256).max` to opt out.
-    function buyPixels(uint256[] calldata ids, address token, uint256 maxTotalCost, uint256 deadline) external nonReentrant {
+    function buyPixels(uint256[] calldata ids, address token, uint256 maxTotalCost, uint256 deadline)
+        external
+        nonReentrant
+    {
         if (block.timestamp > deadline) revert DeadlineExpired(deadline);
 
         TokenConfig memory tc = tokenConfig[token];
@@ -222,7 +225,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                 px.owner = msg.sender;
             }
 
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         if (totalCost > maxTotalCost) revert SlippageExceeded(totalCost, maxTotalCost);
@@ -239,7 +244,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                 amounts[0] += amt; // redirect blocked seller proceeds to the treasury (base units)
                 emit SellerPaymentRedirected(recipients[i], token, amt);
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
         // Treasury: unowned-pixel proceeds + fees + any redirected seller funds, in one transfer.
         // Uses safeTransferFrom (reverting) so a buyer who cannot pay fails cleanly.
@@ -298,15 +305,19 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     /// @notice Returns all contract constants and config needed for client-side rendering and
     ///         price computation in a single RPC call.
-    function config() external view returns (
-        uint16 width,
-        uint16 height,
-        uint256 halvingTime,
-        uint256 _initialPrice,
-        uint256 _minPrice,
-        uint256 _halvingStartTimestamp,
-        uint256 _feeRate
-    ) {
+    function config()
+        external
+        view
+        returns (
+            uint16 width,
+            uint16 height,
+            uint256 halvingTime,
+            uint256 _initialPrice,
+            uint256 _minPrice,
+            uint256 _halvingStartTimestamp,
+            uint256 _feeRate
+        )
+    {
         return (WIDTH, HEIGHT, HALVING_TIME, initialPrice, minPrice, halvingStartTimestamp, feeRate);
     }
 
@@ -366,7 +377,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                         cachedWord = landMask[wordIdx];
                     }
                     if (cachedWord & (1 << (id & 255)) == 0) {
-                        unchecked { ++col; }
+                        unchecked {
+                            ++col;
+                        }
                         continue;
                     }
                 }
@@ -389,9 +402,13 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                     }
                     offset += 24;
                 }
-                unchecked { ++col; }
+                unchecked {
+                    ++col;
+                }
             }
-            unchecked { ++row; }
+            unchecked {
+                ++row;
+            }
         }
 
         // Trim to actual size
@@ -422,9 +439,14 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                 if (cachedWord & (1 << (id & 255)) != 0) {
                     total += _price(pixels[id].saleCount, elapsed, _initialPrice, _minPrice);
                 }
-                unchecked { ++id; ++col; }
+                unchecked {
+                    ++id;
+                    ++col;
+                }
             }
-            unchecked { ++row; }
+            unchecked {
+                ++row;
+            }
         }
         return total;
     }
@@ -506,7 +528,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         return start == 0 ? 0 : block.timestamp - start;
     }
 
-    function _price(uint8 saleCount, uint256 elapsed, uint256 _initialPrice, uint256 _minPrice) internal view returns (uint256) {
+    function _price(uint8 saleCount, uint256 elapsed, uint256 _initialPrice, uint256 _minPrice)
+        internal
+        view
+        returns (uint256)
+    {
         uint256 epochStart = elapsed / HALVING_TIME;
         uint256 remainder = elapsed - epochStart * HALVING_TIME;
 
@@ -520,7 +546,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         return pStart - (pStart - pEnd) * remainder / HALVING_TIME;
     }
 
-    function _discretePrice(uint8 saleCount, uint256 epoch, uint256 _initialPrice, uint256 _minPrice) internal pure returns (uint256) {
+    function _discretePrice(uint8 saleCount, uint256 epoch, uint256 _initialPrice, uint256 _minPrice)
+        internal
+        pure
+        returns (uint256)
+    {
         if (saleCount >= epoch) {
             uint256 shift = saleCount - epoch;
             if (shift >= 128) return type(uint256).max;

@@ -51,10 +51,8 @@ contract MondetoTest is Test {
         tokens[1] = address(usdc); // 6 decimals
         tokens[2] = address(cusd); // 18 decimals
         Mondeto impl = new Mondeto(300, 200, HALVING_TIME);
-        bytes memory initData = abi.encodeCall(
-            Mondeto.initialize,
-            (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, mask)
-        );
+        bytes memory initData =
+            abi.encodeCall(Mondeto.initialize, (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, mask));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         mondeto = Mondeto(address(proxy));
 
@@ -404,7 +402,10 @@ contract MondetoTest is Test {
             let ptr := add(batch, 32)
             owner0 := shr(96, mload(ptr))
             sc0 := byte(0, mload(add(ptr, 20)))
-            color0 := or(or(shl(16, byte(0, mload(add(ptr, 21)))), shl(8, byte(0, mload(add(ptr, 22))))), byte(0, mload(add(ptr, 23))))
+            color0 := or(
+                or(shl(16, byte(0, mload(add(ptr, 21)))), shl(8, byte(0, mload(add(ptr, 22))))),
+                byte(0, mload(add(ptr, 23)))
+            )
         }
         assertEq(owner0, alice);
         assertEq(sc0, 1);
@@ -677,10 +678,8 @@ contract MondetoTest is Test {
         uint256[] memory badMask = new uint256[](100);
         address[] memory tokens = new address[](1);
         tokens[0] = address(usdt2);
-        bytes memory initData = abi.encodeCall(
-            Mondeto.initialize,
-            (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, badMask)
-        );
+        bytes memory initData =
+            abi.encodeCall(Mondeto.initialize, (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, badMask));
         vm.expectRevert(Mondeto.InvalidMaskLength.selector);
         new ERC1967Proxy(address(impl), initData);
     }
@@ -696,10 +695,8 @@ contract MondetoTest is Test {
         uint256[] memory mask = new uint256[](235);
         address[] memory tokens = new address[](1);
         tokens[0] = address(usdt2);
-        bytes memory initData = abi.encodeCall(
-            Mondeto.initialize,
-            (tokens, INITIAL_PRICE, INITIAL_PRICE + 1, INITIAL_FEE_RATE, mask)
-        );
+        bytes memory initData =
+            abi.encodeCall(Mondeto.initialize, (tokens, INITIAL_PRICE, INITIAL_PRICE + 1, INITIAL_FEE_RATE, mask));
         vm.expectRevert(Mondeto.InvalidPrice.selector);
         new ERC1967Proxy(address(impl), initData);
     }
