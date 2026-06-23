@@ -467,9 +467,14 @@ contract MondetoTest is Test {
         vm.expectRevert();
         mondeto.setFeeRate(100);
 
-        // Above 10000 reverts
+        // Above MAX_FEE_RATE (20%) reverts
+        uint256 maxFeeRate = mondeto.MAX_FEE_RATE();
         vm.expectRevert(Mondeto.InvalidFeeRate.selector);
-        mondeto.setFeeRate(10001);
+        mondeto.setFeeRate(maxFeeRate + 1);
+
+        // The cap itself (20%) is accepted
+        mondeto.setFeeRate(maxFeeRate);
+        assertEq(mondeto.feeRate(), maxFeeRate);
 
         // Zero is valid
         mondeto.setFeeRate(0);
