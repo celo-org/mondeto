@@ -71,6 +71,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     event AcceptedTokenAdded(address indexed token, uint8 decimals);
     event AcceptedTokenRemoved(address indexed token);
     event FeeRateUpdated(uint256 feeRate);
+    /// @notice Emitted when a seller payment could not be delivered (e.g. token blacklist)
+    ///         and was retained by the contract instead. `amount` is in PRICE_DECIMALS base units.
+    event SellerPaymentRedirected(address indexed seller, address indexed token, uint256 amount);
 
     // --- Errors ---
     error InvalidPixelId(uint256 id);
@@ -227,11 +230,21 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         // Execute transfers, scaling each aggregated (base-unit) amount to the chosen
         // token's decimals. Scaling is linear, so per-recipient scaling == scaling the sum.
         IERC20 t = IERC20(token);
-        for (uint256 i; i < recipientCount;) {
-            if (amounts[i] > 0) {
-                t.safeTransferFrom(msg.sender, recipients[i], _scaleToToken(amounts[i], tc.decimals));
+        // Pay sellers (indices 1+). A token may block a transfer to a blacklisted previous owner;
+        // rather than reverting the whole batch, keep those proceeds in the contract (the blocked
+        // address could not withdraw them anyway). recipients[0] is always address(this), paid last.
+        for (uint256 i = 1; i < recipientCount;) {
+            uint256 amt = amounts[i];
+            if (amt > 0 && !t.trySafeTransferFrom(msg.sender, recipients[i], _scaleToToken(amt, tc.decimals))) {
+                amounts[0] += amt; // redirect blocked seller proceeds to the treasury (base units)
+                emit SellerPaymentRedirected(recipients[i], token, amt);
             }
             unchecked { ++i; }
+        }
+        // Treasury: unowned-pixel proceeds + fees + any redirected seller funds, in one transfer.
+        // Uses safeTransferFrom (reverting) so a buyer who cannot pay fails cleanly.
+        if (amounts[0] > 0) {
+            t.safeTransferFrom(msg.sender, address(this), _scaleToToken(amounts[0], tc.decimals));
         }
 
         emit PixelsPurchased(msg.sender, token, ids, totalCost);

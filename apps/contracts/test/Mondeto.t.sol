@@ -7,6 +7,7 @@ import {Mondeto} from "../src/Mondeto.sol";
 import {MockUSDT} from "./mocks/MockUSDT.sol";
 import {MockUSDC} from "./mocks/MockUSDC.sol";
 import {MockCUSD} from "./mocks/MockCUSD.sol";
+import {MockBlacklistToken} from "./mocks/MockBlacklistToken.sol";
 
 // Minimal V2 for upgrade test
 contract MondetoV2 is Mondeto(300, 200, 14 days) {
@@ -494,6 +495,139 @@ contract MondetoTest is Test {
 
         assertEq(usdt.balanceOf(alice) - aliceBalBefore, price - fee);
         assertEq(usdt.balanceOf(address(mondeto)), INITIAL_PRICE + fee);
+    }
+
+    // ========== Blocked seller payments (Q-01) ==========
+
+    event SellerPaymentRedirected(address indexed seller, address indexed token, uint256 amount);
+
+    /// @dev Deploys a blacklisting token, registers it, funds + approves alice and bob.
+    function _setUpBlacklistToken() internal returns (MockBlacklistToken bl) {
+        bl = new MockBlacklistToken();
+        mondeto.addAcceptedToken(address(bl));
+        address[2] memory users = [alice, bob];
+        for (uint256 i; i < users.length; ++i) {
+            bl.mint(users[i], 1_000_000e6);
+            vm.prank(users[i]);
+            bl.approve(address(mondeto), type(uint256).max);
+        }
+    }
+
+    function test_blockedSellerPaymentRedirectedToTreasury() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // Alice buys pixel 0, then becomes blacklisted by the token.
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+        bl.setBlocked(alice, true);
+
+        uint256 price = INITIAL_PRICE * 2;
+        uint256 fee = price * INITIAL_FEE_RATE / 10000;
+        uint256 sellerShare = price - fee; // would-be payment to alice
+        uint256 aliceBalBefore = bl.balanceOf(alice);
+        uint256 contractBalBefore = bl.balanceOf(address(mondeto));
+
+        // Bob buys alice's pixel. Alice's payout is blocked; the purchase still succeeds
+        // and the seller's share is retained by the contract instead.
+        vm.expectEmit(true, true, false, true);
+        emit SellerPaymentRedirected(alice, address(bl), sellerShare);
+        vm.prank(bob);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+
+        // Alice (blocked) received nothing; contract kept fee + redirected seller share.
+        assertEq(bl.balanceOf(alice), aliceBalBefore);
+        assertEq(bl.balanceOf(address(mondeto)) - contractBalBefore, fee + sellerShare);
+
+        // Pixel ownership transferred to bob despite the blocked payout.
+        (address pixelOwner,) = mondeto.pixels(0);
+        assertEq(pixelOwner, bob);
+    }
+
+    function test_blockedSellerInMixedBatchSucceeds() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+
+        // Alice owns pixel 0; pixel 1 stays unowned (treasury).
+        uint256[] memory aliceIds = new uint256[](1);
+        aliceIds[0] = 0;
+        vm.prank(alice);
+        mondeto.buyPixels(aliceIds, address(bl), type(uint256).max, type(uint256).max);
+        bl.setBlocked(alice, true);
+
+        uint256 contractBalBefore = bl.balanceOf(address(mondeto));
+        uint256 aliceBalBefore = bl.balanceOf(alice);
+
+        // Bob buys [0 (owned by blocked alice), 1 (unowned)] in one call.
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        vm.prank(bob);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+
+        // pixel 0: price 2x → fee + redirected seller share both stay in contract.
+        // pixel 1: unowned at INITIAL_PRICE → full to treasury.
+        uint256 ownedPrice = INITIAL_PRICE * 2;
+        uint256 unownedPrice = INITIAL_PRICE;
+        assertEq(bl.balanceOf(address(mondeto)) - contractBalBefore, ownedPrice + unownedPrice);
+        assertEq(bl.balanceOf(alice), aliceBalBefore); // alice (blocked) received nothing
+
+        (address owner0,) = mondeto.pixels(0);
+        (address owner1,) = mondeto.pixels(1);
+        assertEq(owner0, bob);
+        assertEq(owner1, bob);
+    }
+
+    function test_unblockedSellerStillPaidWhenAnotherBlocked() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+
+        // alice owns pixel 0, bob owns pixel 1.
+        uint256[] memory id0 = new uint256[](1);
+        id0[0] = 0;
+        vm.prank(alice);
+        mondeto.buyPixels(id0, address(bl), type(uint256).max, type(uint256).max);
+        uint256[] memory id1 = new uint256[](1);
+        id1[0] = 1;
+        vm.prank(bob);
+        mondeto.buyPixels(id1, address(bl), type(uint256).max, type(uint256).max);
+
+        // Block only alice. carol buys both pixels.
+        bl.setBlocked(alice, true);
+        address carol = address(0xCA401);
+        bl.mint(carol, 1_000_000e6);
+        vm.prank(carol);
+        bl.approve(address(mondeto), type(uint256).max);
+
+        uint256 price = INITIAL_PRICE * 2;
+        uint256 fee = price * INITIAL_FEE_RATE / 10000;
+        uint256 sellerShare = price - fee;
+        uint256 bobBalBefore = bl.balanceOf(bob);
+        uint256 aliceBalBefore = bl.balanceOf(alice);
+        uint256 contractBalBefore = bl.balanceOf(address(mondeto));
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0; // blocked alice
+        ids[1] = 1; // unblocked bob
+        vm.prank(carol);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+
+        // bob (not blocked) gets paid; alice's share is retained by the contract.
+        assertEq(bl.balanceOf(bob) - bobBalBefore, sellerShare);
+        assertEq(bl.balanceOf(alice), aliceBalBefore); // alice (blocked) received nothing
+        // contract gains: 2 fees + alice's redirected seller share.
+        assertEq(bl.balanceOf(address(mondeto)) - contractBalBefore, fee * 2 + sellerShare);
+    }
+
+    function test_blockedBuyerStillReverts() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+        bl.setBlocked(bob, true);
+
+        // bob cannot pay the treasury for an unowned pixel → purchase must revert.
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+        vm.prank(bob);
+        vm.expectRevert();
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
     }
 
     function test_buyEmpty() public {
