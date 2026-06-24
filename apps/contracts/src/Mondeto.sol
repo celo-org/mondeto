@@ -28,6 +28,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     ///         to the token's own decimals, treating all accepted coins as 1:1.
     uint8 public constant PRICE_DECIMALS = 6;
 
+    /// @notice Upper bound on the resale fee, in basis points (2000 = 20%). Caps how much
+    ///         of an owned-pixel resale the treasury can take, guaranteeing the previous
+    ///         owner always keeps at least 80%. Bounds owner power over pending/future sales.
+    uint256 public constant MAX_FEE_RATE = 2000;
+
     // --- Structs ---
     struct PixelData {
         address owner;
@@ -115,7 +120,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         __Ownable_init(msg.sender);
 
         if (_landMask.length != LAND_MASK_LENGTH) revert InvalidMaskLength();
-        if (_feeRate > 10000) revert InvalidFeeRate();
+        if (_feeRate > MAX_FEE_RATE) revert InvalidFeeRate();
         if (_tokens.length == 0) revert NoTokens();
         if (_minPrice > _initialPrice) revert InvalidPrice();
 
@@ -514,9 +519,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         emit AcceptedTokenRemoved(token);
     }
 
-    /// @param _feeRate Fee rate in basis points (10000 = 100%, 100 = 1%).
+    /// @param _feeRate Fee rate in basis points (100 = 1%), capped at MAX_FEE_RATE (20%).
     function setFeeRate(uint256 _feeRate) external onlyOwner {
-        if (_feeRate > 10000) revert InvalidFeeRate();
+        if (_feeRate > MAX_FEE_RATE) revert InvalidFeeRate();
         feeRate = _feeRate;
         emit FeeRateUpdated(_feeRate);
     }
