@@ -12,8 +12,31 @@ export type TxStep = 'idle' | 'approving' | 'buying' | 'confirming' | 'success' 
 
 // Standing-approval cap, in dollars. If the contract is ever compromised,
 // user funds beyond this cap stay safe. Purchases that exceed the cap
-// approve the exact amount + 2% drift buffer instead.
+// approve the exact amount + the slippage buffer instead.
 const APPROVAL_CAP_DOLLARS = 10n
+
+const BPS_DENOM = 10_000n
+
+// Slippage tolerance for buys, in basis points. The audited `buyPixels`
+// reverts (SlippageExceeded) if the execution-time batch total rises above
+// `maxTotalCost`. Pixel prices drift between our `selectionPrice` quote and
+// inclusion (epoch interpolation, a competing buy on the same pixel), so we
+// quote a ceiling slightly above the live price. The SAME buffer drives the
+// token approval, so the approved allowance always covers the ceiling.
+// Tunable per-environment via NEXT_PUBLIC_BUY_SLIPPAGE_BPS (default 2%).
+const SLIPPAGE_BPS = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_BUY_SLIPPAGE_BPS)
+  return Number.isFinite(raw) && raw >= 0 ? BigInt(Math.floor(raw)) : 200n
+})()
+
+// Deadline window for buys, in seconds. The audited `buyPixels` reverts
+// (DeadlineExpired) once `block.timestamp` passes `deadline`, so a tx that
+// sits unmined doesn't execute at a stale price far in the future.
+// Tunable via NEXT_PUBLIC_BUY_DEADLINE_SECONDS (default 5 minutes).
+const DEADLINE_SECONDS = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_BUY_DEADLINE_SECONDS)
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 300
+})()
 
 export function useBuyPixels(mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
@@ -70,12 +93,19 @@ export function useBuyPixels(mapId?: MapId) {
         }) as Promise<number>,
       ])
       const priceDecimals = Number(priceDecimalsRaw)
-      console.log('On-chain canonical price:', canonicalPrice.toString(), 'priceDecimals:', priceDecimals)
+
+      // Slippage ceiling in PRICE_DECIMALS units — the same units the contract
+      // compares `maxTotalCost` against, so no conversion is needed here.
+      const maxTotalCost = (canonicalPrice * (BPS_DENOM + SLIPPAGE_BPS)) / BPS_DENOM
+      // Reject the tx if it hasn't mined within the deadline window.
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + DEADLINE_SECONDS)
 
       const tenToTokenDec = 10n ** BigInt(tokenDecimals)
       const tenToPriceDec = 10n ** BigInt(priceDecimals)
       const priceInToken = (canonicalPrice * tenToTokenDec) / tenToPriceDec
-      const approveAmount = (priceInToken * 102n) / 100n
+      // Approve the slippage ceiling (same buffer as maxTotalCost) so the
+      // allowance always covers the most the contract could charge.
+      const approveAmount = (priceInToken * (BPS_DENOM + SLIPPAGE_BPS)) / BPS_DENOM
       const capInToken = APPROVAL_CAP_DOLLARS * tenToTokenDec
       const safeApprove = approveAmount > capInToken ? approveAmount : capInToken
 
@@ -108,7 +138,7 @@ export function useBuyPixels(mapId?: MapId) {
         address: contractAddress,
         abi: MONDETO_ABI,
         functionName: 'buyPixels',
-        args: [bigIds, tokenAddress],
+        args: [bigIds, tokenAddress, maxTotalCost, deadline],
         dataSuffix,
       })
 
@@ -124,7 +154,7 @@ export function useBuyPixels(mapId?: MapId) {
             address: contractAddress,
             abi: MONDETO_ABI,
             functionName: 'buyPixels',
-            args: [bigIds, tokenAddress],
+            args: [bigIds, tokenAddress, maxTotalCost, deadline],
             account: address,
           })
         } catch (simErr) {
@@ -145,13 +175,17 @@ export function useBuyPixels(mapId?: MapId) {
         ? 'Transaction rejected by user'
         : msg.includes('nonce')
           ? 'Nonce error — please try again in a few seconds'
-          : msg.includes('NotLand')
-            ? 'Selected pixel is not land'
-            : msg.includes('TokenNotAccepted')
-              ? `${preferred.symbol} is not accepted by this map yet`
-              : msg.includes('insufficient') || msg.includes('ERC20')
-                ? `Insufficient ${preferred.symbol} balance or allowance`
-                : msg.slice(0, 200)
+          : msg.includes('SlippageExceeded')
+            ? 'Price moved while confirming — try again'
+            : msg.includes('DeadlineExpired')
+              ? 'Transaction expired — try again'
+              : msg.includes('NotLand')
+                ? 'Selected pixel is not land'
+                : msg.includes('TokenNotAccepted')
+                  ? `${preferred.symbol} is not accepted by this map yet`
+                  : msg.includes('insufficient') || msg.includes('ERC20')
+                    ? `Insufficient ${preferred.symbol} balance or allowance`
+                    : msg.slice(0, 200)
       setError(short)
       setStep('error')
     }

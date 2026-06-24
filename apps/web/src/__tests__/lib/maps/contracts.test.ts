@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { celo, celoSepolia } from 'viem/chains'
 import {
   getMapsForChain,
@@ -78,5 +78,45 @@ describe('contracts registry', () => {
     for (const m of getRegistry()) {
       expect(m.address).toMatch(/^0x[0-9a-fA-F]{40}$/)
     }
+  })
+})
+
+describe('preview-only address override (NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES)', () => {
+  const EXAMPLE = '0x2E7F1c57db241D529f7BD6B1fA8229984267Af23'
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('is a no-op when unset (production safety)', () => {
+    const africa = getRegistry().find((m) => m.id === 1)!
+    expect(africa.address).toBe('0x67F48829b8CaA06C89Ea010521548CF67E4F5c09')
+  })
+
+  it('repoints the targeted map address while keeping slug/dims', () => {
+    vi.stubEnv('NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES', `1:${EXAMPLE}`)
+    const africa = getRegistry().find((m) => m.id === 1)!
+    expect(africa.address).toBe(EXAMPLE)
+    expect(africa.slug).toBe('africa')
+    expect(africa.width).toBe(127)
+    expect(africa.height).toBe(134)
+    // other maps are untouched
+    expect(getRegistry().find((m) => m.id === 0)!.address).toBe(
+      '0x44bA167119355C8397C855756C2581B0771393D7',
+    )
+  })
+
+  it('flows through the address resolver once the map is also revealed', () => {
+    // getContractByMapId only resolves revealed maps, so QA reveals the
+    // overridden map too (NEXT_PUBLIC_REVEALED_MAP_IDS=0,1).
+    vi.stubEnv('NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES', `1:${EXAMPLE}`)
+    vi.stubEnv('NEXT_PUBLIC_REVEALED_MAP_IDS', '0,1')
+    expect(getContractByMapId(1, celo.id)).toBe(EXAMPLE)
+  })
+
+  it('ignores malformed pairs (bad id or address)', () => {
+    vi.stubEnv('NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES', 'x:0xabc,1:not-an-address')
+    const africa = getRegistry().find((m) => m.id === 1)!
+    expect(africa.address).toBe('0x67F48829b8CaA06C89Ea010521548CF67E4F5c09')
   })
 })

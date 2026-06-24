@@ -140,11 +140,45 @@ const MAPS: readonly MapContract[] = [
 ] as const
 
 /**
+ * Optional per-map address override, for pointing a map at a different
+ * deployment without editing the registry above. Format is comma-separated
+ * `id:address` pairs, e.g. "1:0x2E7F1c57db241D529f7BD6B1fA8229984267Af23".
+ *
+ * This exists to QA a new (e.g. audited) contract on a preview deploy: set it
+ * on the preview environment only and leave it UNSET in Production, where the
+ * hardcoded registry is the single source of truth. Dimensions/slug/mask come
+ * from the static entry, so override a map whose grid matches the target
+ * deployment (the audited Africa example is 127×134 → override id 1, africa).
+ * Returns null when unset/empty.
+ */
+function addressOverrides(): Map<number, `0x${string}`> | null {
+  const raw =
+    typeof process !== 'undefined'
+      ? process.env.NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES
+      : undefined
+  if (!raw || raw.trim() === '') return null
+  const out = new Map<number, `0x${string}`>()
+  for (const pair of raw.split(',')) {
+    const [idPart, addrPart] = pair.split(':').map((s) => s.trim())
+    const id = Number(idPart)
+    if (!Number.isInteger(id) || id < 0) continue
+    if (!addrPart || !/^0x[0-9a-fA-F]{40}$/.test(addrPart)) continue
+    out.set(id, addrPart as `0x${string}`)
+  }
+  return out.size > 0 ? out : null
+}
+
+/**
  * Resolve the active registry. Exported so tests can introspect it;
- * runtime callers should use the chain-aware helpers below.
+ * runtime callers should use the chain-aware helpers below. Applies the
+ * preview-only address override when present (no-op in Production).
  */
 export function getRegistry(): readonly MapContract[] {
-  return MAPS
+  const overrides = addressOverrides()
+  if (!overrides) return MAPS
+  return MAPS.map((m) =>
+    overrides.has(m.id) ? { ...m, address: overrides.get(m.id)! } : m,
+  )
 }
 
 /**
