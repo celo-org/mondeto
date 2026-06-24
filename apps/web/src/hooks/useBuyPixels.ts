@@ -15,6 +15,17 @@ export type TxStep = 'idle' | 'approving' | 'buying' | 'confirming' | 'success' 
 // approve the exact amount + 2% drift buffer instead.
 const APPROVAL_CAP_DOLLARS = 10n
 
+// Buyer-side slippage tolerance. The execution-time price can drift slightly
+// above the quoted price (gradual intra-epoch decay reverses, or another buyer
+// bumps a pixel's saleCount). We accept up to this much over the quote and let
+// the contract revert beyond it, so a front-run that doubles the price can't
+// silently charge the buyer. Expressed as a percentage of the canonical quote.
+const SLIPPAGE_TOLERANCE_BPS = 200n // 2%
+
+// How long a signed buy stays valid. Past this the contract rejects it rather
+// than executing a stale transaction at a possibly worse price.
+const DEADLINE_WINDOW_SECONDS = 20 * 60
+
 export function useBuyPixels(mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
   const { address } = useAccount()
@@ -79,6 +90,13 @@ export function useBuyPixels(mapId?: MapId) {
       const capInToken = APPROVAL_CAP_DOLLARS * tenToTokenDec
       const safeApprove = approveAmount > capInToken ? approveAmount : capInToken
 
+      // Slippage + deadline guards passed to buyPixels. maxTotalCost is in the
+      // contract's PRICE_DECIMALS base units (the same units selectionPrice
+      // returns and totalCost accumulates in), so cap the canonical price
+      // directly — no token-decimal conversion.
+      const maxTotalCost = (canonicalPrice * (10000n + SLIPPAGE_TOLERANCE_BPS)) / 10000n
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + DEADLINE_WINDOW_SECONDS)
+
       // Skip approve if existing allowance already covers the purchase.
       const currentAllowance = (await publicClient.readContract({
         address: tokenAddress,
@@ -108,7 +126,7 @@ export function useBuyPixels(mapId?: MapId) {
         address: contractAddress,
         abi: MONDETO_ABI,
         functionName: 'buyPixels',
-        args: [bigIds, tokenAddress],
+        args: [bigIds, tokenAddress, maxTotalCost, deadline],
         dataSuffix,
       })
 
@@ -124,7 +142,7 @@ export function useBuyPixels(mapId?: MapId) {
             address: contractAddress,
             abi: MONDETO_ABI,
             functionName: 'buyPixels',
-            args: [bigIds, tokenAddress],
+            args: [bigIds, tokenAddress, maxTotalCost, deadline],
             account: address,
           })
         } catch (simErr) {
@@ -149,9 +167,13 @@ export function useBuyPixels(mapId?: MapId) {
             ? 'Selected pixel is not land'
             : msg.includes('TokenNotAccepted')
               ? `${preferred.symbol} is not accepted by this map yet`
-              : msg.includes('insufficient') || msg.includes('ERC20')
-                ? `Insufficient ${preferred.symbol} balance or allowance`
-                : msg.slice(0, 200)
+              : msg.includes('SlippageExceeded')
+                ? 'Price moved above your limit — please review and try again'
+                : msg.includes('DeadlineExpired')
+                  ? 'Transaction expired — please try again'
+                  : msg.includes('insufficient') || msg.includes('ERC20')
+                    ? `Insufficient ${preferred.symbol} balance or allowance`
+                    : msg.slice(0, 200)
       setError(short)
       setStep('error')
     }
