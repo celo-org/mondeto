@@ -90,7 +90,7 @@ describe('preview-only address override (NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES)', ()
 
   it('is a no-op when unset (production safety)', () => {
     const africa = getRegistry().find((m) => m.id === 1)!
-    expect(africa.address).toBe('0x67F48829b8CaA06C89Ea010521548CF67E4F5c09')
+    expect(africa.address).toBe('0x648845bD26F169C0540A80916F4089b260A0Aa1b')
   })
 
   it('repoints the targeted map address while keeping slug/dims', () => {
@@ -102,7 +102,7 @@ describe('preview-only address override (NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES)', ()
     expect(africa.height).toBe(134)
     // other maps are untouched
     expect(getRegistry().find((m) => m.id === 0)!.address).toBe(
-      '0x44bA167119355C8397C855756C2581B0771393D7',
+      '0x34203Fcf8490Ba8672E2e7038441786bA703958E',
     )
   })
 
@@ -117,6 +117,6 @@ describe('preview-only address override (NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES)', ()
   it('ignores malformed pairs (bad id or address)', () => {
     vi.stubEnv('NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES', 'x:0xabc,1:not-an-address')
     const africa = getRegistry().find((m) => m.id === 1)!
-    expect(africa.address).toBe('0x67F48829b8CaA06C89Ea010521548CF67E4F5c09')
+    expect(africa.address).toBe('0x648845bD26F169C0540A80916F4089b260A0Aa1b')
   })
 })
