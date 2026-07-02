@@ -28,6 +28,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     ///         to the token's own decimals, treating all accepted coins as 1:1.
     uint8 public constant PRICE_DECIMALS = 6;
 
+    /// @notice Upper bound on the resale fee, in basis points (2000 = 20%). Caps how much
+    ///         of an owned-pixel resale the treasury can take, guaranteeing the previous
+    ///         owner always keeps at least 80%. Bounds owner power over pending/future sales.
+    uint256 public constant MAX_FEE_RATE = 2000;
+
     // --- Structs ---
     struct PixelData {
         address owner;
@@ -71,6 +76,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     event AcceptedTokenAdded(address indexed token, uint8 decimals);
     event AcceptedTokenRemoved(address indexed token);
     event FeeRateUpdated(uint256 feeRate);
+    /// @notice Emitted when a seller payment could not be delivered (e.g. token blacklist)
+    ///         and was retained by the contract instead. `amount` is in PRICE_DECIMALS base units.
+    event SellerPaymentRedirected(address indexed seller, address indexed token, uint256 amount);
 
     // --- Errors ---
     error InvalidPixelId(uint256 id);
@@ -112,7 +120,7 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         __Ownable_init(msg.sender);
 
         if (_landMask.length != LAND_MASK_LENGTH) revert InvalidMaskLength();
-        if (_feeRate > 10000) revert InvalidFeeRate();
+        if (_feeRate > MAX_FEE_RATE) revert InvalidFeeRate();
         if (_tokens.length == 0) revert NoTokens();
         if (_minPrice > _initialPrice) revert InvalidPrice();
 
@@ -136,7 +144,10 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     /// @param deadline Unix timestamp after which the transaction must not execute. Protects against
     ///        a stale transaction landing at a worse price long after it was signed. Pass
     ///        `type(uint256).max` to opt out.
-    function buyPixels(uint256[] calldata ids, address token, uint256 maxTotalCost, uint256 deadline) external nonReentrant {
+    function buyPixels(uint256[] calldata ids, address token, uint256 maxTotalCost, uint256 deadline)
+        external
+        nonReentrant
+    {
         if (block.timestamp > deadline) revert DeadlineExpired(deadline);
 
         TokenConfig memory tc = tokenConfig[token];
@@ -219,7 +230,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                 px.owner = msg.sender;
             }
 
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         if (totalCost > maxTotalCost) revert SlippageExceeded(totalCost, maxTotalCost);
@@ -227,11 +240,23 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         // Execute transfers, scaling each aggregated (base-unit) amount to the chosen
         // token's decimals. Scaling is linear, so per-recipient scaling == scaling the sum.
         IERC20 t = IERC20(token);
-        for (uint256 i; i < recipientCount;) {
-            if (amounts[i] > 0) {
-                t.safeTransferFrom(msg.sender, recipients[i], _scaleToToken(amounts[i], tc.decimals));
+        // Pay sellers (indices 1+). A token may block a transfer to a blacklisted previous owner;
+        // rather than reverting the whole batch, keep those proceeds in the contract (the blocked
+        // address could not withdraw them anyway). recipients[0] is always address(this), paid last.
+        for (uint256 i = 1; i < recipientCount;) {
+            uint256 amt = amounts[i];
+            if (amt > 0 && !t.trySafeTransferFrom(msg.sender, recipients[i], _scaleToToken(amt, tc.decimals))) {
+                amounts[0] += amt; // redirect blocked seller proceeds to the treasury (base units)
+                emit SellerPaymentRedirected(recipients[i], token, amt);
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
+        }
+        // Treasury: unowned-pixel proceeds + fees + any redirected seller funds, in one transfer.
+        // Uses safeTransferFrom (reverting) so a buyer who cannot pay fails cleanly.
+        if (amounts[0] > 0) {
+            t.safeTransferFrom(msg.sender, address(this), _scaleToToken(amounts[0], tc.decimals));
         }
 
         emit PixelsPurchased(msg.sender, token, ids, totalCost);
@@ -285,15 +310,19 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     /// @notice Returns all contract constants and config needed for client-side rendering and
     ///         price computation in a single RPC call.
-    function config() external view returns (
-        uint16 width,
-        uint16 height,
-        uint256 halvingTime,
-        uint256 _initialPrice,
-        uint256 _minPrice,
-        uint256 _halvingStartTimestamp,
-        uint256 _feeRate
-    ) {
+    function config()
+        external
+        view
+        returns (
+            uint16 width,
+            uint16 height,
+            uint256 halvingTime,
+            uint256 _initialPrice,
+            uint256 _minPrice,
+            uint256 _halvingStartTimestamp,
+            uint256 _feeRate
+        )
+    {
         return (WIDTH, HEIGHT, HALVING_TIME, initialPrice, minPrice, halvingStartTimestamp, feeRate);
     }
 
@@ -353,7 +382,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                         cachedWord = landMask[wordIdx];
                     }
                     if (cachedWord & (1 << (id & 255)) == 0) {
-                        unchecked { ++col; }
+                        unchecked {
+                            ++col;
+                        }
                         continue;
                     }
                 }
@@ -376,9 +407,13 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                     }
                     offset += 24;
                 }
-                unchecked { ++col; }
+                unchecked {
+                    ++col;
+                }
             }
-            unchecked { ++row; }
+            unchecked {
+                ++row;
+            }
         }
 
         // Trim to actual size
@@ -409,9 +444,14 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
                 if (cachedWord & (1 << (id & 255)) != 0) {
                     total += _price(pixels[id].saleCount, elapsed, _initialPrice, _minPrice);
                 }
-                unchecked { ++id; ++col; }
+                unchecked {
+                    ++id;
+                    ++col;
+                }
             }
-            unchecked { ++row; }
+            unchecked {
+                ++row;
+            }
         }
         return total;
     }
@@ -479,9 +519,9 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         emit AcceptedTokenRemoved(token);
     }
 
-    /// @param _feeRate Fee rate in basis points (10000 = 100%, 100 = 1%).
+    /// @param _feeRate Fee rate in basis points (100 = 1%), capped at MAX_FEE_RATE (20%).
     function setFeeRate(uint256 _feeRate) external onlyOwner {
-        if (_feeRate > 10000) revert InvalidFeeRate();
+        if (_feeRate > MAX_FEE_RATE) revert InvalidFeeRate();
         feeRate = _feeRate;
         emit FeeRateUpdated(_feeRate);
     }
@@ -493,7 +533,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         return start == 0 ? 0 : block.timestamp - start;
     }
 
-    function _price(uint8 saleCount, uint256 elapsed, uint256 _initialPrice, uint256 _minPrice) internal view returns (uint256) {
+    function _price(uint8 saleCount, uint256 elapsed, uint256 _initialPrice, uint256 _minPrice)
+        internal
+        view
+        returns (uint256)
+    {
         uint256 epochStart = elapsed / HALVING_TIME;
         uint256 remainder = elapsed - epochStart * HALVING_TIME;
 
@@ -507,7 +551,11 @@ contract Mondeto is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         return pStart - (pStart - pEnd) * remainder / HALVING_TIME;
     }
 
-    function _discretePrice(uint8 saleCount, uint256 epoch, uint256 _initialPrice, uint256 _minPrice) internal pure returns (uint256) {
+    function _discretePrice(uint8 saleCount, uint256 epoch, uint256 _initialPrice, uint256 _minPrice)
+        internal
+        pure
+        returns (uint256)
+    {
         if (saleCount >= epoch) {
             uint256 shift = saleCount - epoch;
             if (shift >= 128) return type(uint256).max;
