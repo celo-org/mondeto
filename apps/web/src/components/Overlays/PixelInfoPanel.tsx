@@ -3,6 +3,7 @@
 import React from 'react'
 import type { PixelView } from '@/lib/mock'
 import { formatUSDT, ownerDefaultColor } from '@/lib/colorUtils'
+import { dailyFallPct, dealDepth } from '@/lib/decay'
 import { generateUsername } from '@/lib/username'
 import { ZERO_ADDRESS } from '@/constants/map'
 
@@ -10,6 +11,11 @@ interface PixelInfoPanelProps {
   visible: boolean
   pixel: PixelView | null
   pixelId: number
+  /** Map-global halving time in seconds (config().halvingTime) — while
+   *  unsold, every pixel's price falls at a constant daily rate. */
+  halvingTime?: bigint
+  /** Map entry price (config().initialPrice, micro-USDT). */
+  initialPrice?: bigint
   onBuyThisPixel: (id: number) => void
   onDismiss: () => void
 }
@@ -22,10 +28,24 @@ export default function PixelInfoPanel({
   visible,
   pixel,
   pixelId,
+  halvingTime,
+  initialPrice,
   onBuyThisPixel,
   onDismiss,
 }: PixelInfoPanelProps) {
   if (!pixel) return null
+
+  // While unsold, the price decays continuously — a constant daily rate,
+  // not a countdown. The rate is map-global (one halving clock per map).
+  const fallPct =
+    halvingTime !== undefined && halvingTime > 0n
+      ? dailyFallPct(Number(halvingTime))
+      : null
+  // A deal: current price has decayed below the map's entry price.
+  const depthPct =
+    initialPrice !== undefined
+      ? Math.round(dealDepth(pixel.currentPrice, initialPrice) * 100)
+      : 0
 
   const firstLetter = pixel.label ? pixel.label[0].toUpperCase() : '?'
   const firstLetterColor = pixel.label ? 'white' : 'var(--text-muted)'
@@ -174,6 +194,20 @@ export default function PixelInfoPanel({
           <div style={{ fontSize: 6, color: 'var(--text-muted)', marginTop: 1 }}>×</div>
         </div>
       </div>
+
+      {/* Falling price — continuous decay while unsold, map-global rate */}
+      {fallPct !== null && (
+        <div style={{ padding: '0 14px 4px' }}>
+          <div style={{ fontSize: 6, color: 'var(--text-muted)', letterSpacing: 1 }}>
+            UNSOLD PRICE FALLS ~{fallPct.toFixed(1)}%/DAY
+          </div>
+          {depthPct > 0 && (
+            <div style={{ fontSize: 6, color: 'var(--brand-lime)', letterSpacing: 1, marginTop: 3 }}>
+              NOW {depthPct}% UNDER ENTRY PRICE — SOMEONE WILL NOTICE
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Buy button */}
       <div style={{ padding: '4px 14px 0' }}>

@@ -2,7 +2,7 @@ import { ZERO_ADDRESS } from '@/constants/map'
 import { MONDETO_ABI } from './contract'
 import { isLand } from './landMask'
 import { uint24ToHex } from './colorUtils'
-import { pixelPrice } from './priceCalc'
+import { pixelPrice, type PriceConfig } from './priceCalc'
 import type { PixelView } from './mock'
 
 /**
@@ -81,6 +81,11 @@ export async function fetchAllPixelsFromContract(
   width: number,
   height: number,
   mask: Uint8Array,
+  /** Called with the map's on-chain pricing config once it's read — the
+   *  same values used to compute each pixel's currentPrice below. Lets
+   *  callers (usePixelMap) surface halvingTime/initialPrice to the UI
+   *  without a second config() round-trip. */
+  onConfig?: (config: PriceConfig) => void,
 ): Promise<PixelView[]> {
   const batchData = await readContract({
     address: contractAddress,
@@ -109,6 +114,7 @@ export async function fetchAllPixelsFromContract(
     const [, , halvingTime, initialPrice, minPrice, halvingStartTimestamp] = cfg
     const now = BigInt(Math.floor(Date.now() / 1000))
     const priceCfg = { initialPrice, minPrice, halvingStartTimestamp, halvingTime }
+    onConfig?.(priceCfg)
     for (const px of pixels) {
       px.currentPrice = pixelPrice(px.saleCount, now, priceCfg)
     }

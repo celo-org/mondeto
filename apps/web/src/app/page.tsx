@@ -7,6 +7,7 @@ import MapSwitcher from '@/components/Layout/MapSwitcher'
 import AwayFromHomeIndicator from '@/components/Layout/AwayFromHomeIndicator'
 import PaintModeBanner from '@/components/Map/PaintModeBanner'
 import HeatmapLegend from '@/components/Map/HeatmapLegend'
+import DealsLegend from '@/components/Map/DealsLegend'
 import ZoomHintToast from '@/components/Layout/ZoomHintToast'
 import CampaignBanner from '@/components/Layout/CampaignBanner'
 import BridgeBanner from '@/components/Layout/BridgeBanner'
@@ -46,7 +47,7 @@ export default function Home() {
   const mapMeta = useCurrentMapMeta()
   const mondetoAddress = mapMeta.address
 
-  const { pixelDataRef, loadState, load, refresh, version, changedIds } = usePixelMap(currentMapId)
+  const { pixelDataRef, loadState, load, refresh, version, changedIds, priceConfig } = usePixelMap(currentMapId)
   const {
     selectedIds,
     togglePixel,
@@ -66,7 +67,7 @@ export default function Home() {
   const [drawerProfiles, setDrawerProfiles] = useState<Map<string, { label: string; url: string }>>(new Map())
   const [mapProfiles, setMapProfiles] = useState<Map<string, { label: string; url?: string; color?: string }>>(new Map())
 
-  const [mapView, setMapView] = useState<'normal' | 'heatmap' | 'myland'>('normal')
+  const [mapView, setMapView] = useState<'normal' | 'heatmap' | 'myland' | 'deals'>('normal')
   const [currentScale, setCurrentScale] = useState(1)
   const [activeOverlay, setActiveOverlay] = useState<'none' | 'drawer' | 'info'>('none')
   const [tappedPixelId, setTappedPixelId] = useState<number | null>(null)
@@ -384,7 +385,7 @@ export default function Home() {
       {/* Top bar */}
       <TopBar title="MONDETO" />
 
-      {/* HEATMAP / MY LAND toggle — sits under the TopBar on the lime band */}
+      {/* HEATMAP / MY LAND / DEALS toggle — sits under the TopBar on the lime band */}
       <div
         style={{
           position: 'absolute',
@@ -401,7 +402,8 @@ export default function Home() {
           gap: 6,
         }}
       >
-        {(['heatmap', 'myland'] as const).map((v, i) => {
+        {/* analytics: deals_view_opened lands with the analytics baseline */}
+        {(['heatmap', 'myland', 'deals'] as const).map((v, i) => {
           const active = mapView === v
           return (
             <React.Fragment key={v}>
@@ -428,7 +430,7 @@ export default function Home() {
                   textTransform: 'uppercase',
                 }}
               >
-                {v === 'myland' ? 'MY LAND' : 'HEATMAP'}
+                {v === 'myland' ? 'MY LAND' : v === 'deals' ? 'DEALS' : 'HEATMAP'}
               </button>
             </React.Fragment>
           )
@@ -461,6 +463,7 @@ export default function Home() {
           loadState={loadState}
           userAddress={addrStr}
           userColor={profile.color}
+          initialPrice={priceConfig?.initialPrice}
           changedIds={changedIds}
           profilesMap={mapProfiles}
         />
@@ -512,6 +515,12 @@ export default function Home() {
 
       {/* Heatmap legend */}
       <HeatmapLegend visible={mapView === 'heatmap'} />
+
+      {/* Deals legend */}
+      <DealsLegend
+        visible={mapView === 'deals'}
+        halvingTimeSeconds={priceConfig ? Number(priceConfig.halvingTime) : undefined}
+      />
 
       {/* Zoom hint toast */}
       <ZoomHintToast hasZoomedPast4x={hasZoomedPast4xRef.current} />
@@ -631,6 +640,8 @@ export default function Home() {
           visible={true}
           pixel={tappedPixel}
           pixelId={tappedPixelId ?? 0}
+          halvingTime={priceConfig?.halvingTime}
+          initialPrice={priceConfig?.initialPrice}
           onBuyThisPixel={handleBuyThisPixel}
           onDismiss={handleDismissOverlay}
         />
