@@ -153,7 +153,7 @@ Three cards in a row, equal width, gap 5px, margin 0 10px 8px:
 ### Name Field
 ```
 [  NAME              ]
-[  Lena              ]
+[  Nova              ]
 ```
 - Container: background #faf7f2, border 0.5px solid #e0d8ce, border-radius 8px, padding 6px 9px
 - Label: 6px, #a09080, letter-spacing 1px, text-transform uppercase, margin-bottom 2px

@@ -1,6 +1,5 @@
 /**
  * Mondeto — map assignment & leaderboards
- * Lena · DevRel Lead, Celo Core Co · 2026-05-15
  *
  * Dependency-free domain types. Pixel/price data is expected to be hydrated
  * from the on-chain contracts upstream (one contract per map). This module is
