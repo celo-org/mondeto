@@ -17,25 +17,25 @@ const APPROVAL_CAP_DOLLARS = 10n
 
 const BPS_DENOM = 10_000n
 
-// Slippage tolerance for buys, in basis points. The audited `buyPixels`
-// reverts (SlippageExceeded) if the execution-time batch total rises above
-// `maxTotalCost`. Pixel prices drift between our `selectionPrice` quote and
-// inclusion (epoch interpolation, a competing buy on the same pixel), so we
-// quote a ceiling slightly above the live price. The SAME buffer drives the
-// token approval, so the approved allowance always covers the ceiling.
+// Buyer-side slippage tolerance, in basis points. The execution-time price can
+// drift slightly above the quoted price (gradual intra-epoch decay reverses, or
+// another buyer bumps a pixel's saleCount). We accept up to this much over the
+// quote and let the contract revert (SlippageExceeded) beyond it, so a
+// front-run that doubles the price can't silently charge the buyer. The SAME
+// buffer drives the token approval, so the allowance always covers the ceiling.
 // Tunable per-environment via NEXT_PUBLIC_BUY_SLIPPAGE_BPS (default 2%).
 const SLIPPAGE_BPS = (() => {
   const raw = Number(process.env.NEXT_PUBLIC_BUY_SLIPPAGE_BPS)
   return Number.isFinite(raw) && raw >= 0 ? BigInt(Math.floor(raw)) : 200n
 })()
 
-// Deadline window for buys, in seconds. The audited `buyPixels` reverts
-// (DeadlineExpired) once `block.timestamp` passes `deadline`, so a tx that
-// sits unmined doesn't execute at a stale price far in the future.
-// Tunable via NEXT_PUBLIC_BUY_DEADLINE_SECONDS (default 5 minutes).
+// How long a signed buy stays valid, in seconds. Past this the contract
+// rejects it (DeadlineExpired) rather than executing a stale transaction at a
+// possibly worse price. Tunable via NEXT_PUBLIC_BUY_DEADLINE_SECONDS
+// (default 20 minutes).
 const DEADLINE_SECONDS = (() => {
   const raw = Number(process.env.NEXT_PUBLIC_BUY_DEADLINE_SECONDS)
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 300
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 20 * 60
 })()
 
 export function useBuyPixels(mapId?: MapId) {
@@ -175,14 +175,14 @@ export function useBuyPixels(mapId?: MapId) {
         ? 'Transaction rejected by user'
         : msg.includes('nonce')
           ? 'Nonce error — please try again in a few seconds'
-          : msg.includes('SlippageExceeded')
-            ? 'Price moved while confirming — try again'
-            : msg.includes('DeadlineExpired')
-              ? 'Transaction expired — try again'
-              : msg.includes('NotLand')
-                ? 'Selected pixel is not land'
-                : msg.includes('TokenNotAccepted')
-                  ? `${preferred.symbol} is not accepted by this map yet`
+          : msg.includes('NotLand')
+            ? 'Selected pixel is not land'
+            : msg.includes('TokenNotAccepted')
+              ? `${preferred.symbol} is not accepted by this map yet`
+              : msg.includes('SlippageExceeded')
+                ? 'Price moved above your limit — please review and try again'
+                : msg.includes('DeadlineExpired')
+                  ? 'Transaction expired — please try again'
                   : msg.includes('insufficient') || msg.includes('ERC20')
                     ? `Insufficient ${preferred.symbol} balance or allowance`
                     : msg.slice(0, 200)
