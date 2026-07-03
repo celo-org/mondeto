@@ -1,14 +1,23 @@
 'use client'
 
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useAccount } from 'wagmi'
 import { celo } from 'viem/chains'
 import {
   getMapsForChain,
-  isRevealedMapId,
   type ChainId,
   type MapContract,
 } from '@/lib/maps/contracts'
+import { useRevealedMapIds } from '@/hooks/useRevealedMapIds'
 import { track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
@@ -23,45 +32,97 @@ export interface UseMapsResult {
   setCurrentMapId: (id: MapId) => void
 }
 
-// The active map is app-global state: the map view, the switcher, the
-// leaderboards, and referral deep-links all have to agree on it. It
-// lives in a module-level external store (not per-hook useState) so
-// every useMaps() caller shares one value — a setCurrentMapId from any
-// component re-renders all of them.
-let activeMapId: MapId | null = null
-const listeners = new Set<() => void>()
-
-function setActiveMapId(id: MapId) {
-  if (activeMapId === id) return
-  activeMapId = id
-  listeners.forEach((l) => l())
+/**
+ * Shared store for the active map id.
+ *
+ * `currentMapId` was previously a `useState` inside `useMaps`, which gave
+ * every caller (MapSwitcher, WorldCanvas, usePixelMap, …) its own private
+ * copy — switching maps in the top-bar pill didn't propagate to the
+ * renderer. The context here hoists the id into one place so all callers
+ * stay in sync; the value also rides in localStorage so a reload lands on
+ * the same map.
+ */
+interface CurrentMapStore {
+  currentMapId: MapId
+  setCurrentMapId: (id: MapId) => void
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+const CurrentMapContext = createContext<CurrentMapStore | null>(null)
+
+const STORAGE_KEY = 'mondeto-current-map-id'
+
+function readStoredMapId(): MapId | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (raw === null) return null
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 0) return null
+    return n as MapId
+  } catch {
+    return null
+  }
+}
+
+export function CurrentMapProvider({ children }: { children: ReactNode }) {
+  // Start at 0 on both server and client to avoid a hydration mismatch
+  // (localStorage isn't readable during SSR). The stored value is
+  // restored from localStorage on mount via the effect below.
+  const [currentMapId, setCurrentMapIdState] = useState<MapId>(0 as MapId)
+
+  useEffect(() => {
+    const stored = readStoredMapId()
+    if (stored !== null) setCurrentMapIdState(stored)
+  }, [])
+
+  const setCurrentMapId = useCallback((id: MapId) => {
+    setCurrentMapIdState(id)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(id))
+    } catch {
+      // localStorage may be unavailable (private browsing, embedded
+      // webviews). The in-memory state still updates so the session
+      // works; only persistence across reload is lost.
+    }
+  }, [])
+
+  const value = useMemo<CurrentMapStore>(
+    () => ({ currentMapId, setCurrentMapId }),
+    [currentMapId, setCurrentMapId],
+  )
+
+  return createElement(CurrentMapContext.Provider, { value }, children)
 }
 
 /**
  * Multi-map state hook.
  *
- * Home derivation rule (per the "1 user -> 1 map" direction):
+ * Home derivation rule:
  *  - If the wallet owns at least one pixel on any registered map, home is
  *    the map where it owns the most (lowest id wins ties).
- *  - Otherwise, home is the lowest revealed map id (today: map 0).
+ *  - Otherwise, home is the lowest revealed map id.
  *
- * TODO: the ownership scan (useOwnedMaps) is not wired in yet — until it
- * is, homeMapId falls back to the lowest revealed map for every wallet.
+ * Home is NOT persisted — it's recomputed every load from on-chain state
+ * via `useOwnedMaps`. `currentMapId` (the active view) lives in the
+ * `CurrentMapProvider` context so the top-bar pill, the renderer, and
+ * the leaderboard all stay in sync; persisted to localStorage too.
  *
- * `currentMapId` (the active view, distinct from home) is shared across
- * all callers; the map switcher and referral deep-links write to it.
+ * When no provider is mounted (e.g. test renders), the hook falls back
+ * to a local `useState` so existing tests keep working in isolation.
  */
 export function useMaps(): UseMapsResult {
   const { address, chainId } = useAccount()
   const effectiveChain = (chainId ?? celo.id) as ChainId
+  const revealedIds = useRevealedMapIds()
   const revealedMaps = useMemo(
-    () => getMapsForChain(effectiveChain),
-    [effectiveChain],
+    () => getMapsForChain(effectiveChain, revealedIds),
+    [effectiveChain, revealedIds],
+  )
+
+  // Validate against the currently-revealed set (runtime, reveal-aware).
+  const isRevealed = useCallback(
+    (id: MapId) => revealedMaps.some((m) => m.id === id),
+    [revealedMaps],
   )
 
   const homeMapId = useMemo<MapId | null>(() => {
@@ -69,23 +130,39 @@ export function useMaps(): UseMapsResult {
     return revealedMaps[0].id
   }, [address, revealedMaps])
 
-  const fallbackMapId = revealedMaps[0]?.id ?? (0 as MapId)
-  const storedMapId = useSyncExternalStore(
-    subscribe,
-    () => activeMapId,
-    () => null,
+  const ctx = useContext(CurrentMapContext)
+  const [localId, setLocalId] = useState<MapId>(
+    () => revealedMaps[0]?.id ?? (0 as MapId),
   )
-  const currentMapId = storedMapId ?? fallbackMapId
+  const currentRaw = ctx ? ctx.currentMapId : localId
+  const setRaw = ctx ? ctx.setCurrentMapId : setLocalId
+
+  // If the stored id isn't revealed (e.g. a continent that hasn't opened, or
+  // a chain mismatch), fall back to the first revealed map. Doesn't write
+  // back to storage — the original id stays parked.
+  const currentMapId = useMemo<MapId>(() => {
+    if (revealedMaps.length === 0) return currentRaw
+    return isRevealed(currentRaw) ? currentRaw : revealedMaps[0].id
+  }, [currentRaw, revealedMaps, isRevealed])
+
+  // Snap the persisted id forward when the revealed set changes (e.g. reveals
+  // load after first render, or a map the user was on gets hidden).
+  useEffect(() => {
+    if (revealedMaps.length === 0) return
+    if (!isRevealed(currentRaw)) {
+      setRaw(revealedMaps[0].id)
+    }
+  }, [currentRaw, revealedMaps, isRevealed, setRaw])
 
   const setCurrentMapId = useCallback(
     (id: MapId) => {
-      if (!isRevealedMapId(id, effectiveChain)) return
-      if (id !== activeMapId) {
-        track('map_switched', { fromMapId: activeMapId ?? fallbackMapId, toMapId: id })
+      if (!isRevealed(id)) return
+      if (id !== currentMapId) {
+        track('map_switched', { fromMapId: currentMapId, toMapId: id })
       }
-      setActiveMapId(id)
+      setRaw(id)
     },
-    [effectiveChain, fallbackMapId],
+    [isRevealed, setRaw, currentMapId],
   )
 
   return { revealedMaps, homeMapId, currentMapId, setCurrentMapId }

@@ -29,10 +29,7 @@ contract DeployScript is Script {
         console.log("Implementation deployed at:", address(implementation));
 
         // Deploy proxy with land mask included in initialization
-        bytes memory initData = abi.encodeCall(
-            Mondeto.initialize,
-            (tokens, initialPrice, minPrice, feeRate, landMask)
-        );
+        bytes memory initData = abi.encodeCall(Mondeto.initialize, (tokens, initialPrice, minPrice, feeRate, landMask));
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         console.log("Proxy deployed at:", address(proxy));
 

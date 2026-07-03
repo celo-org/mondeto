@@ -6,6 +6,13 @@ vi.mock('@/components/connect-button', () => ({
   ConnectButton: () => <button>Connect</button>,
 }))
 
+// MapSwitcher pulls in wagmi (useAccount + usePublicClient via useMaps and
+// useShouldOpenNextMap). TopBar doesn't own those concerns — stub the
+// switcher out so the bar can be rendered without a WagmiProvider tree.
+vi.mock('@/components/Layout/MapSwitcher', () => ({
+  default: () => null,
+}))
+
 describe('TopBar', () => {
   it('renders the wordmark with the title as alt', () => {
     render(<TopBar title="MONDETO" />)

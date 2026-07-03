@@ -1,8 +1,9 @@
 'use client'
 import React, { useRef, useEffect } from 'react'
-import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
+import { ZERO_ADDRESS } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
 import { isLand } from '@/lib/landMask'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
 const S = 4
@@ -14,6 +15,7 @@ interface OwnerMarkersProps {
 }
 
 export default function OwnerMarkers({ pixelData, userAddress, isDark = true }: OwnerMarkersProps) {
+  const { width: WIDTH, height: HEIGHT, mask } = useCurrentMapMeta()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number>(0)
 
@@ -29,10 +31,10 @@ export default function OwnerMarkers({ pixelData, userAddress, isDark = true }: 
     // Collect own pixel positions once
     const ownedPixels: { x: number; y: number }[] = []
     for (let i = 0; i < pixelData.length; i++) {
-      if (!isLand(i)) continue
+      if (!isLand(i, mask)) continue
       if (pixelData[i].owner === ZERO_ADDRESS) continue
       if (pixelData[i].owner.toLowerCase() === addr) {
-        ownedPixels.push(idToXY(i))
+        ownedPixels.push(idToXY(i, WIDTH))
       }
     }
 

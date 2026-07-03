@@ -10,6 +10,7 @@ import React, { useState, useEffect, useRef } from 'react'
 type Slide = {
   key: string
   kicker: string
+  headline?: string
   body: string
   tagline?: string
   visual: React.ReactNode
@@ -33,8 +34,10 @@ function SlideTycoon() {
 }
 
 function SlideHold() {
-  // Price tag that doubles in steps. The block underneath shakes lightly on
-  // each tick so the "they pay double" beat lands visually.
+  // Doubling sequence: a tag pops in, the big "x2" bounces, the next (doubled)
+  // tag pops in, x2 bounces again, and so on up the diagonal. Tags accumulate
+  // and stay, so the full $1 -> $2 -> $4 -> $8 run is readable at the peak
+  // before it resets. The bouncing x2 in the middle drives the rhythm.
   return (
     <div className="mi-stage">
       <div className="mi-tag-stack">
@@ -43,7 +46,6 @@ function SlideHold() {
         <div className="mi-tag mi-tag-3 font-display">$4</div>
         <div className="mi-tag mi-tag-4 font-display">$8</div>
       </div>
-      <div className="mi-block mi-block-hold" aria-hidden />
       <div className="mi-arrow font-display">x2</div>
     </div>
   )
@@ -134,7 +136,8 @@ const SLIDES: Slide[] = [
   {
     key: 'hold',
     kicker: 'HOLD YOUR GROUND',
-    body: 'Every pixel doubles when it sells. Buy early. When someone wants in, they pay you double.',
+    headline: 'PRICE x2 EVERY SALE',
+    body: 'Buy early. Next buyer pays 2x.',
     visual: <SlideHold />,
   },
   {
@@ -232,6 +235,9 @@ export default function IntroScreen() {
             <div key={s.key} className="mi-slide">
               <div className="mi-visual">{s.visual}</div>
               <div className="mi-kicker font-display">&gt; {s.kicker}</div>
+              {s.headline && (
+                <div className="mi-headline font-display">{s.headline}</div>
+              )}
               <div className="mi-body font-mono">{s.body}</div>
               {s.tagline && (
                 <div className="mi-tagline font-mono">{s.tagline}</div>
@@ -315,6 +321,11 @@ const INTRO_CSS = `
   color: var(--brand-lime);
   margin-bottom: 12px;
 }
+.mi-headline {
+  font-size: 18px; letter-spacing: 2px;
+  color: var(--brand-lime);
+  margin: -4px 0 12px;
+}
 .mi-body {
   font-size: 12px; line-height: 1.55;
   color: #FFFFFF;
@@ -372,49 +383,76 @@ const INTRO_CSS = `
 }
 
 /* ---------- Slide 2: HOLD / 2x ---------- */
-.mi-block-hold {
-  width: 80px; height: 80px;
-  background: var(--brand-lime);
-  box-shadow:
-    0 0 0 3px var(--brand-black),
-    0 0 0 6px var(--brand-lime);
-  image-rendering: pixelated;
-  animation: mi-shake 1.6s ease-in-out infinite;
-}
-@keyframes mi-shake {
-  0%, 90%, 100% { transform: translate(0,0); }
-  20%  { transform: translate(-2px, 2px); }
-  40%  { transform: translate(2px, -2px); }
-  60%  { transform: translate(-2px, -1px); }
-}
 .mi-tag-stack { position: absolute; inset: 0; pointer-events: none; }
 .mi-tag {
   position: absolute; left: 50%;
-  font-size: 12px; color: var(--brand-lime);
-  background: var(--brand-black);
-  border: 2px solid var(--brand-lime);
-  padding: 4px 8px;
-  opacity: 0;
-  animation: mi-tag-pop 6.4s ease-in-out infinite;
-}
-.mi-tag-1 { animation-delay: 0s;   top: 26%; transform: translateX(-180%); }
-.mi-tag-2 { animation-delay: 1.6s; top: 22%; transform: translateX(-60%);  }
-.mi-tag-3 { animation-delay: 3.2s; top: 18%; transform: translateX(60%);   }
-.mi-tag-4 { animation-delay: 4.8s; top: 14%; transform: translateX(180%);  color: var(--brand-black); background: var(--brand-lime); }
-@keyframes mi-tag-pop {
-  0%, 100% { opacity: 0; }
-  4%, 22%  { opacity: 1; }
-  25%      { opacity: 0; }
-}
-.mi-arrow {
-  position: absolute; right: 14%; bottom: 18%;
+  font-size: 20px; line-height: 1;
   color: var(--brand-lime);
-  font-size: 18px;
-  animation: mi-pulse 1.6s ease-in-out infinite;
+  background: var(--brand-black);
+  border: 3px solid var(--brand-lime);
+  box-shadow: 0 0 0 3px var(--brand-black), 0 0 14px rgba(167, 255, 5, 0.45);
+  padding: 8px 12px;
+  opacity: 0;
+  /* Tags appear one per 2s beat (25% of the 8s loop) and HOLD until the cycle
+     resets, so the full doubling run lines up on the diagonal at the peak. */
+  animation: mi-tag-grow 8s ease-in-out infinite;
 }
-@keyframes mi-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.5; }
-  50% { transform: scale(1.25); opacity: 1; }
+.mi-tag-1 { animation-name: mi-tag-grow-1; top: 30%; transform: translateX(-185%); }
+.mi-tag-2 { animation-name: mi-tag-grow-2; top: 22%; transform: translateX(-62%);  }
+.mi-tag-3 { animation-name: mi-tag-grow-3; top: 14%; transform: translateX(62%);   }
+.mi-tag-4 { animation-name: mi-tag-grow-4; top: 6%;  transform: translateX(185%);
+  color: var(--brand-black); background: var(--brand-lime); border-color: var(--brand-black); }
+/* Per-tag keyframes share the 8s timeline so tags accumulate (all four on
+   screen from ~75% to ~94%), then reset together. Each pops in with a little
+   overshoot bounce. translateX is repeated in every frame so the scale pop
+   doesn't drop the horizontal offset. */
+@keyframes mi-tag-grow-1 {
+  0%        { opacity: 0; transform: translateX(-185%) scale(0.5); }
+  4%        { opacity: 1; transform: translateX(-185%) scale(1.25); }
+  9%, 94%   { opacity: 1; transform: translateX(-185%) scale(1); }
+  100%      { opacity: 0; transform: translateX(-185%) scale(1); }
+}
+@keyframes mi-tag-grow-2 {
+  0%, 21%   { opacity: 0; transform: translateX(-62%) scale(0.5); }
+  25%       { opacity: 1; transform: translateX(-62%) scale(1.25); }
+  30%, 94%  { opacity: 1; transform: translateX(-62%) scale(1); }
+  100%      { opacity: 0; transform: translateX(-62%) scale(1); }
+}
+@keyframes mi-tag-grow-3 {
+  0%, 46%   { opacity: 0; transform: translateX(62%) scale(0.5); }
+  50%       { opacity: 1; transform: translateX(62%) scale(1.25); }
+  55%, 94%  { opacity: 1; transform: translateX(62%) scale(1); }
+  100%      { opacity: 0; transform: translateX(62%) scale(1); }
+}
+@keyframes mi-tag-grow-4 {
+  0%, 71%   { opacity: 0; transform: translateX(185%) scale(0.5); }
+  75%       { opacity: 1; transform: translateX(185%) scale(1.35); }
+  81%, 94%  { opacity: 1; transform: translateX(185%) scale(1); }
+  100%      { opacity: 0; transform: translateX(185%) scale(1); }
+}
+/* Big x2 in the lower middle. Bounces once per 2s beat, just before each new
+   doubled tag lands, so the rhythm reads "x2 -> new number -> x2 -> ...". */
+.mi-arrow {
+  position: absolute; left: 50%; bottom: 14%;
+  color: var(--brand-lime);
+  font-size: 32px;
+  text-shadow: 0 0 14px rgba(167, 255, 5, 0.6);
+  transform: translateX(-50%);
+  animation: mi-arrow-bounce 2s ease-in-out infinite;
+}
+@keyframes mi-arrow-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1);    opacity: 0.55; }
+  12%      { transform: translateX(-50%) translateY(-8px) scale(1.45); opacity: 1; }
+  30%      { transform: translateX(-50%) translateY(0) scale(1);    opacity: 0.8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mi-tag, .mi-arrow { animation: none; opacity: 1; }
+  .mi-tag-1 { transform: translateX(-185%); }
+  .mi-tag-2 { transform: translateX(-62%); }
+  .mi-tag-3 { transform: translateX(62%); }
+  .mi-tag-4 { transform: translateX(185%); }
+  .mi-arrow { transform: translateX(-50%); }
 }
 
 /* ---------- Slide 3: HUNT ---------- */

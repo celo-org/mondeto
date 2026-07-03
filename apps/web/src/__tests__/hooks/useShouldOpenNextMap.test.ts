@@ -1,10 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import {
+  cacheKeyFor,
   pixelViewsToStates,
   summarizeMap,
 } from '@/hooks/useShouldOpenNextMap'
-import { ZERO_ADDRESS, WIDTH, HEIGHT } from '@/constants/map'
+import { celo } from 'viem/chains'
+import { ZERO_ADDRESS } from '@/constants/map'
+import { getMaskData } from '@/lib/maps/masks'
 import type { PixelState } from '@/lib/maps/types'
+
+const WORLD = getMaskData('world')
+const WIDTH = WORLD.width
+const HEIGHT = WORLD.height
 
 function landPixel(
   id: number,
@@ -37,9 +44,9 @@ describe('summarizeMap', () => {
     const pixels: PixelState[] = [
       landPixel(0, '0xAlice', 1.0),
       landPixel(1, '0xBob', 2.0),
-      landPixel(2, null, 0.5), // unowned land still counts toward avg
+      landPixel(2, null, 0.5),
       landPixel(3, null, 0.5),
-      waterPixel(4), // water excluded entirely
+      waterPixel(4),
       waterPixel(5),
     ]
 
@@ -49,7 +56,6 @@ describe('summarizeMap', () => {
     expect(summary.totalLand).toBe(4)
     expect(summary.ownedCount).toBe(2)
     expect(summary.fillPct).toBeCloseTo(50, 5)
-    // (1.0 + 2.0 + 0.5 + 0.5) / 4 = 1.0
     expect(summary.avgPriceUsd).toBeCloseTo(1.0, 5)
   })
 
@@ -75,14 +81,11 @@ describe('summarizeMap', () => {
 
 describe('pixelViewsToStates', () => {
   it('converts USDT 6-decimal raw price to USD float', () => {
-    // Build just two views — the function does not require a full grid for
-    // unit testing; isLand is consulted from the real mask but we only check
-    // the owner/price conversion here.
     const views = [
-      { owner: '0xAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', currentPrice: 1_000_000n }, // $1.00
-      { owner: ZERO_ADDRESS, currentPrice: 250_000n }, // $0.25, unowned
+      { owner: '0xAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', currentPrice: 1_000_000n },
+      { owner: ZERO_ADDRESS, currentPrice: 250_000n },
     ]
-    const states = pixelViewsToStates(views)
+    const states = pixelViewsToStates(views, WIDTH, WORLD.mask)
     expect(states).toHaveLength(2)
     expect(states[0].owner).toBe('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
     expect(states[0].currentPrice).toBeCloseTo(1.0, 6)
@@ -90,16 +93,31 @@ describe('pixelViewsToStates', () => {
     expect(states[1].currentPrice).toBeCloseTo(0.25, 6)
   })
 
-  it('respects grid coordinates derived from index', () => {
+  it('respects grid coordinates derived from index using per-map width', () => {
     const views = Array.from({ length: WIDTH + 2 }, () => ({
       owner: ZERO_ADDRESS,
       currentPrice: 0n,
     }))
-    const states = pixelViewsToStates(views)
+    const states = pixelViewsToStates(views, WIDTH, WORLD.mask)
     expect(states[0]).toMatchObject({ x: 0, y: 0 })
     expect(states[WIDTH]).toMatchObject({ x: 0, y: 1 })
     expect(states[WIDTH + 1]).toMatchObject({ x: 1, y: 1 })
-    // Sanity: indices below total land should be within grid.
     expect(states[states.length - 1].y).toBeLessThan(HEIGHT)
+  })
+})
+
+describe('cacheKeyFor', () => {
+  it('includes the chain id and the sorted revealed ids', () => {
+    expect(cacheKeyFor(celo.id, [1, 0])).toBe(
+      `mondeto-should-open-next-map-cache:${celo.id}:0-1`,
+    )
+  })
+
+  it('differs across reveal sets so a pre-reveal entry cannot shadow a wider one', () => {
+    expect(cacheKeyFor(celo.id, [0])).not.toBe(cacheKeyFor(celo.id, [0, 1]))
+  })
+
+  it('is insensitive to reveal-id ordering', () => {
+    expect(cacheKeyFor(celo.id, [1, 0])).toBe(cacheKeyFor(celo.id, [0, 1]))
   })
 })

@@ -31,7 +31,7 @@ mask under `map/continents/` to deploy a single continent instead.
    | `INITIAL_PRICE`    | Starting pixel price in 6-decimal base units (`10000` = $0.01).      |
    | `MIN_PRICE`        | Price floor in base units.                                           |
    | `HALVING_TIME_DAYS`| Epoch length; price gradually halves over this window.               |
-   | `INITIAL_FEE_RATE` | Treasury fee on resales, in basis points (`500` = 5%).               |
+   | `INITIAL_FEE_RATE` | Treasury fee on resales, in basis points (`500` = 5%), max `2000` (20%).|
    | `ETH_RPC_URL`      | RPC endpoint (used by default when `--rpc-url` is omitted).          |
    | `LAND_MASK_PATH`   | *Optional.* Path to the land mask JSON. Defaults to `map/land_mask.json`. Set to `map/continents/<name>.json` (e.g. `africa`, `asia`, `europe`, `north-america`, `oceania`, `south-america`, `antarctica`) for a single-continent deploy. |
 

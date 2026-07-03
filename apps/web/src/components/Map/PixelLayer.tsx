@@ -1,8 +1,10 @@
 'use client'
 import React from 'react'
-import { WIDTH, HEIGHT, TILE_GAP, TILE_RADIUS, ZERO_ADDRESS } from '@/constants/map'
+import { TILE_GAP, TILE_RADIUS, ZERO_ADDRESS } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
 import { isLand } from '@/lib/landMask'
+import { ownerDefaultColor } from '@/lib/colorUtils'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
 export type MapView = 'normal' | 'heatmap' | 'myland'
@@ -36,15 +38,44 @@ export function drawPixels(
   ctx: CanvasRenderingContext2D,
   pixelData: PixelView[],
   mapView: MapView,
+  width: number,
+  height: number,
+  mask: Uint8Array,
   userAddress?: string,
+  /** The connected wallet's current (possibly unsaved) profile color, used
+   *  for their own pixels so the map matches what they see on the profile
+   *  screen even before they save it on-chain. */
+  userColor?: string,
 ) {
-  ctx.clearRect(0, 0, WIDTH, HEIGHT)
+  ctx.clearRect(0, 0, width, height)
 
   const gap = TILE_GAP
   const rad = TILE_RADIUS
   const userAddr = userAddress?.toLowerCase()
   const unownedColor = '#dddddd'
   const fadedColor = 'rgba(221,221,221,0.25)'
+
+  // Resolve an owned pixel's fill:
+  //   1. on-chain per-owner color (what everyone agrees on) wins;
+  //   2. else, for the connected user's OWN pixels, their live profile color
+  //      so their view matches the profile screen even before they save;
+  //   3. else, a deterministic per-address color (so unclaimed-looking grey
+  //      never shows and every viewer computes the same hue).
+  // Cached per owner so the hash isn't recomputed for every pixel.
+  const ownerColorCache = new Map<string, string>()
+  const ownedFill = (pixel: PixelView): string => {
+    if (pixel.color) return pixel.color
+    const owner = pixel.owner
+    if (userColor && userAddr && owner.toLowerCase() === userAddr) {
+      return userColor
+    }
+    let c = ownerColorCache.get(owner)
+    if (!c) {
+      c = ownerDefaultColor(owner)
+      ownerColorCache.set(owner, c)
+    }
+    return c
+  }
 
   if (mapView === 'heatmap') {
     let maxSales = 0
@@ -55,9 +86,9 @@ export function drawPixels(
     }
 
     for (let i = 0; i < pixelData.length; i++) {
-      if (!isLand(i)) continue
+      if (!isLand(i, mask)) continue
       const pixel = pixelData[i]
-      const { x, y } = idToXY(i)
+      const { x, y } = idToXY(i, width)
 
       if (pixel.saleCount === 0) {
         ctx.fillStyle = unownedColor
@@ -72,17 +103,15 @@ export function drawPixels(
     }
   } else if (mapView === 'myland') {
     for (let i = 0; i < pixelData.length; i++) {
-      if (!isLand(i)) continue
+      if (!isLand(i, mask)) continue
       const pixel = pixelData[i]
-      const { x, y } = idToXY(i)
+      const { x, y } = idToXY(i, width)
       const isOwned = pixel.owner !== ZERO_ADDRESS
       const isMine = userAddr && isOwned && pixel.owner.toLowerCase() === userAddr
 
       if (isMine) {
-        // My pixels: full color
-        ctx.fillStyle = pixel.color || '#888888'
+        ctx.fillStyle = ownedFill(pixel)
       } else {
-        // Everything else: faded out
         ctx.fillStyle = fadedColor
       }
 
@@ -92,13 +121,13 @@ export function drawPixels(
     }
   } else {
     for (let i = 0; i < pixelData.length; i++) {
-      if (!isLand(i)) continue
+      if (!isLand(i, mask)) continue
       const pixel = pixelData[i]
-      const { x, y } = idToXY(i)
+      const { x, y } = idToXY(i, width)
       const isOwned = pixel.owner !== ZERO_ADDRESS
 
       if (isOwned) {
-        ctx.fillStyle = pixel.color || '#888888'
+        ctx.fillStyle = ownedFill(pixel)
       } else {
         ctx.fillStyle = unownedColor
       }
@@ -115,17 +144,18 @@ interface PixelLayerProps {
 }
 
 export default function PixelLayer({ canvasRef }: PixelLayerProps) {
+  const { width, height } = useCurrentMapMeta()
   return (
     <canvas
       ref={el => { canvasRef.current = el }}
-      width={WIDTH}
-      height={HEIGHT}
+      width={width}
+      height={height}
       style={{
         position: 'absolute',
         top: 0,
         left: 0,
-        width: WIDTH,
-        height: HEIGHT,
+        width,
+        height,
         pointerEvents: 'none',
         imageRendering: 'pixelated',
       }}

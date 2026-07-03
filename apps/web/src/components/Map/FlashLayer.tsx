@@ -1,7 +1,9 @@
 'use client'
 import React, { useRef, useEffect } from 'react'
-import { WIDTH, HEIGHT, TILE_GAP, TILE_RADIUS } from '@/constants/map'
+import { TILE_GAP, TILE_RADIUS } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
+import { ownerDefaultColor } from '@/lib/colorUtils'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
 interface FlashLayerProps {
@@ -12,6 +14,7 @@ interface FlashLayerProps {
 const FLASH_DURATION = 1200
 
 export default function FlashLayer({ changedIds, pixelData }: FlashLayerProps) {
+  const { width: WIDTH, height: HEIGHT } = useCurrentMapMeta()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number>(0)
 
@@ -28,9 +31,9 @@ export default function FlashLayer({ changedIds, pixelData }: FlashLayerProps) {
 
     // Collect pixel positions and target colors
     const targets = changedIds.map(id => {
-      const { x, y } = idToXY(id)
+      const { x, y } = idToXY(id, WIDTH)
       const px = pixelData[id]
-      const color = px?.color || '#888888'
+      const color = px?.color || ownerDefaultColor(px?.owner)
       // Parse target color to RGB
       const m = color.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
       const tr = m ? parseInt(m[1], 16) : 136

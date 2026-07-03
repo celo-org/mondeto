@@ -1,18 +1,17 @@
-import { WIDTH, HEIGHT, ZERO_ADDRESS } from '@/constants/map'
+import { ZERO_ADDRESS } from '@/constants/map'
 import { MONDETO_ABI } from './contract'
 import { isLand } from './landMask'
-
-// Re-exported for backward compatibility with callers that imported through
-// this module; live multi-map callers should use getContractByMapId().
 import { uint24ToHex } from './colorUtils'
 import { pixelPrice } from './priceCalc'
 import type { PixelView } from './mock'
 
 /**
- * Decode packed pixel batch bytes from the contract into PixelView array.
- * Each land pixel = 24 bytes: owner(20) + saleCount(1) + color(3)
- * Water pixels are skipped in the packed data — we iterate row-major and
- * only consume a record when isLand is true.
+ * Decode packed pixel batch bytes from the contract into a PixelView
+ * array of length width*height, indexed row-major.
+ *
+ * Each land pixel = 24 bytes: owner(20) + saleCount(1) + color(3). Water
+ * pixels are skipped in the packed data — we iterate row-major and only
+ * consume a record when `isLand` is true.
  */
 export function decodePixelBatch(
   hexData: string,
@@ -20,12 +19,14 @@ export function decodePixelBatch(
   startY: number,
   w: number,
   h: number,
+  width: number,
+  height: number,
+  mask: Uint8Array,
 ): PixelView[] {
   const hex = hexData.startsWith('0x') ? hexData.slice(2) : hexData
-  const totalPixels = WIDTH * HEIGHT
+  const totalPixels = width * height
   const result: PixelView[] = new Array(totalPixels)
 
-  // Initialize all pixels as empty
   for (let i = 0; i < totalPixels; i++) {
     result[i] = {
       owner: ZERO_ADDRESS,
@@ -40,10 +41,9 @@ export function decodePixelBatch(
   let recordOffset = 0
   for (let row = startY; row < startY + h; row++) {
     for (let col = startX; col < startX + w; col++) {
-      const pixelId = row * WIDTH + col
-      if (!isLand(pixelId)) continue
+      const pixelId = row * width + col
+      if (!isLand(pixelId, mask)) continue
 
-      // Consume next 24-byte record
       const byteOffset = recordOffset * 48 // 24 bytes = 48 hex chars
       if (byteOffset + 48 > hex.length) break
 
@@ -54,7 +54,7 @@ export function decodePixelBatch(
       result[pixelId] = {
         owner: ownerHex,
         saleCount,
-        currentPrice: 0n, // computed client-side if needed
+        currentPrice: 0n,
         color: colorInt > 0 ? uint24ToHex(colorInt) : '',
         label: '',
         url: '',
@@ -68,25 +68,30 @@ export function decodePixelBatch(
 }
 
 /**
- * Fetch all pixel data from the contract in one call.
+ * Fetch all pixel data from the contract in one batch read.
  *
- * Callers MUST pass an explicit contract address — resolve it via
- * `getContractByMapId(currentMapId)` from `@/lib/maps/contracts`.
+ * Callers MUST pass the deployed contract's address and its grid
+ * dimensions + bundled mask, since each map's contract is sized
+ * independently (world 170x100, africa 127x134, europe 160x107). Use
+ * `useCurrentMapMeta()` to resolve the active map's dims.
  */
 export async function fetchAllPixelsFromContract(
   readContract: (args: { address: `0x${string}`; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }) => Promise<unknown>,
   contractAddress: `0x${string}`,
+  width: number,
+  height: number,
+  mask: Uint8Array,
 ): Promise<PixelView[]> {
   const batchData = await readContract({
     address: contractAddress,
     abi: MONDETO_ABI,
     functionName: 'getPixelBatch',
-    args: [0, 0, WIDTH, HEIGHT],
+    args: [0, 0, width, height],
   }) as `0x${string}`
 
-  const pixels = decodePixelBatch(batchData, 0, 0, WIDTH, HEIGHT)
+  const pixels = decodePixelBatch(batchData, 0, 0, width, height, width, height, mask)
 
-  // Read REAL pricing params from the contract — the constants in
+  // Read pricing params from the contract — the constants in
   // src/constants/map.ts were placeholders from the v2 migration and
   // don't match what's actually deployed. config() returns:
   //   [width, height, halvingTime, initialPrice, minPrice, halvingStartTimestamp, feeRate]

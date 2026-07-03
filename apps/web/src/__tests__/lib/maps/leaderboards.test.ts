@@ -163,11 +163,27 @@ import {
   globalMostPixels,
   globalMostExpensivePixel,
   globalBiggestConnectedArea,
+  globalTerritoryShare,
   allGlobalLeaderboards,
 } from "@/lib/maps/leaderboards";
 
 function namedMap(id: number, pixels: PixelState[]): MapSnapshot {
   return { meta: { id, open: true }, pixels };
+}
+
+/** Build a map with `total` land pixels, assigning the first `owned` to
+ *  `owner` and the rest to null (unowned). */
+function landMap(
+  id: number,
+  total: number,
+  owner: string,
+  owned: number,
+): MapSnapshot {
+  const pixels: PixelState[] = [];
+  for (let i = 0; i < total; i++) {
+    pixels.push(px(i, 0, i < owned ? owner : null));
+  }
+  return namedMap(id, pixels);
 }
 
 describe("global leaderboards", () => {
@@ -209,12 +225,45 @@ describe("global leaderboards", () => {
     ]);
   });
 
-  it("allGlobalLeaderboards returns all three", () => {
+  it("allGlobalLeaderboards uses normalized share for AREA", () => {
+    // mapA: 2 land, both 0xA -> share 1.0 ; mapB: 1 land, 0xB -> share 1.0.
     const mapA = namedMap(0, [px(0, 0, "0xA", 9), px(1, 0, "0xA", 2)]);
     const mapB = namedMap(1, [px(0, 0, "0xB", 3)]);
     const r = allGlobalLeaderboards([mapA, mapB]);
-    expect(r.mostPixels[0]).toEqual({ address: "0xA", value: 2 });
+    // AREA is now territory share (fraction), tie at 1.0 -> address asc.
+    expect(r.mostPixels[0].address).toBe("0xA");
+    expect(r.mostPixels[0].value).toBeCloseTo(1, 6);
     expect(r.mostExpensivePixel[0]).toEqual({ address: "0xA", value: 9 });
     expect(r.biggestConnectedArea[0]).toEqual({ address: "0xA", value: 2 });
+  });
+});
+
+describe("globalTerritoryShare (normalized AREA)", () => {
+  it("a dominant share on a small map beats a larger raw count on a big map", () => {
+    // 0xA owns 6 of 10 (0.60). 0xB owns 12 of 100 (0.12) — more raw pixels,
+    // but a smaller slice of its board, so A must rank first.
+    const small = landMap(0, 10, "0xA", 6);
+    const big = landMap(1, 100, "0xB", 12);
+    const board = globalTerritoryShare([small, big]);
+    expect(board[0].address).toBe("0xA");
+    expect(board[0].value).toBeCloseTo(0.6, 6);
+    expect(board[1].address).toBe("0xB");
+    expect(board[1].value).toBeCloseTo(0.12, 6);
+  });
+
+  it("sums a player's ownership fraction across maps", () => {
+    // 0xA owns 0.5 of map0 and 0.25 of map1 -> 0.75 total.
+    const m0 = landMap(0, 8, "0xA", 4); // 0.5
+    const m1 = landMap(1, 8, "0xA", 2); // 0.25
+    const board = globalTerritoryShare([m0, m1]);
+    expect(board[0].address).toBe("0xA");
+    expect(board[0].value).toBeCloseTo(0.75, 6);
+  });
+
+  it("skips empty maps without producing NaN", () => {
+    const empty = namedMap(0, [px(0, 0, null)]);
+    const real = landMap(1, 4, "0xA", 1); // 0.25
+    const board = globalTerritoryShare([empty, real]);
+    expect(board).toEqual([{ address: "0xA", value: 0.25 }]);
   });
 });

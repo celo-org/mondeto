@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useLeaderboard } from '@/hooks/useLeaderboard'
 import type { PixelView } from '@/lib/mock'
-import { ZERO_ADDRESS, TOTAL_PIXELS } from '@/constants/map'
+import { ZERO_ADDRESS } from '@/constants/map'
+import { getMaskData } from '@/lib/maps/masks'
+
+const WORLD = getMaskData('world')
+const TOTAL_PIXELS = WORLD.width * WORLD.height
 
 // usePublicClient is only consumed by the global path; for local-scope tests
 // it can return undefined safely.

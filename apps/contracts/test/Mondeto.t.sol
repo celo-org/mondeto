@@ -7,6 +7,7 @@ import {Mondeto} from "../src/Mondeto.sol";
 import {MockUSDT} from "./mocks/MockUSDT.sol";
 import {MockUSDC} from "./mocks/MockUSDC.sol";
 import {MockCUSD} from "./mocks/MockCUSD.sol";
+import {MockBlacklistToken} from "./mocks/MockBlacklistToken.sol";
 
 // Minimal V2 for upgrade test
 contract MondetoV2 is Mondeto(300, 200, 14 days) {
@@ -50,10 +51,8 @@ contract MondetoTest is Test {
         tokens[1] = address(usdc); // 6 decimals
         tokens[2] = address(cusd); // 18 decimals
         Mondeto impl = new Mondeto(300, 200, HALVING_TIME);
-        bytes memory initData = abi.encodeCall(
-            Mondeto.initialize,
-            (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, mask)
-        );
+        bytes memory initData =
+            abi.encodeCall(Mondeto.initialize, (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, mask));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         mondeto = Mondeto(address(proxy));
 
@@ -79,7 +78,7 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 1; // (1, 0)
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
     }
 
     function test_priceAtEpoch0() public view {
@@ -93,7 +92,7 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Price should now be doubled
         uint256 price = mondeto.priceOf(0, 0);
@@ -161,7 +160,7 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Halving clock now starts at the first-buy timestamp
         assertEq(mondeto.halvingStartTimestamp(), firstBuyTime);
@@ -175,7 +174,7 @@ contract MondetoTest is Test {
         // Empty buyPixels must not boot the clock — otherwise anyone could grief
         uint256[] memory ids = new uint256[](0);
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
         assertEq(mondeto.halvingStartTimestamp(), 0);
     }
 
@@ -184,7 +183,7 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // saleCount=1, epoch=0 → price = initial << 1 = 200_000
         assertEq(mondeto.priceOf(0, 0), INITIAL_PRICE * 2);
@@ -207,7 +206,7 @@ contract MondetoTest is Test {
         uint256 contractBalBefore = usdt.balanceOf(address(mondeto));
 
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // USDT went to contract (treasury)
         assertEq(usdt.balanceOf(address(mondeto)) - contractBalBefore, INITIAL_PRICE);
@@ -224,12 +223,12 @@ contract MondetoTest is Test {
 
         // Alice buys first
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Bob buys from alice
         uint256 aliceBalBefore = usdt.balanceOf(alice);
         vm.prank(bob);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Alice received payment (price was doubled), minus fee to contract
         uint256 price = INITIAL_PRICE * 2;
@@ -247,17 +246,71 @@ contract MondetoTest is Test {
         ids[1] = 1;
 
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Bob bulk-buys both from alice — should aggregate into one transfer
         uint256 aliceBalBefore = usdt.balanceOf(alice);
         vm.prank(bob);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Alice received aggregated payment for both pixels, minus fee each
         uint256 totalPrice = INITIAL_PRICE * 2 * 2;
         uint256 totalFee = totalPrice * INITIAL_FEE_RATE / 10000;
         assertEq(usdt.balanceOf(alice) - aliceBalBefore, totalPrice - totalFee);
+    }
+
+    // ========== Slippage & Deadline ==========
+
+    function test_revertWhenTotalCostExceedsMax() public {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // Alice buys at INITIAL_PRICE, bumping saleCount so the next price doubles.
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
+
+        // Bob quoted INITIAL_PRICE off-chain but the execution-time price is now 2x.
+        // Capping maxTotalCost at the stale quote must revert rather than overpay.
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Mondeto.SlippageExceeded.selector, INITIAL_PRICE * 2, INITIAL_PRICE));
+        mondeto.buyPixels(ids, address(usdt), INITIAL_PRICE, type(uint256).max);
+    }
+
+    function test_buySucceedsWhenTotalCostEqualsMax() public {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // An exact-match cap (totalCost == maxTotalCost) must NOT revert.
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt), INITIAL_PRICE, type(uint256).max);
+
+        (address pixelOwner,) = mondeto.pixels(0);
+        assertEq(pixelOwner, alice);
+    }
+
+    function test_revertWhenDeadlinePassed() public {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // Move past the buyer's deadline so the stale transaction is rejected.
+        vm.warp(block.timestamp + 1 hours);
+        uint256 deadline = block.timestamp - 1;
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Mondeto.DeadlineExpired.selector, deadline));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, deadline);
+    }
+
+    function test_buySucceedsAtDeadline() public {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // deadline == block.timestamp is still valid (only strictly-later reverts).
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, block.timestamp);
+
+        (address pixelOwner,) = mondeto.pixels(0);
+        assertEq(pixelOwner, alice);
     }
 
     function test_revertOnInvalidPixelId() public {
@@ -266,7 +319,7 @@ contract MondetoTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Mondeto.InvalidPixelId.selector, 60_000));
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
     }
 
     function test_revertOnWaterPixel() public {
@@ -276,7 +329,7 @@ contract MondetoTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Mondeto.NotLand.selector, 1024));
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
     }
 
     function test_selfBuy() public {
@@ -285,12 +338,12 @@ contract MondetoTest is Test {
 
         // Alice buys pixel
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Alice buys her own pixel again
         uint256 aliceBalBefore = usdt.balanceOf(alice);
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Alice pays full price but only receives price - fee back; fee goes to contract
         uint256 price = INITIAL_PRICE * 2;
@@ -335,7 +388,7 @@ contract MondetoTest is Test {
         ids[0] = 0;
         vm.startPrank(alice);
         mondeto.updateProfile(0xFF0000, "alice", "");
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
         vm.stopPrank();
 
         bytes memory batch = mondeto.getPixelBatch(0, 0, 2, 1);
@@ -349,7 +402,10 @@ contract MondetoTest is Test {
             let ptr := add(batch, 32)
             owner0 := shr(96, mload(ptr))
             sc0 := byte(0, mload(add(ptr, 20)))
-            color0 := or(or(shl(16, byte(0, mload(add(ptr, 21)))), shl(8, byte(0, mload(add(ptr, 22))))), byte(0, mload(add(ptr, 23))))
+            color0 := or(
+                or(shl(16, byte(0, mload(add(ptr, 21)))), shl(8, byte(0, mload(add(ptr, 22))))),
+                byte(0, mload(add(ptr, 23)))
+            )
         }
         assertEq(owner0, alice);
         assertEq(sc0, 1);
@@ -411,9 +467,14 @@ contract MondetoTest is Test {
         vm.expectRevert();
         mondeto.setFeeRate(100);
 
-        // Above 10000 reverts
+        // Above MAX_FEE_RATE (20%) reverts
+        uint256 maxFeeRate = mondeto.MAX_FEE_RATE();
         vm.expectRevert(Mondeto.InvalidFeeRate.selector);
-        mondeto.setFeeRate(10001);
+        mondeto.setFeeRate(maxFeeRate + 1);
+
+        // The cap itself (20%) is accepted
+        mondeto.setFeeRate(maxFeeRate);
+        assertEq(mondeto.feeRate(), maxFeeRate);
 
         // Zero is valid
         mondeto.setFeeRate(0);
@@ -426,7 +487,7 @@ contract MondetoTest is Test {
 
         // Alice buys unowned pixel → full INITIAL_PRICE to treasury
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
         assertEq(usdt.balanceOf(address(mondeto)), INITIAL_PRICE);
 
         // Bob buys from alice: price = INITIAL_PRICE * 2
@@ -436,16 +497,149 @@ contract MondetoTest is Test {
         uint256 fee = price * INITIAL_FEE_RATE / 10000;
         uint256 aliceBalBefore = usdt.balanceOf(alice);
         vm.prank(bob);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         assertEq(usdt.balanceOf(alice) - aliceBalBefore, price - fee);
         assertEq(usdt.balanceOf(address(mondeto)), INITIAL_PRICE + fee);
     }
 
+    // ========== Blocked seller payments (Q-01) ==========
+
+    event SellerPaymentRedirected(address indexed seller, address indexed token, uint256 amount);
+
+    /// @dev Deploys a blacklisting token, registers it, funds + approves alice and bob.
+    function _setUpBlacklistToken() internal returns (MockBlacklistToken bl) {
+        bl = new MockBlacklistToken();
+        mondeto.addAcceptedToken(address(bl));
+        address[2] memory users = [alice, bob];
+        for (uint256 i; i < users.length; ++i) {
+            bl.mint(users[i], 1_000_000e6);
+            vm.prank(users[i]);
+            bl.approve(address(mondeto), type(uint256).max);
+        }
+    }
+
+    function test_blockedSellerPaymentRedirectedToTreasury() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // Alice buys pixel 0, then becomes blacklisted by the token.
+        vm.prank(alice);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+        bl.setBlocked(alice, true);
+
+        uint256 price = INITIAL_PRICE * 2;
+        uint256 fee = price * INITIAL_FEE_RATE / 10000;
+        uint256 sellerShare = price - fee; // would-be payment to alice
+        uint256 aliceBalBefore = bl.balanceOf(alice);
+        uint256 contractBalBefore = bl.balanceOf(address(mondeto));
+
+        // Bob buys alice's pixel. Alice's payout is blocked; the purchase still succeeds
+        // and the seller's share is retained by the contract instead.
+        vm.expectEmit(true, true, false, true);
+        emit SellerPaymentRedirected(alice, address(bl), sellerShare);
+        vm.prank(bob);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+
+        // Alice (blocked) received nothing; contract kept fee + redirected seller share.
+        assertEq(bl.balanceOf(alice), aliceBalBefore);
+        assertEq(bl.balanceOf(address(mondeto)) - contractBalBefore, fee + sellerShare);
+
+        // Pixel ownership transferred to bob despite the blocked payout.
+        (address pixelOwner,) = mondeto.pixels(0);
+        assertEq(pixelOwner, bob);
+    }
+
+    function test_blockedSellerInMixedBatchSucceeds() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+
+        // Alice owns pixel 0; pixel 1 stays unowned (treasury).
+        uint256[] memory aliceIds = new uint256[](1);
+        aliceIds[0] = 0;
+        vm.prank(alice);
+        mondeto.buyPixels(aliceIds, address(bl), type(uint256).max, type(uint256).max);
+        bl.setBlocked(alice, true);
+
+        uint256 contractBalBefore = bl.balanceOf(address(mondeto));
+        uint256 aliceBalBefore = bl.balanceOf(alice);
+
+        // Bob buys [0 (owned by blocked alice), 1 (unowned)] in one call.
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        vm.prank(bob);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+
+        // pixel 0: price 2x → fee + redirected seller share both stay in contract.
+        // pixel 1: unowned at INITIAL_PRICE → full to treasury.
+        uint256 ownedPrice = INITIAL_PRICE * 2;
+        uint256 unownedPrice = INITIAL_PRICE;
+        assertEq(bl.balanceOf(address(mondeto)) - contractBalBefore, ownedPrice + unownedPrice);
+        assertEq(bl.balanceOf(alice), aliceBalBefore); // alice (blocked) received nothing
+
+        (address owner0,) = mondeto.pixels(0);
+        (address owner1,) = mondeto.pixels(1);
+        assertEq(owner0, bob);
+        assertEq(owner1, bob);
+    }
+
+    function test_unblockedSellerStillPaidWhenAnotherBlocked() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+
+        // alice owns pixel 0, bob owns pixel 1.
+        uint256[] memory id0 = new uint256[](1);
+        id0[0] = 0;
+        vm.prank(alice);
+        mondeto.buyPixels(id0, address(bl), type(uint256).max, type(uint256).max);
+        uint256[] memory id1 = new uint256[](1);
+        id1[0] = 1;
+        vm.prank(bob);
+        mondeto.buyPixels(id1, address(bl), type(uint256).max, type(uint256).max);
+
+        // Block only alice. carol buys both pixels.
+        bl.setBlocked(alice, true);
+        address carol = address(0xCA401);
+        bl.mint(carol, 1_000_000e6);
+        vm.prank(carol);
+        bl.approve(address(mondeto), type(uint256).max);
+
+        uint256 price = INITIAL_PRICE * 2;
+        uint256 fee = price * INITIAL_FEE_RATE / 10000;
+        uint256 sellerShare = price - fee;
+        uint256 bobBalBefore = bl.balanceOf(bob);
+        uint256 aliceBalBefore = bl.balanceOf(alice);
+        uint256 contractBalBefore = bl.balanceOf(address(mondeto));
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0; // blocked alice
+        ids[1] = 1; // unblocked bob
+        vm.prank(carol);
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+
+        // bob (not blocked) gets paid; alice's share is retained by the contract.
+        assertEq(bl.balanceOf(bob) - bobBalBefore, sellerShare);
+        assertEq(bl.balanceOf(alice), aliceBalBefore); // alice (blocked) received nothing
+        // contract gains: 2 fees + alice's redirected seller share.
+        assertEq(bl.balanceOf(address(mondeto)) - contractBalBefore, fee * 2 + sellerShare);
+    }
+
+    function test_blockedBuyerStillReverts() public {
+        MockBlacklistToken bl = _setUpBlacklistToken();
+        bl.setBlocked(bob, true);
+
+        // bob cannot pay the treasury for an unowned pixel → purchase must revert.
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+        vm.prank(bob);
+        vm.expectRevert();
+        mondeto.buyPixels(ids, address(bl), type(uint256).max, type(uint256).max);
+    }
+
     function test_buyEmpty() public {
         uint256[] memory ids = new uint256[](0);
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt)); // should not revert
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max); // should not revert
     }
 
     function test_buyDuplicatePixels() public {
@@ -456,7 +650,7 @@ contract MondetoTest is Test {
 
         uint256 aliceBalBefore = usdt.balanceOf(alice);
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // First iteration: unowned → price1 = INITIAL_PRICE, goes to treasury
         // Second iteration: owned by alice → price2 = INITIAL_PRICE * 2,
@@ -489,11 +683,26 @@ contract MondetoTest is Test {
         uint256[] memory badMask = new uint256[](100);
         address[] memory tokens = new address[](1);
         tokens[0] = address(usdt2);
-        bytes memory initData = abi.encodeCall(
-            Mondeto.initialize,
-            (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, badMask)
-        );
+        bytes memory initData =
+            abi.encodeCall(Mondeto.initialize, (tokens, INITIAL_PRICE, MIN_PRICE, INITIAL_FEE_RATE, badMask));
         vm.expectRevert(Mondeto.InvalidMaskLength.selector);
+        new ERC1967Proxy(address(impl), initData);
+    }
+
+    function test_constructorRejectsZeroHalvingTime() public {
+        vm.expectRevert(Mondeto.InvalidHalvingTime.selector);
+        new Mondeto(300, 200, 0);
+    }
+
+    function test_initializeRejectsMinPriceAboveInitialPrice() public {
+        MockUSDT usdt2 = new MockUSDT();
+        Mondeto impl = new Mondeto(300, 200, 14 days);
+        uint256[] memory mask = new uint256[](235);
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(usdt2);
+        bytes memory initData =
+            abi.encodeCall(Mondeto.initialize, (tokens, INITIAL_PRICE, INITIAL_PRICE + 1, INITIAL_FEE_RATE, mask));
+        vm.expectRevert(Mondeto.InvalidPrice.selector);
         new ERC1967Proxy(address(impl), initData);
     }
 
@@ -518,7 +727,7 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Deploy V2 and upgrade
         MondetoV2 v2Impl = new MondetoV2();
@@ -551,7 +760,7 @@ contract MondetoTest is Test {
 
         uint256 contractBalBefore = usdc.balanceOf(address(mondeto));
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdc));
+        mondeto.buyPixels(ids, address(usdc), type(uint256).max, type(uint256).max);
 
         assertEq(usdc.balanceOf(address(mondeto)) - contractBalBefore, INITIAL_PRICE);
         (address pixelOwner,) = mondeto.pixels(0);
@@ -566,7 +775,7 @@ contract MondetoTest is Test {
 
         // Unowned: full price to treasury, scaled.
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(cusd));
+        mondeto.buyPixels(ids, address(cusd), type(uint256).max, type(uint256).max);
         assertEq(cusd.balanceOf(address(mondeto)), INITIAL_PRICE * scale);
 
         // Owned: fee to treasury, remainder to previous owner — both scaled.
@@ -574,7 +783,7 @@ contract MondetoTest is Test {
         uint256 fee = price * INITIAL_FEE_RATE / 10000;
         uint256 aliceBalBefore = cusd.balanceOf(alice);
         vm.prank(bob);
-        mondeto.buyPixels(ids, address(cusd));
+        mondeto.buyPixels(ids, address(cusd), type(uint256).max, type(uint256).max);
 
         assertEq(cusd.balanceOf(alice) - aliceBalBefore, (price - fee) * scale);
         assertEq(cusd.balanceOf(address(mondeto)), (INITIAL_PRICE + fee) * scale);
@@ -587,7 +796,7 @@ contract MondetoTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Mondeto.TokenNotAccepted.selector, address(stray)));
-        mondeto.buyPixels(ids, address(stray));
+        mondeto.buyPixels(ids, address(stray), type(uint256).max, type(uint256).max);
     }
 
     function test_getAcceptedTokens() public view {
@@ -613,7 +822,7 @@ contract MondetoTest is Test {
         extra.approve(address(mondeto), type(uint256).max);
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
-        mondeto.buyPixels(ids, address(extra));
+        mondeto.buyPixels(ids, address(extra), type(uint256).max, type(uint256).max);
         vm.stopPrank();
         assertEq(extra.balanceOf(address(mondeto)), INITIAL_PRICE * 1e12);
     }
@@ -652,7 +861,7 @@ contract MondetoTest is Test {
         ids[0] = 0;
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Mondeto.TokenNotAccepted.selector, address(usdc)));
-        mondeto.buyPixels(ids, address(usdc));
+        mondeto.buyPixels(ids, address(usdc), type(uint256).max, type(uint256).max);
     }
 
     function test_removeAcceptedTokenRevertsIfNotAccepted() public {
@@ -666,7 +875,7 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(cusd));
+        mondeto.buyPixels(ids, address(cusd), type(uint256).max, type(uint256).max);
 
         uint256 amount = INITIAL_PRICE * 1e12;
         uint256 balBefore = cusd.balanceOf(owner);
@@ -679,11 +888,11 @@ contract MondetoTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt)); // INITIAL_PRICE of USDT (6 dec)
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max); // INITIAL_PRICE of USDT (6 dec)
         uint256[] memory ids2 = new uint256[](1);
         ids2[0] = 1;
         vm.prank(alice);
-        mondeto.buyPixels(ids2, address(cusd)); // INITIAL_PRICE * 1e12 of cUSD (18 dec)
+        mondeto.buyPixels(ids2, address(cusd), type(uint256).max, type(uint256).max); // INITIAL_PRICE * 1e12 of cUSD (18 dec)
 
         uint256 usdtExpected = INITIAL_PRICE;
         uint256 cusdExpected = INITIAL_PRICE * 1e12;
@@ -718,7 +927,7 @@ contract MondetoTest is Test {
 
         for (uint8 i; i < buys; ++i) {
             vm.prank(i % 2 == 0 ? alice : bob);
-            mondeto.buyPixels(ids, address(usdt));
+            mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
             if (i == 0) {
                 // First buy starts the halving clock at initialPrice. Warp far
                 // forward so subsequent buys floor at minPrice and balances last.
@@ -739,7 +948,7 @@ contract MondetoTest is Test {
         ids[0] = pixelIdx;
 
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         (address pixelOwner,) = mondeto.pixels(pixelIdx);
         assertEq(pixelOwner, alice);
@@ -753,7 +962,7 @@ contract MondetoTest is Test {
 
         // First buy starts the halving clock at initialPrice (saleCount: 0 → 1).
         vm.prank(alice);
-        mondeto.buyPixels(ids, address(usdt));
+        mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
 
         // Warp far so subsequent buys floor at minPrice (balances would otherwise run out).
         vm.warp(block.timestamp + 182 days * 300);
@@ -761,7 +970,7 @@ contract MondetoTest is Test {
         // 255 more buys (256 total) — saleCount should saturate at 255.
         for (uint256 i; i < 255; ++i) {
             vm.prank(i % 2 == 0 ? bob : alice);
-            mondeto.buyPixels(ids, address(usdt));
+            mondeto.buyPixels(ids, address(usdt), type(uint256).max, type(uint256).max);
         }
 
         (, uint8 saleCount) = mondeto.pixels(0);

@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { usePublicClient } from 'wagmi'
 import type { PixelView } from '@/lib/mock'
-import { fetchAllPixelsFromContract } from '@/lib/contractReads'
-import { allGlobalLeaderboards, allLeaderboards } from '@/lib/maps/leaderboards'
+import { allLeaderboards } from '@/lib/maps/leaderboards'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
-import { getRevealedMaps } from '@/lib/maps/contracts'
-import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
+import { getMapContractById } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
+import type { LeaderEntry, MapId } from '@/lib/maps/types'
 import { generateUsername } from '@/lib/username'
 
 export type LeaderboardTab = 'AREA' | 'EMPIRE' | 'TYCOONS'
@@ -43,70 +42,6 @@ interface BoardSet {
   loading: boolean
 }
 
-// 30s TTL avoids hammering Forno when the user flips local/global tabs.
-const GLOBAL_CACHE_TTL_MS = 30_000
-const GLOBAL_CACHE_KEY = 'mondeto:global-snapshots:v1'
-
-interface CachedSnapshot {
-  mapId: MapId
-  open: boolean
-  // Each pixel encoded as a tuple to keep storage tight.
-  // [id, x, y, owner|null, currentPrice, isLand(0|1)]
-  pixels: Array<[number, number, number, string | null, number, 0 | 1]>
-}
-
-interface CacheEntry {
-  storedAt: number
-  snapshots: CachedSnapshot[]
-}
-
-function readGlobalCache(): MapSnapshot[] | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.sessionStorage.getItem(GLOBAL_CACHE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as CacheEntry
-    if (Date.now() - parsed.storedAt > GLOBAL_CACHE_TTL_MS) return null
-    return parsed.snapshots.map((s) => ({
-      meta: { id: s.mapId, open: s.open },
-      pixels: s.pixels.map(([id, x, y, owner, currentPrice, isLand]) => ({
-        id,
-        x,
-        y,
-        owner,
-        currentPrice,
-        isLand: isLand === 1,
-      })),
-    }))
-  } catch {
-    return null
-  }
-}
-
-function writeGlobalCache(snapshots: MapSnapshot[]): void {
-  if (typeof window === 'undefined') return
-  try {
-    const entry: CacheEntry = {
-      storedAt: Date.now(),
-      snapshots: snapshots.map((s) => ({
-        mapId: s.meta.id,
-        open: s.meta.open,
-        pixels: s.pixels.map((p) => [
-          p.id,
-          p.x,
-          p.y,
-          p.owner,
-          p.currentPrice,
-          p.isLand ? 1 : 0,
-        ]),
-      })),
-    }
-    window.sessionStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(entry))
-  } catch {
-    // sessionStorage may be full or unavailable; not fatal.
-  }
-}
-
 function formatUSDTFromNumber(value: number): string {
   if (value === 0) return '0.00'
   if (value >= 1) return value.toFixed(2)
@@ -114,6 +49,17 @@ function formatUSDTFromNumber(value: number): string {
   const str = value.toFixed(6)
   const trimmed = str.replace(/0+$/, '').replace(/\.$/, '')
   return trimmed.length === 0 ? '0.00' : trimmed
+}
+
+/**
+ * Global AREA values are a sum of per-map ownership fractions (0..N for N
+ * maps). Render as a percentage so "owns 22% of total territory" reads
+ * naturally; can exceed 100% for a wallet dominating several maps. One
+ * decimal under 10% so small-but-real holdings aren't shown as "0%".
+ */
+function formatPercent(value: number): string {
+  const pct = value * 100
+  return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`
 }
 
 function decorate(
@@ -153,12 +99,12 @@ export function useLeaderboard(
 ): BoardSet {
   const scope = options.scope ?? 'local'
   const homeMapId = options.homeMapId ?? 0
-  const publicClient = usePublicClient()
 
-  const localSnapshot = useMemo(
-    () => pixelViewToMapSnapshot(pixelData, homeMapId, true),
-    [pixelData, homeMapId],
-  )
+  const localSnapshot = useMemo(() => {
+    const home = getMapContractById(homeMapId)
+    const { mask } = getMaskData(home.slug)
+    return pixelViewToMapSnapshot(pixelData, homeMapId, true, home.width, mask)
+  }, [pixelData, homeMapId])
 
   const localBoards = useMemo<BoardSet>(() => {
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
@@ -177,80 +123,64 @@ export function useLeaderboard(
   }, [localSnapshot, profilesMap])
 
   // --- Global path -------------------------------------------------------
-  const [globalSnapshots, setGlobalSnapshots] = useState<MapSnapshot[] | null>(
-    null,
-  )
+  // The cross-map board is computed server-side (/api/global-board) — reading
+  // every map's full pixel state from the phone was unreliable on MiniPay's
+  // RPC. The client just fetches the ranked entries and decorates them.
+  interface GlobalRaw {
+    area: LeaderEntry[]
+    empire: LeaderEntry[]
+    tycoons: LeaderEntry[]
+  }
+  const [globalRaw, setGlobalRaw] = useState<GlobalRaw | null>(null)
   const [globalLoading, setGlobalLoading] = useState(false)
 
   useEffect(() => {
     if (scope !== 'global') return
     let cancelled = false
 
-    const revealed = getRevealedMaps()
-    // If only one map is revealed there's nothing extra to fetch — the local
-    // snapshot IS the global snapshot. Caller is expected to hide the toggle
-    // in that case, but we stay correct either way.
-    if (revealed.length <= 1) {
-      setGlobalSnapshots([localSnapshot])
-      setGlobalLoading(false)
-      return
-    }
-
-    const cached = readGlobalCache()
-    if (cached && cached.length === revealed.length) {
-      setGlobalSnapshots(cached)
-      setGlobalLoading(false)
-      return
-    }
-
-    if (!publicClient) return
     setGlobalLoading(true)
-    const read = publicClient.readContract.bind(
-      publicClient,
-    ) as Parameters<typeof fetchAllPixelsFromContract>[0]
-
-    Promise.all(
-      revealed.map(async (m) => {
-        try {
-          const data = await fetchAllPixelsFromContract(read, m.address)
-          return pixelViewToMapSnapshot(data, m.id, m.revealed)
-        } catch (e) {
-          console.warn(`Failed to load map ${m.id} for global board:`, e)
-          // Empty snapshot so one bad map doesn't kill the whole board.
-          return pixelViewToMapSnapshot([], m.id, m.revealed)
-        }
-      }),
-    ).then((snapshots) => {
-      if (cancelled) return
-      writeGlobalCache(snapshots)
-      setGlobalSnapshots(snapshots)
-      setGlobalLoading(false)
-    })
+    fetch('/api/global-board')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        setGlobalRaw({
+          area: d.area ?? [],
+          empire: d.empire ?? [],
+          tycoons: d.tycoons ?? [],
+        })
+        setGlobalLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setGlobalLoading(false)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [scope, publicClient, localSnapshot])
+  }, [scope])
 
   const globalBoards = useMemo<BoardSet>(() => {
-    const snapshots = globalSnapshots ?? []
-    if (snapshots.length === 0) {
-      return { area: [], empire: [], tycoons: [], loading: globalLoading }
+    // Treat "haven't fetched yet" as loading too, so the first fetch reads as
+    // loading rather than flashing the empty "no claims yet" state.
+    const stillLoading = globalLoading || globalRaw === null
+    if (!globalRaw) {
+      return { area: [], empire: [], tycoons: [], loading: stillLoading }
     }
-    const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
-      allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
     return {
-      area: decorate(mostPixels, 'px', (v) => String(v), profilesMap),
-      empire: decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap),
+      // Global AREA is the normalized territory-share board, so its value is
+      // a fraction rendered as a percentage (not a raw pixel count).
+      area: decorate(globalRaw.area, '', formatPercent, profilesMap),
+      empire: decorate(globalRaw.empire, 'px', (v) => String(v), profilesMap),
       tycoons: decorate(
-        mostExpensivePixel,
+        globalRaw.tycoons,
         'USDT',
         formatUSDTFromNumber,
         profilesMap,
       ),
-      loading: globalLoading,
+      loading: stillLoading,
     }
-  }, [globalSnapshots, globalLoading, profilesMap])
+  }, [globalRaw, globalLoading, profilesMap])
 
   return scope === 'global' ? globalBoards : localBoards
 }

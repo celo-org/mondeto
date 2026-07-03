@@ -105,3 +105,6 @@ Thumbs.db
 # Turbo
 .turbo
 .vercel
+
+# Admin board lives in its own private repo (celo-org). Scaffolded here but not part of this repo.
+/admin/

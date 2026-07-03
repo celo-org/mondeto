@@ -81,27 +81,39 @@ scripts/
 
 ## Deployments
 
-Mondeto runs multiple identical 170×100 map contracts. New wallets are auto-assigned to the current "active" map (the lowest-id map whose average pixel price is below `NEXT_PUBLIC_MAP_THRESHOLD_USD`, default `$2`); the pointer advances automatically as each map fills. Existing wallets keep their sticky home (persisted to `localStorage`). All contracts live in [`apps/web/src/lib/maps/contracts.ts`](apps/web/src/lib/maps/contracts.ts).
+Mondeto runs one map contract per continent (plus the whole world) on **Celo mainnet**. Each map is its own canvas with a different grid size and land area. All contracts and their grid dimensions live in [`apps/web/src/lib/maps/contracts.ts`](apps/web/src/lib/maps/contracts.ts); the matching land masks are generated into `apps/web/src/data/masks/` by `pnpm -F web build:masks`. `ChainGuard` keeps wallets on Celo mainnet.
 
-### Production (Celo mainnet)
+**Gradual rollout.** All continents are deployed and listed in the registry, but visibility is opened over time. By default only **WORLD** is revealed (launch state); continents stay hidden until opened. Set `NEXT_PUBLIC_REVEALED_MAP_IDS` (comma-separated ids, e.g. `0,1,2` for World + Africa + Asia) to reveal more, then redeploy — no code change. When more than one map is revealed, the map switcher and the per-map leaderboard selector appear automatically.
 
-| Map | Address |
-|-----|---------|
-| 0   | [`0xf825914Fa66F82f603310a1a7146C0F64A382298`](https://celoscan.io/address/0xf825914Fa66F82f603310a1a7146C0F64A382298) |
-| 1   | [`0xB58dA361F816af8F7C996864a66cd1e12C35D0f1`](https://celoscan.io/address/0xB58dA361F816af8F7C996864a66cd1e12C35D0f1) |
-| 2   | [`0x198c60A8515cdA74Ae82c8D3D56d3683e2713599`](https://celoscan.io/address/0x198c60A8515cdA74Ae82c8D3D56d3683e2713599) |
+**Active-map pointer.** Among the *revealed* maps, new wallets are auto-assigned to the current "active" map (the lowest-id map whose average pixel price is below `NEXT_PUBLIC_MAP_THRESHOLD_USD`, default `$2`); the pointer advances as each map fills. Existing wallets keep their sticky home (persisted to `localStorage`).
 
-Add new mainnet deployments to `PRODUCTION_MAPS` in the registry as one-line entries. No other code change is required — the active-pointer mechanism picks them up.
+### Celo mainnet — world + continents
 
-### Staging
+| ID | Map | Grid | Land px | Proxy |
+|----|-----|------|---------|-------|
+| 0 | World | 170×100 | 5,622 | [`0xA8cFC1B4365518f56954382B6Fab25a5382f5C49`](https://celoscan.io/address/0xA8cFC1B4365518f56954382B6Fab25a5382f5C49) |
+| 1 | Africa | 127×134 | 8,806 | [`0x8e70ada33714C3F8f35182b781C63449c5e079b7`](https://celoscan.io/address/0x8e70ada33714C3F8f35182b781C63449c5e079b7) |
+| 2 | Asia | 158×107 | 6,208 | [`0x9b8DC1e200A21A97963948A758D9fc4300310661`](https://celoscan.io/address/0x9b8DC1e200A21A97963948A758D9fc4300310661) |
+| 3 | Europe | 160×107 | 7,293 | [`0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767`](https://celoscan.io/address/0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767) |
+| 4 | North America | 159×107 | 5,497 | [`0x5bf55b88220DF9500A33962777B9d48945443106`](https://celoscan.io/address/0x5bf55b88220DF9500A33962777B9d48945443106) |
+| 5 | South America | 115×147 | 6,865 | [`0x822e332ac5f0c760257C7204154BA5eaF7A06586`](https://celoscan.io/address/0x822e332ac5f0c760257C7204154BA5eaF7A06586) |
+| 6 | Oceania | 158×107 | 4,425 | [`0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773`](https://celoscan.io/address/0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773) |
+| 7 | Antarctica | 145×117 | 9,115 | [`0x66C6eF911B3e33B35558956a0E636F33E16063c4`](https://celoscan.io/address/0x66C6eF911B3e33B35558956a0E636F33E16063c4) |
 
-`NEXT_PUBLIC_ENV=staging` switches to a separate registry so we can exercise the app on testnet without affecting production:
+Implementation (logic) contracts behind each UUPS proxy:
 
-| Chain | Map | Address |
-|-------|-----|---------|
-| Celo Sepolia  | 0 | [`0xc71e444c5339749c1c3067B62AacbfeE7840c934`](https://celo-sepolia.blockscout.com/address/0xc71e444c5339749c1c3067B62AacbfeE7840c934) |
+| Map | Implementation |
+|-----|----------------|
+| World | `0x35b4E020F3978Cc2a4F0C123A6A249204b8340e8` |
+| Africa | `0xd05C6A419c770425831885FDA2cA4a8b13e5caDb` |
+| Asia | `0x869552c7a8e20f2cd45f3B5489A044eE71A29c8F` |
+| Europe | `0x435f62Ad79A045c8b02ef27b44F139b31CD77C1c` |
+| North America | `0x9c9386dbA4Eb28C377C1eD15E4dC763D5f4DB586` |
+| South America | `0x2e965EE6d92777134867d5701CF5A39aA79f5203` |
+| Oceania | `0x2DcF496973a97076A7D97E5Ad75d9B7EFcb6D593` |
+| Antarctica | `0x1D4e86CfA050654C111728517Abd495696e37B07` |
 
-`ChainGuard` is relaxed on staging so the wallet can stay on Sepolia. Production wallets are auto-switched to Celo mainnet.
+To add or change a map: update the `MAPS` array in the registry (id, slug, displayName, address, grid dims), drop the continent's mask JSON into `apps/contracts/map/` and run `pnpm -F web build:masks`. No other code change is required — rendering, leaderboards, and the active-pointer mechanism all read the registry.
 
 ## Tech Stack
 

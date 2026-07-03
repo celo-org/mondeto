@@ -164,6 +164,16 @@ export const MONDETO_ABI = [
         "name": "token",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "maxTotalCost",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -928,6 +938,33 @@ export const MONDETO_ABI = [
     "type": "error",
     "name": "InvalidCoordinates",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DeadlineExpired",
+    "inputs": [
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SlippageExceeded",
+    "inputs": [
+      {
+        "name": "totalCost",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxTotalCost",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

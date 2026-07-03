@@ -1,9 +1,32 @@
+import { PROFILE_DEFAULT_PALETTE, ZERO_ADDRESS } from '@/constants/map'
+
 export function hexToUint24(hex: string): number {
   return parseInt(hex.replace('#', ''), 16)
 }
 
 export function uint24ToHex(n: number): string {
   return '#' + n.toString(16).padStart(6, '0')
+}
+
+/**
+ * Deterministic per-address profile color.
+ *
+ * The same wallet always maps to the same hue from `PROFILE_DEFAULT_PALETTE`
+ * (curated to avoid ocean-blue / land-cream). Because it's a pure function
+ * of the address, every viewer computes the identical color — so it doubles
+ * as the map's fallback color for owners who haven't saved an on-chain
+ * profile color yet (the contract returns 0 for them, and a flat grey would
+ * make their land look unclaimed). The profile screen seeds with this too,
+ * so the map matches what the owner sees as "their color".
+ */
+export function ownerDefaultColor(address: string | undefined): string {
+  if (!address || address === ZERO_ADDRESS) return PROFILE_DEFAULT_PALETTE[0]
+  let hash = 0
+  for (let i = 2; i < address.length; i++) {
+    hash = (hash * 31 + address.charCodeAt(i)) | 0
+  }
+  const idx = Math.abs(hash) % PROFILE_DEFAULT_PALETTE.length
+  return PROFILE_DEFAULT_PALETTE[idx]
 }
 
 function lerpColor(a: string, b: string, t: number): string {
