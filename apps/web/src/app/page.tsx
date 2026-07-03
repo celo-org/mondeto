@@ -541,7 +541,7 @@ export default function Home() {
           ZOOM IN TO SELECT A PIXEL
         </div>
       )}
-      {/* <CampaignBanner /> */}
+      <CampaignBanner />
       {/* Browser-only — points users with empty Celo wallets at Squid to
           bridge in. The component self-hides in MiniPay (where the in-drawer
           TOP UP BALANCE deeplink to MiniPay Add Cash handles the same case). */}
