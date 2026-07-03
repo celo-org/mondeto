@@ -5,6 +5,7 @@ import type { PixelView } from '@/lib/mock'
 import { formatUSDT, ownerDefaultColor } from '@/lib/colorUtils'
 import { generateUsername } from '@/lib/username'
 import { ZERO_ADDRESS } from '@/constants/map'
+import { track } from '@/lib/analytics'
 
 interface PixelInfoPanelProps {
   visible: boolean
@@ -25,6 +26,14 @@ export default function PixelInfoPanel({
   onBuyThisPixel,
   onDismiss,
 }: PixelInfoPanelProps) {
+  React.useEffect(() => {
+    if (visible && pixel != null) {
+      track('pixel_info_viewed', { pixelId, owned: pixel.owner !== ZERO_ADDRESS })
+    }
+    // fire once per inspected pixel — `pixel` object identity churns on poll
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, pixelId])
+
   if (!pixel) return null
 
   const firstLetter = pixel.label ? pixel.label[0].toUpperCase() : '?'

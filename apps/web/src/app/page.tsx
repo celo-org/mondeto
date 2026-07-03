@@ -437,7 +437,11 @@ export default function Home() {
                 </span>
               )}
               <button
-                onClick={() => setMapView(mapView === v ? 'normal' : v)}
+                onClick={() => {
+                  const next = mapView === v ? 'normal' : v
+                  setMapView(next)
+                  track('map_view_toggled', { view: next })
+                }}
                 className="font-display"
                 style={{
                   fontSize: 10,
