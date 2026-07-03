@@ -7,6 +7,7 @@ import { useConnect, WagmiProvider, createConfig } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
 import { ChainGuard } from "./ChainGuard";
+import { WalletAnalytics } from "./wallet-analytics";
 import { celoTransport, celoSepoliaTransport } from "@/lib/chain";
 
 // Architecture — MiniPay first, Privy lazy.
@@ -93,6 +94,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         <WagmiProvider config={wagmiConfig}>
           {mounted && isMiniPay && <MiniPayAutoConnect />}
           <ChainGuard />
+          <WalletAnalytics />
           {children}
         </WagmiProvider>
       </QueryClientProvider>

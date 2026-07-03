@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import WorldCanvas, { type WorldCanvasRef } from '@/components/Map/WorldCanvas'
 import TopBar from '@/components/Layout/TopBar'
@@ -24,13 +25,14 @@ import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
-import { isLandXY } from '@/lib/landMask'
 import { MONDETO_ABI } from '@/lib/contract'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
+import { storeReferrer, track } from '@/lib/analytics'
+import type { MapId } from '@/lib/maps/types'
 
 export default function Home() {
   // Dark is the only theme now; downstream map components still take the flag
@@ -43,9 +45,34 @@ export default function Home() {
   // resolved yet or because Privy's WagmiProvider hasn't initialized.
   const publicClient = useReadClient()
 
-  const { currentMapId } = useMaps()
+  const { currentMapId, setCurrentMapId } = useMaps()
   const mapMeta = useCurrentMapMeta()
   const mondetoAddress = mapMeta.address
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Invite/referral deep-links: /?map=<id>&ref=<wallet>. The map param
+  // jumps straight to that map (validated inside setCurrentMapId), the
+  // ref is kept for the visit and attached to buy events for
+  // attribution. Params are stripped from the URL afterwards so
+  // reloads/shares from the address bar don't re-fire.
+  useEffect(() => {
+    const mapParam = searchParams.get('map')
+    const refParam = searchParams.get('ref')
+    if (mapParam === null && refParam === null) return
+
+    if (mapParam !== null) {
+      const id = Number(mapParam)
+      if (Number.isInteger(id)) setCurrentMapId(id as MapId)
+    }
+    if (refParam) {
+      storeReferrer(refParam)
+      track('referral_landed', { ref: refParam, mapId: mapParam ?? undefined })
+    }
+    router.replace('/', { scroll: false })
+    // Run once for the URL the page was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { pixelDataRef, loadState, load, refresh, version, changedIds, priceConfig } = usePixelMap(currentMapId)
   const {
@@ -147,7 +174,6 @@ export default function Home() {
         if (mapMeta.slug !== 'world') return
         const { x, y } = geoToPixel(lat, lng)
         const targetId = pixelIdFn(x, y, mapMeta.width)
-        const landed = isLandXY(x, y, mapMeta.width, mapMeta.mask)
 
         // The canvas ref + its internal TransformWrapper need a few
         // frames to be ready after loadState flips to 'ready'. Retry
@@ -167,9 +193,6 @@ export default function Home() {
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
-            console.log(
-              `[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${lat.toFixed(2)},${lng.toFixed(2)} — land=${landed} via /api/geo (${data.city ?? '?'}, ${data.country ?? '?'})`,
-            )
             return
           }
           if (Date.now() - start > 2000) {
@@ -416,7 +439,11 @@ export default function Home() {
                 </span>
               )}
               <button
-                onClick={() => setMapView(mapView === v ? 'normal' : v)}
+                onClick={() => {
+                  const next = mapView === v ? 'normal' : v
+                  setMapView(next)
+                  track('map_view_toggled', { view: next })
+                }}
                 className="font-display"
                 style={{
                   fontSize: 10,
@@ -550,7 +577,7 @@ export default function Home() {
           ZOOM IN TO SELECT A PIXEL
         </div>
       )}
-      {/* <CampaignBanner /> */}
+      <CampaignBanner />
       {/* Browser-only — points users with empty Celo wallets at Squid to
           bridge in. The component self-hides in MiniPay (where the in-drawer
           TOP UP BALANCE deeplink to MiniPay Add Cash handles the same case). */}

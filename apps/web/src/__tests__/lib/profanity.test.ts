@@ -9,7 +9,7 @@ describe('checkProfanity', () => {
   })
 
   it('accepts ordinary names', () => {
-    for (const name of ['alice', 'pixelqueen', 'lena', 'mapgod', 'farah']) {
+    for (const name of ['alice', 'pixelqueen', 'nova', 'mapgod', 'farah']) {
       expect(checkProfanity(name)).toEqual({ ok: true })
     }
   })

@@ -50,7 +50,7 @@ const QA: Array<{ q: string; a: string }> = [
   },
   {
     q: 'Where does support go?',
-    a: 'Join us at t.me/mondetoSupport. A human (or our bot during phase 1) reads everything.',
+    a: 'Use the SUPPORT button on your profile page — it opens a short form. A human reads every submission.',
   },
 ]
 

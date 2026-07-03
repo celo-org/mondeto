@@ -18,6 +18,7 @@ import {
   type MapContract,
 } from '@/lib/maps/contracts'
 import { useRevealedMapIds } from '@/hooks/useRevealedMapIds'
+import { track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
 export interface UseMapsResult {
@@ -156,9 +157,12 @@ export function useMaps(): UseMapsResult {
   const setCurrentMapId = useCallback(
     (id: MapId) => {
       if (!isRevealed(id)) return
+      if (id !== currentMapId) {
+        track('map_switched', { fromMapId: currentMapId, toMapId: id })
+      }
       setRaw(id)
     },
-    [isRevealed, setRaw],
+    [isRevealed, setRaw, currentMapId],
   )
 
   return { revealedMaps, homeMapId, currentMapId, setCurrentMapId }

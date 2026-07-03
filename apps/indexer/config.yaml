@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+#
+# Envio HyperIndex config for the Mondeto map contracts.
+#
+# All eight maps are separate UUPS proxies of the same Mondeto implementation
+# on Celo mainnet (chain id 42220), so they share one contract definition and
+# are listed as addresses of the same contract. Which address emitted a log is
+# available in handlers as `event.srcAddress`; src/maps.ts resolves it to the
+# frontend mapId.
+#
+# Event signatures are copied verbatim from apps/contracts/src/Mondeto.sol.
+# After any change here, run `pnpm codegen` to regenerate .envio/ types.
+name: mondeto-indexer
+description: Ownership + purchase history for the Mondeto pixel maps on Celo
+
+# Lowercase every address the indexer surfaces (event params, srcAddress,
+# entity ids) so GraphQL consumers never have to worry about checksum casing.
+address_format: lowercase
+
+contracts:
+  - name: Mondeto
+    events:
+      - event: "PixelsPurchased(address indexed buyer, address indexed token, uint256[] ids, uint256 totalCost)"
+        field_selection:
+          transaction_fields:
+            - hash
+      - event: "ProfileUpdated(address indexed user, uint24 color, bytes label, bytes url)"
+
+chains:
+  - id: 42220 # Celo mainnet — HyperSync-supported, no RPC needed
+    # WORLD proxy deploy block; the other seven proxies were deployed in the
+    # same window (71123574-71123597), so this covers full history for all.
+    start_block: 71123574
+    contracts:
+      - name: Mondeto
+        # Keep in sync with apps/web/src/lib/maps/contracts.ts (map registry).
+        address:
+          - "0xA8cFC1B4365518f56954382B6Fab25a5382f5C49" # 0 world
+          - "0x8e70ada33714C3F8f35182b781C63449c5e079b7" # 1 africa
+          - "0x9b8DC1e200A21A97963948A758D9fc4300310661" # 2 asia
+          - "0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767" # 3 europe
+          - "0x5bf55b88220DF9500A33962777B9d48945443106" # 4 north-america
+          - "0x822e332ac5f0c760257C7204154BA5eaF7A06586" # 5 south-america
+          - "0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773" # 6 oceania
+          - "0x66C6eF911B3e33B35558956a0E636F33E16063c4" # 7 antarctica
