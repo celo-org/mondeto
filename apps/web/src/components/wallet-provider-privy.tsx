@@ -10,6 +10,7 @@ import { createContext } from "react";
 import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
 import { ChainGuard } from "./ChainGuard";
+import { WalletAnalytics } from "./wallet-analytics";
 import { celoTransport, celoSepoliaTransport } from "@/lib/chain";
 
 // Privy-only tree, isolated from the MiniPay path. Lazy-loaded by
@@ -42,10 +43,14 @@ export const PrivyReadyContext = createContext(false);
 export function PrivyTree({ children }: { children: React.ReactNode }) {
   return (
     <PrivyProvider
-      appId="cmmxiatqc01fa0cjv4eg3b9kp"
+      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "cmmxiatqc01fa0cjv4eg3b9kp"}
       config={{
         defaultChain: celo,
         supportedChains: [celo, celoSepolia],
+        // Needed for the wallet_connect entry in walletList below — the
+        // desktop QR-code flow. MiniPay users never reach this tree.
+        walletConnectCloudProjectId:
+          process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
         loginMethods: ["wallet"],
         embeddedWallets: { ethereum: { createOnLogin: "off" } },
         appearance: {
@@ -59,6 +64,7 @@ export function PrivyTree({ children }: { children: React.ReactNode }) {
         <PrivyWagmiProvider config={privyWagmiConfig}>
           <PrivyReadyContext.Provider value={true}>
             <ChainGuard />
+            <WalletAnalytics />
             {children}
           </PrivyReadyContext.Provider>
         </PrivyWagmiProvider>

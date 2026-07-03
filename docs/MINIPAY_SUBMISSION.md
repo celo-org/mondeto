@@ -78,7 +78,7 @@ submitting):
 - [x] All contracts verified on Celoscan
 - [x] Sample tx hashes for every user-facing method (`approve`, `buyPixels` × USDm/USDT/USDC, `updateProfile`; `withdraw` owner-only sample included for completeness)
 - [x] Redirects to Top up (MiniPay deposit deeplink) on insufficient balance
-- [x] In-app support link (t.me/mondetoSupport)
+- [x] In-app support link (Google Form via `NEXT_PUBLIC_SUPPORT_FORM_URL`; the submission originally listed t.me/mondetoSupport, which stays as the code fallback until the form URL is set)
 - [x] ToS + Privacy linked in-app
 - [x] FAQ page linked in-app
 - [ ] Tested at 360 × 640 — walk the `docs/MOBILE_QA.md` checklist on a real device
