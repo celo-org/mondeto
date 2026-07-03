@@ -56,9 +56,23 @@ describe('contracts registry', () => {
     expect(getContractByMapId(first.id, celo.id)).toBe(first.address)
   })
 
-  it('getContractByMapId falls back to the first revealed map for unknown/hidden ids', () => {
+  it('getContractByMapId falls back to the first revealed map for ids not in the registry', () => {
     const fallback = getMapsForChain(celo.id)[0]
     expect(getContractByMapId(999, celo.id)).toBe(fallback.address)
+  })
+
+  it('resolves known-but-unrevealed ids to their real contract (runtime reveals are invisible here)', () => {
+    // Maps opened via the admin board (Edge Config) never reach this
+    // module's env/static fallback, so a registry-known id must resolve
+    // to its own deployment — falling back to world sent Africa reads
+    // and buys to the world contract.
+    expect(getContractByMapId(1, celo.id)).toBe(
+      '0x8e70ada33714C3F8f35182b781C63449c5e079b7',
+    )
+    const africa = getMapContractById(1, celo.id)
+    expect(africa.slug).toBe('africa')
+    expect(africa.width).toBe(127)
+    expect(africa.height).toBe(134)
   })
 
   it('getMapContractById returns the full record with dims and slug (registry-wide)', () => {
@@ -106,11 +120,8 @@ describe('preview-only address override (NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES)', ()
     )
   })
 
-  it('flows through the address resolver once the map is also revealed', () => {
-    // getContractByMapId only resolves revealed maps, so QA reveals the
-    // overridden map too (NEXT_PUBLIC_REVEALED_MAP_IDS=0,1).
+  it('address override flows through the resolver without revealing the map', () => {
     vi.stubEnv('NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES', `1:${EXAMPLE}`)
-    vi.stubEnv('NEXT_PUBLIC_REVEALED_MAP_IDS', '0,1')
     expect(getContractByMapId(1, celo.id)).toBe(EXAMPLE)
   })
 

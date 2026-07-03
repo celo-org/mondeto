@@ -119,6 +119,17 @@ export function summarizeMap(
   return { mapId, fillPct, avgPriceUsd, ownedCount, totalLand }
 }
 
+/**
+ * Session-cache key for the per-map fill snapshot. Includes the sorted
+ * revealed ids: the effect's first run happens with the pre-/api/reveals
+ * default ([0]), and a cache entry written then must not shadow the
+ * fetch for the full revealed set once it loads — with a chain-only key,
+ * a just-revealed map showed no fill data ("?") for the whole session.
+ */
+export function cacheKeyFor(chainId: ChainId, revealedIds: number[]): string {
+  return `${CACHE_KEY}:${chainId}:${[...revealedIds].sort((a, b) => a - b).join('-')}`
+}
+
 function parseCache(raw: string | null): CachedShape | null {
   if (!raw) return null
   try {
@@ -168,7 +179,7 @@ export function useShouldOpenNextMap(): ShouldOpenNextMapResult {
     async function run() {
       const thresholdUsd = readThresholdUsd()
       const effectiveChain = (chainId ?? celo.id) as ChainId
-      const cacheKey = `${CACHE_KEY}:${effectiveChain}`
+      const cacheKey = cacheKeyFor(effectiveChain, revealedIds)
 
       try {
         const cached = parseCache(sessionStorage.getItem(cacheKey))
