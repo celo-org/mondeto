@@ -91,14 +91,14 @@ Mondeto runs one map contract per continent (plus the whole world) on **Celo mai
 
 | ID | Map | Grid | Land px | Proxy |
 |----|-----|------|---------|-------|
-| 0 | World | 170×100 | 5,622 | [`0x44bA167119355C8397C855756C2581B0771393D7`](https://celoscan.io/address/0x44bA167119355C8397C855756C2581B0771393D7) |
-| 1 | Africa | 127×134 | 8,806 | [`0x67F48829b8CaA06C89Ea010521548CF67E4F5c09`](https://celoscan.io/address/0x67F48829b8CaA06C89Ea010521548CF67E4F5c09) |
-| 2 | Asia | 158×107 | 6,208 | [`0xc489709234A9a847C56a6248E6A7e51d5AC4f78F`](https://celoscan.io/address/0xc489709234A9a847C56a6248E6A7e51d5AC4f78F) |
-| 3 | Europe | 160×107 | 7,293 | [`0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9`](https://celoscan.io/address/0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9) |
-| 4 | North America | 159×107 | 5,497 | [`0x7eDC67EA2925510512242A8e0985B4db1D001163`](https://celoscan.io/address/0x7eDC67EA2925510512242A8e0985B4db1D001163) |
-| 5 | South America | 115×147 | 6,865 | [`0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2`](https://celoscan.io/address/0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2) |
-| 6 | Oceania | 158×107 | 4,425 | [`0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D`](https://celoscan.io/address/0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D) |
-| 7 | Antarctica | 145×117 | 9,115 | [`0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2`](https://celoscan.io/address/0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2) |
+| 0 | World | 170×100 | 5,622 | [`0xA8cFC1B4365518f56954382B6Fab25a5382f5C49`](https://celoscan.io/address/0xA8cFC1B4365518f56954382B6Fab25a5382f5C49) |
+| 1 | Africa | 127×134 | 8,806 | [`0x8e70ada33714C3F8f35182b781C63449c5e079b7`](https://celoscan.io/address/0x8e70ada33714C3F8f35182b781C63449c5e079b7) |
+| 2 | Asia | 158×107 | 6,208 | [`0x9b8DC1e200A21A97963948A758D9fc4300310661`](https://celoscan.io/address/0x9b8DC1e200A21A97963948A758D9fc4300310661) |
+| 3 | Europe | 160×107 | 7,293 | [`0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767`](https://celoscan.io/address/0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767) |
+| 4 | North America | 159×107 | 5,497 | [`0x5bf55b88220DF9500A33962777B9d48945443106`](https://celoscan.io/address/0x5bf55b88220DF9500A33962777B9d48945443106) |
+| 5 | South America | 115×147 | 6,865 | [`0x822e332ac5f0c760257C7204154BA5eaF7A06586`](https://celoscan.io/address/0x822e332ac5f0c760257C7204154BA5eaF7A06586) |
+| 6 | Oceania | 158×107 | 4,425 | [`0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773`](https://celoscan.io/address/0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773) |
+| 7 | Antarctica | 145×117 | 9,115 | [`0x66C6eF911B3e33B35558956a0E636F33E16063c4`](https://celoscan.io/address/0x66C6eF911B3e33B35558956a0E636F33E16063c4) |
 
 Implementation (logic) contracts behind each UUPS proxy:
 

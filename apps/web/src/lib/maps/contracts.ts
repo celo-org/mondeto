@@ -61,7 +61,7 @@ const MAPS: readonly MapContract[] = [
     id: 0,
     slug: 'world',
     displayName: 'WORLD',
-    address: '0x44bA167119355C8397C855756C2581B0771393D7',
+    address: '0xA8cFC1B4365518f56954382B6Fab25a5382f5C49',
     chainId: celo.id,
     width: 170,
     height: 100,
@@ -71,7 +71,7 @@ const MAPS: readonly MapContract[] = [
     id: 1,
     slug: 'africa',
     displayName: 'AFRICA',
-    address: '0x67F48829b8CaA06C89Ea010521548CF67E4F5c09',
+    address: '0x8e70ada33714C3F8f35182b781C63449c5e079b7',
     chainId: celo.id,
     width: 127,
     height: 134,
@@ -81,7 +81,7 @@ const MAPS: readonly MapContract[] = [
     id: 2,
     slug: 'asia',
     displayName: 'ASIA',
-    address: '0xc489709234A9a847C56a6248E6A7e51d5AC4f78F',
+    address: '0x9b8DC1e200A21A97963948A758D9fc4300310661',
     chainId: celo.id,
     width: 158,
     height: 107,
@@ -91,7 +91,7 @@ const MAPS: readonly MapContract[] = [
     id: 3,
     slug: 'europe',
     displayName: 'EUROPE',
-    address: '0x6d52AA5552f9768d065B3B3ff24a759a2156C1E9',
+    address: '0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767',
     chainId: celo.id,
     width: 160,
     height: 107,
@@ -101,7 +101,7 @@ const MAPS: readonly MapContract[] = [
     id: 4,
     slug: 'north-america',
     displayName: 'NORTH AMERICA',
-    address: '0x7eDC67EA2925510512242A8e0985B4db1D001163',
+    address: '0x5bf55b88220DF9500A33962777B9d48945443106',
     chainId: celo.id,
     width: 159,
     height: 107,
@@ -111,7 +111,7 @@ const MAPS: readonly MapContract[] = [
     id: 5,
     slug: 'south-america',
     displayName: 'SOUTH AMERICA',
-    address: '0xF63DC592Ddb98D41012CEBDcc0F5e2e1b56784A2',
+    address: '0x822e332ac5f0c760257C7204154BA5eaF7A06586',
     chainId: celo.id,
     width: 115,
     height: 147,
@@ -121,7 +121,7 @@ const MAPS: readonly MapContract[] = [
     id: 6,
     slug: 'oceania',
     displayName: 'OCEANIA',
-    address: '0x912b49a6aFFf9403D8F4fBDacC33aE4e98c5441D',
+    address: '0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773',
     chainId: celo.id,
     width: 158,
     height: 107,
@@ -131,7 +131,7 @@ const MAPS: readonly MapContract[] = [
     id: 7,
     slug: 'antarctica',
     displayName: 'ANTARCTICA',
-    address: '0x17235471D4c8c1620dA1a3511ac76e5Ef137f5E2',
+    address: '0x66C6eF911B3e33B35558956a0E636F33E16063c4',
     chainId: celo.id,
     width: 145,
     height: 117,
@@ -140,11 +140,45 @@ const MAPS: readonly MapContract[] = [
 ] as const
 
 /**
+ * Optional per-map address override, for pointing a map at a different
+ * deployment without editing the registry above. Format is comma-separated
+ * `id:address` pairs, e.g. "1:0x2E7F1c57db241D529f7BD6B1fA8229984267Af23".
+ *
+ * This exists to QA a new (e.g. audited) contract on a preview deploy: set it
+ * on the preview environment only and leave it UNSET in Production, where the
+ * hardcoded registry is the single source of truth. Dimensions/slug/mask come
+ * from the static entry, so override a map whose grid matches the target
+ * deployment (the audited Africa example is 127×134 → override id 1, africa).
+ * Returns null when unset/empty.
+ */
+function addressOverrides(): Map<number, `0x${string}`> | null {
+  const raw =
+    typeof process !== 'undefined'
+      ? process.env.NEXT_PUBLIC_MAP_ADDRESS_OVERRIDES
+      : undefined
+  if (!raw || raw.trim() === '') return null
+  const out = new Map<number, `0x${string}`>()
+  for (const pair of raw.split(',')) {
+    const [idPart, addrPart] = pair.split(':').map((s) => s.trim())
+    const id = Number(idPart)
+    if (!Number.isInteger(id) || id < 0) continue
+    if (!addrPart || !/^0x[0-9a-fA-F]{40}$/.test(addrPart)) continue
+    out.set(id, addrPart as `0x${string}`)
+  }
+  return out.size > 0 ? out : null
+}
+
+/**
  * Resolve the active registry. Exported so tests can introspect it;
- * runtime callers should use the chain-aware helpers below.
+ * runtime callers should use the chain-aware helpers below. Applies the
+ * preview-only address override when present (no-op in Production).
  */
 export function getRegistry(): readonly MapContract[] {
-  return MAPS
+  const overrides = addressOverrides()
+  if (!overrides) return MAPS
+  return MAPS.map((m) =>
+    overrides.has(m.id) ? { ...m, address: overrides.get(m.id)! } : m,
+  )
 }
 
 /**
