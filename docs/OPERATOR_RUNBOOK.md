@@ -50,3 +50,70 @@ If you ever need to add a new contract to the rotation, add a one-line entry to 
 - This is a manual flow on purpose for the launch window. Once we trust
   the signal, the automated monitoring agent in the backlog will take it
   over.
+
+## Operations wallets
+
+Three roles, three keys. Money flows in one direction:
+`map contracts → treasury → disbursement`.
+
+| Role | What it is | What it holds |
+|---|---|---|
+| **Contract owner** | The key that can call `withdraw`, `setFeeRate`, and — because the contracts are UUPS proxies — **upgrade the contract code itself**. Compromise of this key is total compromise of all maps. Currently the deployer EOA. | Nothing (it's a control key, keep its balance at gas dust) |
+| **Treasury** | Recommended: a [Safe](https://app.safe.global) multisig on Celo (2-of-3). Receives all fee/first-sale sweeps from the contracts. | The accumulated revenue |
+| **Disbursement** | A separate hot EOA used for campaign prizes / reward payouts. Topped up from treasury as needed. | A small working balance only — never treasury-scale funds; key held separately from treasury signers |
+
+### Sweeping contract revenue to the treasury
+
+`withdraw` takes an arbitrary destination, so the treasury does **not**
+need to be the contract owner. From the owner key, per map contract and
+per token:
+
+```sh
+# balance check (USDT example, map 0)
+cast call <TOKEN_ADDRESS> "balanceOf(address)(uint256)" 0xf825914Fa66F82f603310a1a7146C0F64A382298 --rpc-url https://forno.celo.org
+
+# sweep everything in every accepted token to the treasury in one call
+cast send <MAP_CONTRACT> "withdrawAll(address)" <TREASURY_ADDRESS> \
+  --rpc-url https://forno.celo.org --private-key <OWNER_KEY>
+```
+
+Suggested cadence: weekly during the launch window, or whenever a map's
+token balance crosses a few hundred dollars.
+
+### Recommended: move contract ownership to the Safe
+
+Because the owner key can upgrade the contract, a single hot EOA as owner
+is the biggest standing risk after launch. Once the treasury Safe exists,
+transfer ownership of **all three** map contracts to it:
+
+```sh
+cast send 0xf825914Fa66F82f603310a1a7146C0F64A382298 "transferOwnership(address)" <SAFE_ADDRESS> --rpc-url https://forno.celo.org --private-key <OWNER_KEY>
+cast send 0xB58dA361F816af8F7C996864a66cd1e12C35D0f1 "transferOwnership(address)" <SAFE_ADDRESS> --rpc-url https://forno.celo.org --private-key <OWNER_KEY>
+cast send 0x198c60A8515cdA74Ae82c8D3D56d3683e2713599 "transferOwnership(address)" <SAFE_ADDRESS> --rpc-url https://forno.celo.org --private-key <OWNER_KEY>
+```
+
+After the transfer, `withdrawAll` / `setFeeRate` / upgrades are executed
+as Safe transactions (propose in the Safe UI, second signer confirms).
+Verify with:
+
+```sh
+cast call <MAP_CONTRACT> "owner()(address)" --rpc-url https://forno.celo.org
+```
+
+Fill in once created (roles only — no personal names in this doc):
+
+- Treasury Safe: `<TBD>`
+- Disbursement wallet: `<TBD>`
+
+## Usage limits and alerts
+
+Third-party free tiers we depend on, and where the warning lives:
+
+| Service | What counts against the tier | Alert |
+|---|---|---|
+| PostHog (US cloud) | Events/month | Billing limit + usage alert in PostHog → Settings → Billing. Set a hard monthly cap. |
+| Privy | Monthly active users — only **non-MiniPay** connects reach Privy | PostHog insight alert on weekly `wallet_connected` where `isMiniPay = false`; set threshold at ~70% of the current free-tier MAU cap (check the Privy dashboard for the current number) |
+| WalletConnect / Reown | Monthly active wallets on the QR flow | Same insight as Privy — the population is a subset. Check the Reown dashboard cap when setting the threshold. |
+
+MiniPay users bypass Privy/WalletConnect entirely (injected connector),
+so those two only grow with desktop traffic.

@@ -24,7 +24,7 @@ Index of what lives where. Edit the underlying doc, not this index.
 ## Planning (forward-looking, not yet shipped)
 
 - [`planning/MULTISTABLE_ROADMAP.md`](planning/MULTISTABLE_ROADMAP.md) — v2 multi-stable path (paused, awaiting MiniPay's in-app swap)
-- [`planning/SUPPORT_AGENTS_PLAN.md`](planning/SUPPORT_AGENTS_PLAN.md) — Telegram support-bot architecture; phase-1 scaffold lives in `apps/support-agents/`
+- [`archive/SUPPORT_AGENTS_PLAN.md`](archive/SUPPORT_AGENTS_PLAN.md) — (dropped) Telegram support-bot architecture; support now runs through a Google Form
 - [`planning/SCALING_PLAN.md`](planning/SCALING_PLAN.md) — operational playbook for traction events
 
 ## Archive (decisions implemented or work plans that shipped)
