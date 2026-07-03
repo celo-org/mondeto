@@ -20,6 +20,8 @@ import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
+import { InviteButton } from '@/components/InviteButton'
+import { track } from '@/lib/analytics'
 
 export default function ProfilePage() {
   const { address } = useAccount()
@@ -467,6 +469,10 @@ export default function ProfilePage() {
             {saveLabel}
           </button>
 
+          {/* Invite link — lands the invitee on this player's current map
+              with their wallet as the referral code. */}
+          <InviteButton />
+
           {/* Support + legal footer — boxed card so it reads as a distinct
               section. MiniPay requires Support / Terms / Privacy to be
               reachable in-app. Uses a 2px accent border so it pops in dark
@@ -498,6 +504,7 @@ export default function ProfilePage() {
               href={SUPPORT_URL}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => track('support_form_opened')}
               className="pixel-btn pixel-btn-filled font-display"
               style={{ fontSize: 9, letterSpacing: 2, padding: '8px 18px', textDecoration: 'none' }}
             >
