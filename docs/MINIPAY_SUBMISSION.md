@@ -92,7 +92,7 @@ submitting):
 
 - [ ] Logo PNG/SVG (1024×1024 master + 360×360 for MiniPay tile)
 - [ ] Legal copy review (lawyer) for `/terms` and `/privacy` — current drafts are placeholders
-- [ ] PageSpeed Insights run on <https://mondeto-web.vercel.app/> + capture mobile screenshot
+- [ ] PageSpeed Insights run on <https://mondeto.app/> + capture mobile screenshot
 - [ ] 24h critical-fix SLA commitment
 - [ ] Walk `docs/MOBILE_QA.md` 360×640 checklist on a real device
 - [ ] Capture URL / origin manifest from a cold load network trace

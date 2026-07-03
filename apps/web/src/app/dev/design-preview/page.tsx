@@ -41,7 +41,7 @@ function UrlBar() {
     <div className="px-3 pb-2">
       <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5">
         <span className="text-white/60 text-[11px]">⊙</span>
-        <span className="flex-1 text-center text-white/80 text-[12px]">mondeto-web.vercel.app</span>
+        <span className="flex-1 text-center text-white/80 text-[12px]">mondeto.app</span>
         <span className="text-white/60 text-[11px]">↗</span>
       </div>
     </div>
