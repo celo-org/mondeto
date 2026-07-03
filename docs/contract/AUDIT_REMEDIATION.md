@@ -4,7 +4,7 @@
 finding — the original finding, the decision taken, the exact change (with
 commit / PR references), and how to verify it.
 
-**Date:** 2026-07-02
+**Date:** 2026-07-03
 **Contract:** `apps/contracts/src/Mondeto.sol` (UUPS upgradeable)
 
 ## How to review
@@ -17,6 +17,11 @@ previous):
 2. **PR #127** — `[Q-01]` tolerate blocked seller payments (branches off #126)
 3. **PR #128** — `[M-01]` cap resale fee at 20% (branches off #127)
 
+Note on `main` history: the original squash of the stack into `main`
+(`7503118`) only carried the M-02 changes; the Q-01 and M-01 changes were
+subsequently landed on `main` via merge commit `d2af1cd`. All four fixes are
+on `main` and in the deployed implementations (verification below).
+
 The frontend change required by M-02 is tracked separately in **PR #129**
 (`mondeto-fe`), since the new `buyPixels` parameters are supplied by the client.
 
@@ -24,52 +29,42 @@ The frontend change required by M-02 is tracked separately in **PR #129**
 
 | ID | Severity | Finding | Code status | Deployed? |
 |------|----------|---------|--------|--------|
-| M-01 | Medium | `setFeeRate` — owner can set resale fee to 100% | Fixed in PR #128 · `293798b` | **NO — see "Deployment gap"** |
+| M-01 | Medium | `setFeeRate` — owner can set resale fee to 100% | Fixed in PR #128 · `293798b` | **Yes** (verified on-chain) |
 | M-02 | Medium | `buyPixels` — no buyer-side slippage protection | Fixed in PR #126 · `cc9b7b1` + FE PR #129 | **Yes** (verified on-chain) |
 | L-01 | Low | Missing validation for pricing configuration | Fixed in `0eb2276` (on `main`) | **Yes** |
-| Q-01 | Informational | Push payments can block purchases for restricted token recipients | Fixed in PR #127 · `3c488fa` | **NO — see "Deployment gap"** |
+| Q-01 | Informational | Push payments can block purchases for restricted token recipients | Fixed in PR #127 · `3c488fa` | **Yes** (verified on-chain) |
 | Q-02 | Informational | Admin treasury actions have limited event metadata | Acknowledged — not changed | — |
 
-## Deployments (Celo mainnet, 2026-07-02)
+## Deployments (Celo mainnet, 2026-07-03)
 
 Fresh deployments (not upgrades of the previous proxies) — pixel state starts
 empty. All eight verified on-chain: grid dimensions match the frontend
-registry, and each proxy's EIP-1967 implementation slot matches the listed
-implementation.
+registry, each proxy's EIP-1967 implementation slot matches the listed
+implementation, `MAX_FEE_RATE()` returns 2000 (M-01), the
+`SellerPaymentRedirected` event topic is present in the implementation
+bytecode (Q-01), and the 4-argument `buyPixels` is live (M-02).
 
 | Map | Proxy | Implementation |
 |-----|-------|----------------|
-| World | `0x34203Fcf8490Ba8672E2e7038441786bA703958E` | `0xda38B5E99b506b1D30f09060651aAf8ce07Fe4a6` |
-| Africa | `0x648845bD26F169C0540A80916F4089b260A0Aa1b` | `0x2aAE3a9Eca16b6B6b9970C078F129f8DA9e294DE` |
-| Asia | `0x305826B207D644d51A957dA03e88E4688daa1B71` | `0x4a2d9e5F58dbDfD53ae247E72f1E4656f598Cf9C` |
-| Europe | `0xa11FDcB6961da471b1831A4294615614C57706C0` | `0xfCFA49A52A120cd6a44dAbBEa1dDDB3aDCF06D69` |
-| North America | `0xfA90BA97f785261C08fE04cfD4B6fe4CDd85c9Db` | `0x5F2aB096E7B31412C71bEEEEde81b433E5d770b1` |
-| South America | `0xB1f79C1D6436885EBDcf98b58D29266569fbf1A4` | `0x116bd89b5aD4527C33785e70F53E894DB8ad1a92` |
-| Oceania | `0xEbbE1E7b159f3b6CE05813bd8d6788BEe73142AD` | `0x3118D2E659d6c34D4980bAB3E05D8Ca7b8B9f6D8` |
-| Antarctica | `0x72E8117dC8a1a4f05168BF4dC3fA289366652B18` | `0xD0B08AC6fACC8a2642AFaEc40E4292137210967a` |
+| World | `0xA8cFC1B4365518f56954382B6Fab25a5382f5C49` | `0xCC880b98B04b485e346Aa813cD8aEEB4AaE51F6A` |
+| Africa | `0x8e70ada33714C3F8f35182b781C63449c5e079b7` | `0x13E8DD1D12fcBd91661E7173526f0660A058f0Cb` |
+| Asia | `0x9b8DC1e200A21A97963948A758D9fc4300310661` | `0x30F7D4177E79B2e3b8bD817d87329D5FE432a4Ba` |
+| Europe | `0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767` | `0xED229A60290044875259202f972D696331499734` |
+| North America | `0x5bf55b88220DF9500A33962777B9d48945443106` | `0xDd49d053B1d24266CA58318979B7dbE03A11797F` |
+| South America | `0x822e332ac5f0c760257C7204154BA5eaF7A06586` | `0x943fC144C711d669B6609e394CBB35532DD46e44` |
+| Oceania | `0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773` | `0x35f22eCA0a32a842F50EAd3AE70230716744E403` |
+| Antarctica | `0x66C6eF911B3e33B35558956a0E636F33E16063c4` | `0x0Ea3C07a9bb369e00C29732ba66D2bc4bbCB9F41` |
 
-### ⚠️ Deployment gap: M-01 and Q-01 are not in the deployed implementations
+### Note: an earlier deployment round (superseded) was missing M-01 and Q-01
 
-Although PRs #126/#127/#128 all show as merged on GitHub, the stack was
-squash-merged such that **only the M-02 changes reached `main`**
-(commit `7503118`): #127 and #128 merged into their stack base branches, and
-the final squash of #126 into `main` predates/excludes their content. The
-deployed implementations were built from that state. Verified on-chain
-(2026-07-02):
-
-- `MAX_FEE_RATE()` reverts (selector absent) and an owner-simulated
-  `setFeeRate(2001)` **succeeds** → the M-01 fee cap is **not deployed**
-  (the old 100% bound applies).
-- The `SellerPaymentRedirected` event topic is absent from the deployed
-  implementation bytecode → the Q-01 blocked-seller handling is **not
-  deployed**. (Both are present in the earlier single-map example deployment
-  at `0x2E7F1c57db241D529f7BD6B1fA8229984267Af23`, which was built from the
-  full stack.)
-
-**Required follow-up (contract team):** re-land the Q-01 (`3c488fa`) and M-01
-(`293798b`) changes onto `main`, rebuild, and UUPS-upgrade the eight
-implementations. Proxy addresses are unchanged by an upgrade, so no frontend
-or registry changes are needed when this lands.
+For the record: a first batch of eight redeployments (2026-07-02) was built
+from `main` at commit `7503118`, which — due to how the stacked PRs were
+squash-merged — contained only the M-02 changes. On-chain verification at the
+time showed the M-01 fee cap and Q-01 blocked-seller handling absent from
+those implementations. The Q-01/M-01 changes were then landed on `main`
+(merge commit `d2af1cd`) and all eight maps were redeployed. The deployments
+listed above are the current, complete set; the 2026-07-02 batch is retired
+and was never referenced by a production frontend release.
 
 ---
 
@@ -102,8 +97,8 @@ rather than the only safeguard.
 **Verify.** `setFeeRate(MAX_FEE_RATE)` succeeds; any value above it reverts with
 `InvalidFeeRate`. The same bound is enforced on the initialization path.
 
-**Deployment status.** Not yet in the deployed implementations — see
-"Deployment gap" above.
+**Deployment status.** Verified present in the deployed implementations
+(2026-07-03) — see "Deployments" above.
 
 ---
 
@@ -216,8 +211,8 @@ succeeds; the buyer is charged in full; the blocked owner's proceeds remain in
 the contract and a `SellerPaymentRedirected` event is emitted. A buyer with
 insufficient balance/allowance still reverts.
 
-**Deployment status.** Not yet in the deployed implementations — see
-"Deployment gap" above.
+**Deployment status.** Verified present in the deployed implementations
+(2026-07-03) — see "Deployments" above.
 
 ---
 
