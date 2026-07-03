@@ -5,7 +5,7 @@ import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 
 import { MONDETO_ABI } from '@/lib/contract'
 import { uint24ToHex, hexToUint24, ownerDefaultColor } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
-import { getBuilderCodeSuffix } from '@/lib/builderCode'
+import { getAttributionSuffix } from '@/lib/attribution'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { generateUsername } from '@/lib/username'
 import type { MapId } from '@/lib/maps/types'
@@ -124,7 +124,7 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
         abi: MONDETO_ABI,
         functionName: 'updateProfile',
         args: [hexToUint24(color), name, url],
-        dataSuffix: getBuilderCodeSuffix(),
+        dataSuffix: getAttributionSuffix(),
       })
     } catch {
       setSaveState('error')

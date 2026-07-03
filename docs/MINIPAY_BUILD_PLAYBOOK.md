@@ -50,7 +50,7 @@ General takeaways from building a MiniPay mini-app on Celo. Opinionated defaults
 
 ## Launch / ops
 
-- **Builder Codes** (`@celo/builder-codes`) on every tx — tiny effort, gets you the attribution leaderboard.
+- **Attribution Tags** (`@celo/attribution-tags`, ERC-8021 — successor to `@celo/builder-codes`) on every tx — tiny effort, gets you the attribution leaderboard.
 - **Talent Protocol domain verification** meta tag — same idea.
 - **Operator runbook** in the repo (env vars, thresholds, what to flip when). Future-you will thank you.
 - **Staging on mainnet, separate URL.** Same contract, separate analytics project, low feature-flag thresholds for forcing edge cases. Branch protection: nothing merges directly to `main`; everything flows feature → staging → main.

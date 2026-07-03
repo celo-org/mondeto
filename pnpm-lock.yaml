@@ -33,9 +33,9 @@ importers:
 
   apps/web:
     dependencies:
-      '@celo/builder-codes':
-        specifier: ^0.2.0
-        version: 0.2.0(typescript@5.9.3)(viem@2.47.4)
+      '@celo/attribution-tags':
+        specifier: ^0.3.0
+        version: 0.3.0(typescript@5.9.3)(viem@2.47.4)
       '@opentelemetry/api-logs':
         specifier: ^0.218.0
         version: 0.218.0
@@ -305,8 +305,8 @@ packages:
       css-tree: 3.2.1
     dev: true
 
-  /@celo/builder-codes@0.2.0(typescript@5.9.3)(viem@2.47.4):
-    resolution: {integrity: sha512-6UsSHYjL/tyHeRnOGp00tYER9Drwyi7VCNTlUFohjTyYMo73WvX9Mntbax/OyhAwoH06klhERmvMVjpb78yeUw==}
+  /@celo/attribution-tags@0.3.0(typescript@5.9.3)(viem@2.47.4):
+    resolution: {integrity: sha512-6RwRqupxXmKt5GGnUkquViLta7VpyKRr4MZeoVnkMdSBpVurpy9UUd2ortephxustvjBa4iEUj/5+A2rLQgRhQ==}
     engines: {node: '>=18'}
     peerDependencies:
       viem: ^2
