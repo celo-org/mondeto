@@ -3,6 +3,7 @@
 import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider } from 'posthog-js/react'
 import { useEffect } from 'react'
+import { registerCampaignParams } from '@/lib/analytics'
 
 /**
  * PostHog client provider for the Next.js App Router.
@@ -52,6 +53,10 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       // high signal.
       capture_exceptions: true,
     })
+
+    // Attach utm_* from the landing URL to every event as memory-only
+    // super-properties (cleared on reload — no cookies/localStorage).
+    registerCampaignParams()
   }, [])
 
   return <PHProvider client={posthog}>{children}</PHProvider>
