@@ -110,3 +110,67 @@ describe('useLeaderboard (local scope)', () => {
     expect(result.current.area[0].owner.toLowerCase()).toBe('0xbob')
   })
 })
+
+describe('useLeaderboard viewer standing (you)', () => {
+  it('returns the viewer standing with the gap to the rank above', () => {
+    const data = emptyGrid()
+    data[ROW0_LAND_IDS[0]] = makePx({ owner: '0xAlice' })
+    data[ROW0_LAND_IDS[1]] = makePx({ owner: '0xAlice' })
+    data[ROW0_LAND_IDS[2]] = makePx({ owner: '0xAlice' })
+    data[ROW0_LAND_IDS[3]] = makePx({ owner: '0xBob' })
+
+    const { result } = renderHook(() =>
+      useLeaderboard(data, undefined, { viewer: '0xBob' }),
+    )
+    const you = result.current.you.area
+    expect(you).not.toBeNull()
+    expect(you!.entry.rank).toBe(2)
+    expect(you!.entry.value).toBe('1')
+    expect(you!.gap).toBe(2)
+    expect(you!.gapValue).toBe('2')
+  })
+
+  it('gives rank 1 a null gap (nothing above to chase)', () => {
+    const data = emptyGrid()
+    data[ROW0_LAND_IDS[0]] = makePx({ owner: '0xAlice' })
+
+    const { result } = renderHook(() =>
+      useLeaderboard(data, undefined, { viewer: '0xAlice' }),
+    )
+    const you = result.current.you.area
+    expect(you!.entry.rank).toBe(1)
+    expect(you!.gap).toBeNull()
+    expect(you!.gapValue).toBeNull()
+  })
+
+  it('matches the viewer address case-insensitively', () => {
+    const data = emptyGrid()
+    data[ROW0_LAND_IDS[0]] = makePx({ owner: '0xAlice' })
+    data[ROW0_LAND_IDS[1]] = makePx({ owner: '0xBob' })
+
+    const { result } = renderHook(() =>
+      useLeaderboard(data, undefined, { viewer: '0xALICE' }),
+    )
+    expect(result.current.you.area!.entry.rank).toBe(1)
+  })
+
+  it('returns null per board when the viewer owns nothing', () => {
+    const data = emptyGrid()
+    data[ROW0_LAND_IDS[0]] = makePx({ owner: '0xAlice' })
+
+    const { result } = renderHook(() =>
+      useLeaderboard(data, undefined, { viewer: '0xNobody' }),
+    )
+    expect(result.current.you.area).toBeNull()
+    expect(result.current.you.empire).toBeNull()
+    expect(result.current.you.tycoons).toBeNull()
+  })
+
+  it('returns all-null standings when no viewer is passed', () => {
+    const data = emptyGrid()
+    data[ROW0_LAND_IDS[0]] = makePx({ owner: '0xAlice' })
+
+    const { result } = renderHook(() => useLeaderboard(data))
+    expect(result.current.you).toEqual({ area: null, empire: null, tycoons: null })
+  })
+})

@@ -10,6 +10,10 @@ interface LeaderboardRowProps {
   isRuler?: boolean
   /** Optional per-map breakdown chip (global board), e.g. "W·AF·EU". */
   breakdown?: string
+  /** This row is the connected player — lime frame + YOU tag. */
+  isYou?: boolean
+  /** Rank-proximity nudge under the name, e.g. "12 PX FROM #3". */
+  gapText?: string
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
@@ -45,7 +49,7 @@ const DEFAULT_RANK_FS = 9
 const FIRST_RANK_FS = 16
 const RANK_WIDTH = 60
 
-export default function LeaderboardRow({ entry, isRuler, breakdown }: LeaderboardRowProps) {
+export default function LeaderboardRow({ entry, isRuler, breakdown, isYou, gapText }: LeaderboardRowProps) {
   // URL field hidden — unverified user-entered URLs are an injection /
   // phishing vector. Re-enable once URL verification is in place.
   const isFirst = entry.rank === 1
@@ -60,7 +64,11 @@ export default function LeaderboardRow({ entry, isRuler, breakdown }: Leaderboar
         alignItems: 'center',
         gap: 12,
         padding: `${ROW_PAD_Y}px 16px`,
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        // The player's own row gets a full lime frame; everyone else keeps
+        // the plain divider.
+        border: isYou ? `1px solid ${BRAND_LIME}` : undefined,
+        borderBottom: isYou ? `1px solid ${BRAND_LIME}` : '1px solid rgba(255,255,255,0.08)',
+        background: isYou ? 'rgba(167,255,5,0.08)' : undefined,
         maxWidth: 500,
         margin: '0 auto',
         width: '100%',
@@ -115,7 +123,39 @@ export default function LeaderboardRow({ entry, isRuler, breakdown }: Leaderboar
               RULER
             </span>
           )}
+          {isYou && (
+            <span
+              style={{
+                flexShrink: 0,
+                fontSize: 6,
+                letterSpacing: 1,
+                padding: '2px 5px',
+                borderRadius: 4,
+                color: '#0A0A0A',
+                background: BRAND_LIME,
+                fontWeight: 700,
+              }}
+            >
+              YOU
+            </span>
+          )}
         </div>
+        {gapText && (
+          <div
+            style={{
+              marginTop: 3,
+              fontSize: 6,
+              letterSpacing: 1,
+              color: BRAND_LIME,
+              fontFamily: PIXEL_FONT,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {gapText}
+          </div>
+        )}
         {breakdown && (
           <div
             style={{

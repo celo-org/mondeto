@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PixelView } from '@/lib/mock'
-import { allLeaderboards } from '@/lib/maps/leaderboards'
+import { allLeaderboards, rankGap, type RankGap } from '@/lib/maps/leaderboards'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
@@ -32,6 +32,28 @@ interface UseLeaderboardOptions {
   scope?: LeaderboardScope
   /** Map id whose pixel data `pixelData` represents (for local scope). */
   homeMapId?: MapId
+  /**
+   * Connected wallet to locate on each board (any casing). When set, the
+   * hook also returns the player's standing + gap to the rank above per
+   * board — even when the player sits below the truncated global top-N.
+   */
+  viewer?: string
+}
+
+/** The connected player's standing on one board. */
+export interface YouStanding {
+  /** Decorated row for the player (rank, label, formatted value). */
+  entry: LeaderboardEntry
+  /** Raw numeric distance to the rank above; null at rank 1. */
+  gap: number | null
+  /** `gap` formatted with the same formatter as the board's values. */
+  gapValue: string | null
+}
+
+export interface BoardYou {
+  area: YouStanding | null
+  empire: YouStanding | null
+  tycoons: YouStanding | null
 }
 
 interface BoardSet {
@@ -40,7 +62,12 @@ interface BoardSet {
   tycoons: LeaderboardEntry[]
   /** True while global snapshots are being fetched. */
   loading: boolean
+  /** Per-board standing for `options.viewer`; every board null when the
+   *  viewer is absent or owns nothing on that board. */
+  you: BoardYou
 }
+
+const NO_YOU: BoardYou = { area: null, empire: null, tycoons: null }
 
 function formatUSDTFromNumber(value: number): string {
   if (value === 0) return '0.00'
@@ -83,6 +110,42 @@ function decorate(
 }
 
 /**
+ * Build a YouStanding from a located rank gap. When the player's rank is
+ * inside the decorated list we reuse that row; below the cutoff (global
+ * boards truncate) we synthesize an equivalent row from the raw standing.
+ */
+function toYou(
+  gapInfo: RankGap | null,
+  decorated: LeaderboardEntry[],
+  unit: string,
+  formatValue: (v: number) => string,
+  viewer: string,
+  profilesMap?: Map<string, OwnerProfileData>,
+): YouStanding | null {
+  if (!gapInfo) return null
+  const inList =
+    gapInfo.rank <= decorated.length &&
+    decorated[gapInfo.rank - 1].owner.toLowerCase() === viewer.toLowerCase()
+  const profile = profilesMap?.get(viewer.toLowerCase())
+  const entry: LeaderboardEntry = inList
+    ? decorated[gapInfo.rank - 1]
+    : {
+        rank: gapInfo.rank,
+        owner: viewer,
+        label: profile?.label || generateUsername(viewer),
+        url: profile?.url ?? '',
+        color: profile?.color ?? '',
+        value: formatValue(gapInfo.value),
+        unit,
+      }
+  return {
+    entry,
+    gap: gapInfo.gap,
+    gapValue: gapInfo.gap === null ? null : formatValue(gapInfo.gap),
+  }
+}
+
+/**
  * Leaderboard hook.
  *
  * - `local` scope: builds three boards from `pixelData` (the player's home map).
@@ -99,6 +162,7 @@ export function useLeaderboard(
 ): BoardSet {
   const scope = options.scope ?? 'local'
   const homeMapId = options.homeMapId ?? 0
+  const viewer = options.viewer
 
   const localSnapshot = useMemo(() => {
     const home = getMapContractById(homeMapId)
@@ -109,18 +173,25 @@ export function useLeaderboard(
   const localBoards = useMemo<BoardSet>(() => {
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
       allLeaderboards(localSnapshot, Number.MAX_SAFE_INTEGER)
-    return {
-      area: decorate(mostPixels, 'px', (v) => String(v), profilesMap),
-      empire: decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap),
-      tycoons: decorate(
-        mostExpensivePixel,
-        'USDT',
-        formatUSDTFromNumber,
-        profilesMap,
-      ),
-      loading: false,
-    }
-  }, [localSnapshot, profilesMap])
+    const area = decorate(mostPixels, 'px', (v) => String(v), profilesMap)
+    const empire = decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap)
+    const tycoons = decorate(
+      mostExpensivePixel,
+      'USDT',
+      formatUSDTFromNumber,
+      profilesMap,
+    )
+    // Local boards are never truncated, so the viewer is locatable at any
+    // rank straight from the ranked entries.
+    const you: BoardYou = viewer
+      ? {
+          area: toYou(rankGap(mostPixels, viewer), area, 'px', String, viewer, profilesMap),
+          empire: toYou(rankGap(biggestConnectedArea, viewer), empire, 'px', String, viewer, profilesMap),
+          tycoons: toYou(rankGap(mostExpensivePixel, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
+        }
+      : NO_YOU
+    return { area, empire, tycoons, loading: false, you }
+  }, [localSnapshot, profilesMap, viewer])
 
   // --- Global path -------------------------------------------------------
   // The cross-map board is computed server-side (/api/global-board) — reading
@@ -130,6 +201,12 @@ export function useLeaderboard(
     area: LeaderEntry[]
     empire: LeaderEntry[]
     tycoons: LeaderEntry[]
+    /** Server-located standing for `viewer` (works below the top-N cutoff). */
+    you?: {
+      area: RankGap | null
+      empire: RankGap | null
+      tycoons: RankGap | null
+    }
   }
   const [globalRaw, setGlobalRaw] = useState<GlobalRaw | null>(null)
   const [globalLoading, setGlobalLoading] = useState(false)
@@ -139,7 +216,12 @@ export function useLeaderboard(
     let cancelled = false
 
     setGlobalLoading(true)
-    fetch('/api/global-board')
+    // The endpoint truncates its boards, so the viewer's standing is located
+    // server-side (from the untruncated ranking) and returned alongside.
+    const url = viewer
+      ? `/api/global-board?address=${encodeURIComponent(viewer)}`
+      : '/api/global-board'
+    fetch(url)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return
@@ -147,6 +229,7 @@ export function useLeaderboard(
           area: d.area ?? [],
           empire: d.empire ?? [],
           tycoons: d.tycoons ?? [],
+          you: d.you,
         })
         setGlobalLoading(false)
       })
@@ -158,29 +241,46 @@ export function useLeaderboard(
     return () => {
       cancelled = true
     }
-  }, [scope])
+  }, [scope, viewer])
 
   const globalBoards = useMemo<BoardSet>(() => {
     // Treat "haven't fetched yet" as loading too, so the first fetch reads as
     // loading rather than flashing the empty "no claims yet" state.
     const stillLoading = globalLoading || globalRaw === null
     if (!globalRaw) {
-      return { area: [], empire: [], tycoons: [], loading: stillLoading }
+      return { area: [], empire: [], tycoons: [], loading: stillLoading, you: NO_YOU }
     }
-    return {
-      // Global AREA is the normalized territory-share board, so its value is
-      // a fraction rendered as a percentage (not a raw pixel count).
-      area: decorate(globalRaw.area, '', formatPercent, profilesMap),
-      empire: decorate(globalRaw.empire, 'px', (v) => String(v), profilesMap),
-      tycoons: decorate(
-        globalRaw.tycoons,
-        'USDT',
-        formatUSDTFromNumber,
-        profilesMap,
-      ),
-      loading: stillLoading,
-    }
-  }, [globalRaw, globalLoading, profilesMap])
+    // Global AREA is the normalized territory-share board, so its value is
+    // a fraction rendered as a percentage (not a raw pixel count).
+    const area = decorate(globalRaw.area, '', formatPercent, profilesMap)
+    const empire = decorate(globalRaw.empire, 'px', (v) => String(v), profilesMap)
+    const tycoons = decorate(
+      globalRaw.tycoons,
+      'USDT',
+      formatUSDTFromNumber,
+      profilesMap,
+    )
+    // Prefer the server-located standing (untruncated ranking); fall back to
+    // scanning the truncated entries so an older API response still pins the
+    // viewer when they happen to sit inside the top-N.
+    const you: BoardYou = viewer
+      ? {
+          area: toYou(
+            globalRaw.you?.area ?? rankGap(globalRaw.area, viewer),
+            area, '', formatPercent, viewer, profilesMap,
+          ),
+          empire: toYou(
+            globalRaw.you?.empire ?? rankGap(globalRaw.empire, viewer),
+            empire, 'px', String, viewer, profilesMap,
+          ),
+          tycoons: toYou(
+            globalRaw.you?.tycoons ?? rankGap(globalRaw.tycoons, viewer),
+            tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap,
+          ),
+        }
+      : NO_YOU
+    return { area, empire, tycoons, loading: stillLoading, you }
+  }, [globalRaw, globalLoading, profilesMap, viewer])
 
   return scope === 'global' ? globalBoards : localBoards
 }

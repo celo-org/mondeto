@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAccount } from 'wagmi'
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
 import LeaderboardTabs from '@/components/Leaderboard/LeaderboardTabs'
@@ -10,6 +11,7 @@ import {
   useLeaderboard,
   type LeaderboardTab,
   type OwnerProfileData,
+  type YouStanding,
 } from '@/hooks/useLeaderboard'
 import { useMaps } from '@/hooks/useMaps'
 import type { MapId } from '@/lib/maps/types'
@@ -24,11 +26,30 @@ import { uint24ToHex } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
+const BRAND_LIME = '#A7FF05'
+
+/**
+ * Rank-proximity copy for the player's own row. The delta is phrased per
+ * board: AREA/EMPIRE in pixels (global AREA is a territory share, so its
+ * gap is already a percentage), TYCOONS as a price gap. Rank 1 gets the
+ * defend-it line instead of a target.
+ */
+function gapCopy(tab: LeaderboardTab, isGlobal: boolean, you: YouStanding): string {
+  if (you.entry.rank === 1) {
+    return isGlobal || tab === 'TYCOONS' ? 'TOP SPOT — DEFEND IT' : 'RULER — DEFEND IT'
+  }
+  const target = `#${you.entry.rank - 1}`
+  if (you.gapValue === null) return ''
+  if (tab === 'TYCOONS') return `$${you.gapValue} FROM ${target}`
+  if (tab === 'AREA' && isGlobal) return `${you.gapValue} FROM ${target}`
+  return `${you.gapValue} PX FROM ${target}`
+}
 
 export default function RanksPage() {
   // Guaranteed-defined read client. Leaderboard is a read-only view and
   // must populate for anonymous users.
   const publicClient = useReadClient()
+  const { address } = useAccount()
   const { revealedMaps, currentMapId } = useMaps()
   // Which board to show: 'global' (the cross-map board) or a specific map id.
   // Defaults to GLOBAL — the headline "who's winning overall" view — and the
@@ -132,10 +153,14 @@ export default function RanksPage() {
   // A specific map shows that map's board (from the pixelData loaded above);
   // GLOBAL shows the normalized cross-map board. `homeMapId` is the id the
   // loaded pixelData belongs to so the local snapshot uses the right dims.
-  const { area, empire, tycoons, loading: boardsLoading } = useLeaderboard(
+  const { area, empire, tycoons, loading: boardsLoading, you } = useLeaderboard(
     pixelData,
     profilesMap,
-    { scope: isGlobal ? 'global' : 'local', homeMapId: selectedMapId },
+    {
+      scope: isGlobal ? 'global' : 'local',
+      homeMapId: selectedMapId,
+      viewer: address,
+    },
   )
 
   const dataMap: Record<LeaderboardTab, typeof area> = {
@@ -143,10 +168,24 @@ export default function RanksPage() {
     EMPIRE: empire,
     TYCOONS: tycoons,
   }
+  const youMap: Record<LeaderboardTab, YouStanding | null> = {
+    AREA: you.area,
+    EMPIRE: you.empire,
+    TYCOONS: you.tycoons,
+  }
 
   const currentData = dataMap[activeTab]
   const displayData = showAll ? currentData : currentData.slice(0, 20)
   const hasOwned = currentData.length > 0
+  // The connected player's standing on the active board. If their row is
+  // already in the visible slice it gets highlighted inline; otherwise a
+  // copy of it is pinned at the bottom of the list viewport.
+  const addrLower = address?.toLowerCase()
+  const youStanding = addrLower ? youMap[activeTab] : null
+  const youText = youStanding ? gapCopy(activeTab, isGlobal, youStanding) : undefined
+  const youInView =
+    !!youStanding &&
+    displayData.some((e) => e.owner.toLowerCase() === addrLower)
   // The global board never waits on the local single-map read (it comes from
   // the server endpoint), so don't let a slow/hanging local read block it.
   const isLoading = (isGlobal ? false : loading) || boardsLoading
@@ -221,16 +260,21 @@ export default function RanksPage() {
           </div>
         ) : (
           <>
-            {displayData.map((entry) => (
-              <LeaderboardRow
-                key={entry.owner}
-                entry={entry}
-                // The reigning "Ruler of <map>" is rank-1 of a single map's
-                // LAND board. The global board is cross-map, so no per-map
-                // crown there.
-                isRuler={!isGlobal && activeTab === 'AREA' && entry.rank === 1}
-              />
-            ))}
+            {displayData.map((entry) => {
+              const isYou = !!addrLower && entry.owner.toLowerCase() === addrLower
+              return (
+                <LeaderboardRow
+                  key={entry.owner}
+                  entry={entry}
+                  // The reigning "Ruler of <map>" is rank-1 of a single map's
+                  // LAND board. The global board is cross-map, so no per-map
+                  // crown there.
+                  isRuler={!isGlobal && activeTab === 'AREA' && entry.rank === 1}
+                  isYou={isYou}
+                  gapText={isYou ? youText : undefined}
+                />
+              )
+            })}
             {!showAll && currentData.length > 20 && (
               <button
                 onClick={() => setShowAll(true)}
@@ -251,6 +295,50 @@ export default function RanksPage() {
               >
                 SHOW MORE
               </button>
+            )}
+            {/* analytics: rank_gap_viewed lands with the analytics baseline */}
+            {youStanding && !youInView && (
+              // Player is ranked but below the visible slice — pin their row
+              // to the bottom of the list viewport (56 = fixed BottomNav).
+              <div
+                style={{
+                  position: 'sticky',
+                  bottom: 56,
+                  zIndex: 5,
+                  background: 'var(--bg)',
+                }}
+              >
+                <LeaderboardRow entry={youStanding.entry} isYou gapText={youText} />
+              </div>
+            )}
+            {addrLower && !youStanding && (
+              // Connected but owning nothing on this board — slim nudge row.
+              <div
+                style={{
+                  position: 'sticky',
+                  bottom: 56,
+                  zIndex: 5,
+                  background: 'var(--bg)',
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: 500,
+                    margin: '0 auto',
+                    padding: '10px 16px',
+                    border: `1px solid ${BRAND_LIME}`,
+                    background: 'rgba(167,255,5,0.08)',
+                    fontSize: 7,
+                    fontFamily: PIXEL_FONT,
+                    letterSpacing: 1.5,
+                    lineHeight: 1.6,
+                    color: BRAND_LIME,
+                    textAlign: 'center',
+                  }}
+                >
+                  {"YOU'RE UNRANKED — CLAIM YOUR FIRST PIXEL"}
+                </div>
+              </div>
             )}
           </>
         )}

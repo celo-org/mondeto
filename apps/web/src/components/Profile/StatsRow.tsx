@@ -8,16 +8,23 @@ interface StatsRowProps {
   /** Stablecoin symbol shown under the balance value (USDm / USDC / USDT). */
   balanceSymbol?: string
   rank: number
+  /** Rank-proximity nudge under the RANK number, e.g. "12 PX FROM #3"
+   *  ("RULER" at rank 1). */
+  rankGapLabel?: string
   spent?: string
   earned?: string
 }
 
-export default function StatsRow({ pixels, balance, balanceSymbol, rank, spent, earned }: StatsRowProps) {
+export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGapLabel, spent, earned }: StatsRowProps) {
   const balanceLabel = balanceSymbol ? `BALANCE · ${balanceSymbol.toUpperCase()}` : 'BALANCE'
   const cards = [
     { value: String(pixels), label: 'PIXELS' },
     { value: balance, label: balanceLabel },
-    { value: rank > 0 ? `#${rank}` : '-', label: 'RANK' },
+    {
+      value: rank > 0 ? `#${rank}` : '-',
+      label: 'RANK',
+      sub: rank > 0 ? rankGapLabel : undefined,
+    },
   ]
 
   const pnlCards = [
@@ -43,6 +50,13 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, spent, 
           <div style={{ fontSize: 14, fontFamily: PIXEL_FONT, letterSpacing: 2, color: 'var(--text)' }}>
             {card.value}
           </div>
+          {card.sub && (
+            // Rank-proximity nudge — 6px so it survives the 3-across card
+            // layout at 360px; wraps onto a second line when it must.
+            <div style={{ fontSize: 6, fontFamily: PIXEL_FONT, letterSpacing: 1, lineHeight: 1.6, color: '#A7FF05', marginTop: 4 }}>
+              {card.sub}
+            </div>
+          )}
           <div style={{ fontSize: 6, fontFamily: PIXEL_FONT, letterSpacing: 2, color: 'var(--text-muted)', marginTop: 4 }}>
             {card.label}
           </div>

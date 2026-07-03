@@ -50,6 +50,7 @@ export default function ProfilePage() {
 
   const [pixelCount, setPixelCount] = useState(0)
   const [rank, setRank] = useState(0)
+  const [rankGapLabel, setRankGapLabel] = useState<string | undefined>(undefined)
   const [spent, setSpent] = useState(0n)
   const [earned, setEarned] = useState(0n)
 
@@ -91,10 +92,19 @@ export default function ProfilePage() {
 
         setPixelCount(myCount)
 
-        // Compute rank
+        // Compute rank + the gap to the rank above ("N PX FROM #K") so the
+        // RANK card doubles as a nudge toward the next spot on the board.
         const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
         const rankIdx = sorted.findIndex(([owner]) => owner === addrStr!.toLowerCase())
         setRank(rankIdx >= 0 ? rankIdx + 1 : 0)
+        if (rankIdx === 0) {
+          setRankGapLabel('RULER')
+        } else if (rankIdx > 0) {
+          const gap = sorted[rankIdx - 1][1] - myCount
+          setRankGapLabel(`${gap} PX FROM #${rankIdx}`)
+        } else {
+          setRankGapLabel(undefined)
+        }
       } catch (e) {
         console.warn('Failed to fetch pixel stats from contract:', e)
       }
@@ -392,6 +402,7 @@ export default function ProfilePage() {
           balance={formatBalanceForDisplay(walletBalance.preferred?.amount ?? walletBalance.totalAmount)}
           balanceSymbol={walletBalance.preferred?.symbol}
           rank={rank}
+          rankGapLabel={rankGapLabel}
           spent={formatUSDT(spent)}
           earned={formatUSDT(earned)}
         />
