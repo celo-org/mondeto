@@ -129,8 +129,8 @@ DECIDED — purchase flow will accept USDT + USDC + USDm. Required to unblock Eu
 
 **Purchase flow is still USDT-only** until the v2 contract ships. The FAQ "swap inside MiniPay first" explainer covers the gap for users who only hold USDm / USDC in the interim.
 
-### Support agents
-See `docs/planning/SUPPORT_AGENTS_PLAN.md` + `apps/support-agents/` package. Phase 1 silent observation → phase 2 actually file GitHub/Notion → phase 3 multi-language.
+### Support intake
+Support runs through a Google Form (private response sheet + email notification per submission), linked from the in-app SUPPORT button via `NEXT_PUBLIC_SUPPORT_FORM_URL`. The Telegram-group + AI-agents approach was dropped (moderation burden); the old design is archived at `docs/archive/SUPPORT_AGENTS_PLAN.md`.
 
 ### Partnership pipeline
 - [ ] Vietnam — World App ecosystem builder introduction in progress

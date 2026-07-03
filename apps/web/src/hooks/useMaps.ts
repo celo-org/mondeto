@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useAccount } from 'wagmi'
 import { celo } from 'viem/chains'
 import {
@@ -9,6 +9,7 @@ import {
   type ChainId,
   type MapContract,
 } from '@/lib/maps/contracts'
+import { track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
 export interface UseMapsResult {
@@ -22,6 +23,25 @@ export interface UseMapsResult {
   setCurrentMapId: (id: MapId) => void
 }
 
+// The active map is app-global state: the map view, the switcher, the
+// leaderboards, and referral deep-links all have to agree on it. It
+// lives in a module-level external store (not per-hook useState) so
+// every useMaps() caller shares one value — a setCurrentMapId from any
+// component re-renders all of them.
+let activeMapId: MapId | null = null
+const listeners = new Set<() => void>()
+
+function setActiveMapId(id: MapId) {
+  if (activeMapId === id) return
+  activeMapId = id
+  listeners.forEach((l) => l())
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
 /**
  * Multi-map state hook.
  *
@@ -30,13 +50,11 @@ export interface UseMapsResult {
  *    the map where it owns the most (lowest id wins ties).
  *  - Otherwise, home is the lowest revealed map id (today: map 0).
  *
- * Home is NOT persisted to localStorage — it's recomputed every load from
- * on-chain state via `useOwnedMaps`, so a returning player always lands on
- * their own map even on a fresh device. `useOwnedMaps` caches the ownership
- * scan in sessionStorage for 60 s so navigation across pages is cheap.
+ * TODO: the ownership scan (useOwnedMaps) is not wired in yet — until it
+ * is, homeMapId falls back to the lowest revealed map for every wallet.
  *
- * `currentMapId` (the active view, distinct from home) lives in component
- * state and starts at home; the in-app map switcher writes to it.
+ * `currentMapId` (the active view, distinct from home) is shared across
+ * all callers; the map switcher and referral deep-links write to it.
  */
 export function useMaps(): UseMapsResult {
   const { address, chainId } = useAccount()
@@ -51,16 +69,23 @@ export function useMaps(): UseMapsResult {
     return revealedMaps[0].id
   }, [address, revealedMaps])
 
-  const [currentMapId, setCurrentMapIdState] = useState<MapId>(
-    () => revealedMaps[0]?.id ?? (0 as MapId),
+  const fallbackMapId = revealedMaps[0]?.id ?? (0 as MapId)
+  const storedMapId = useSyncExternalStore(
+    subscribe,
+    () => activeMapId,
+    () => null,
   )
+  const currentMapId = storedMapId ?? fallbackMapId
 
   const setCurrentMapId = useCallback(
     (id: MapId) => {
       if (!isRevealedMapId(id, effectiveChain)) return
-      setCurrentMapIdState(id)
+      if (id !== activeMapId) {
+        track('map_switched', { fromMapId: activeMapId ?? fallbackMapId, toMapId: id })
+      }
+      setActiveMapId(id)
     },
-    [effectiveChain],
+    [effectiveChain, fallbackMapId],
   )
 
   return { revealedMaps, homeMapId, currentMapId, setCurrentMapId }

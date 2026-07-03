@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useWriteContract, useAccount, usePublicClient } from 'wagmi'
 import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getBuilderCodeSuffix } from '@/lib/builderCode'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
+import { getReferrer, track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
 export type TxStep = 'idle' | 'approving' | 'buying' | 'confirming' | 'success' | 'error'
@@ -26,6 +27,10 @@ export function useBuyPixels(mapId?: MapId) {
   const [txHash, setTxHash] = useState<string | null>(null)
 
   const { writeContractAsync } = useWriteContract()
+  // Re-entrancy guard: a second tap on BUY before React re-renders the
+  // drawer must not start a parallel approve/buy sequence (= double
+  // wallet prompts, potential double spend).
+  const inFlight = useRef(false)
 
   const checkBalance = useCallback((totalPrice: bigint, userBalance: bigint) => {
     const insufficient = userBalance < totalPrice
@@ -33,17 +38,28 @@ export function useBuyPixels(mapId?: MapId) {
     return !insufficient
   }, [])
 
-  const execute = useCallback(async (ids: number[], _totalPriceHint: bigint) => {
+  const execute = useCallback(async (ids: number[], totalPriceHint: bigint) => {
     if (!publicClient || !address) return
+    if (inFlight.current) return
+    inFlight.current = true
 
     if (!preferred) {
       setError('No stablecoin balance — top up before buying.')
       setStep('error')
+      inFlight.current = false
       return
     }
 
     const tokenAddress = preferred.address
     const tokenDecimals = preferred.decimals
+    const eventProps = {
+      mapId: mapId ?? 0,
+      pixelCount: ids.length,
+      totalPriceUsd: Number(totalPriceHint) / 1_000_000,
+      token: preferred.symbol,
+      ref: getReferrer() ?? undefined,
+    }
+    track('pixel_buy_started', eventProps)
 
     try {
       setStep('approving')
@@ -70,7 +86,6 @@ export function useBuyPixels(mapId?: MapId) {
         }) as Promise<number>,
       ])
       const priceDecimals = Number(priceDecimalsRaw)
-      console.log('On-chain canonical price:', canonicalPrice.toString(), 'priceDecimals:', priceDecimals)
 
       const tenToTokenDec = 10n ** BigInt(tokenDecimals)
       const tenToPriceDec = 10n ** BigInt(priceDecimals)
@@ -98,8 +113,6 @@ export function useBuyPixels(mapId?: MapId) {
         await publicClient.waitForTransactionReceipt({ hash: approveHash })
         // Wait for nonce to propagate on sequencer
         await new Promise((r) => setTimeout(r, 3000))
-      } else {
-        console.log('Allowance sufficient, skipping approve')
       }
 
       // Step 2: Buy pixels with the chosen token.
@@ -137,6 +150,7 @@ export function useBuyPixels(mapId?: MapId) {
         throw new Error('Transaction reverted on-chain')
       }
 
+      track('pixel_buy_succeeded', { ...eventProps, txHash: buyHash })
       setStep('success')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Transaction failed'
@@ -152,10 +166,13 @@ export function useBuyPixels(mapId?: MapId) {
               : msg.includes('insufficient') || msg.includes('ERC20')
                 ? `Insufficient ${preferred.symbol} balance or allowance`
                 : msg.slice(0, 200)
+      track('pixel_buy_failed', { ...eventProps, reason: short })
       setError(short)
       setStep('error')
+    } finally {
+      inFlight.current = false
     }
-  }, [writeContractAsync, publicClient, address, contractAddress, preferred])
+  }, [writeContractAsync, publicClient, address, contractAddress, preferred, mapId])
 
   const reset = useCallback(() => {
     setStep('idle')

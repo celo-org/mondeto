@@ -12,10 +12,11 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { ConnectButton } from "@/components/connect-button"
+import { SUPPORT_URL } from "@/lib/deeplinks"
 
 const navLinks = [
   { name: "Home", href: "/" },
-  { name: "Support", href: "https://t.me/mondetoSupport", external: true },
+  { name: "Support", href: SUPPORT_URL, external: true },
 ]
 
 const legalLinks = [
