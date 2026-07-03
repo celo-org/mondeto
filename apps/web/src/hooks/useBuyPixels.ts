@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useWriteContract, useAccount, usePublicClient } from 'wagmi'
 import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
-import { getBuilderCodeSuffix } from '@/lib/builderCode'
+import { getAttributionSuffix } from '@/lib/attribution'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { getReferrer, track } from '@/lib/analytics'
@@ -89,7 +89,7 @@ export function useBuyPixels(mapId?: MapId) {
       setError(null)
 
       const bigIds = ids.map((id) => BigInt(id))
-      const dataSuffix = getBuilderCodeSuffix()
+      const dataSuffix = getAttributionSuffix()
 
       // Read the canonical price + canonical-to-token decimal conversion.
       // `selectionPrice` returns the price in PRICE_DECIMALS units (the
