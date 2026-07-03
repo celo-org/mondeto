@@ -10,14 +10,18 @@ import posthog from 'posthog-js'
  * scales with buyers, not visitors (see posthog-provider.tsx for why).
  *
  * Event schema:
- *   wallet_connected      { isMiniPay, chainId }
- *   pixel_buy_started     { mapId, pixelCount, totalPriceUsd, token, ref? }
- *   pixel_buy_succeeded   { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
- *   pixel_buy_failed      { mapId, pixelCount, totalPriceUsd, token, reason, ref? }
- *   map_switched          { fromMapId, toMapId }
- *   referral_landed       { ref, mapId? }
- *   invite_shared         { mapId }
- *   support_form_opened   {}
+ *   wallet_connected        { isMiniPay, chainId }
+ *   pixel_buy_started       { mapId, pixelCount, totalPriceUsd, token, ref? }
+ *   pixel_buy_approve_shown { mapId, pixelCount, totalPriceUsd, token, ref? }
+ *   pixel_buy_succeeded     { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
+ *   pixel_buy_failed        { mapId, pixelCount, totalPriceUsd, token, reason, ref? }
+ *   map_switched            { fromMapId, toMapId }
+ *   referral_landed         { ref, mapId? }
+ *   invite_shared           { mapId }
+ *   support_form_opened     {}
+ *
+ * `utm_*` params from the landing URL are attached to every event as
+ * super-properties via registerCampaignParams() below.
  */
 
 // PostHog init happens in a parent effect, which React runs AFTER child
@@ -62,5 +66,33 @@ export function getReferrer(): string | null {
     return sessionStorage.getItem(REF_KEY)
   } catch {
     return null
+  }
+}
+
+// --- Campaign attribution -------------------------------------------------
+
+// utm_* params from the landing URL, registered as PostHog super-properties
+// so every subsequent event (including a later buy) carries them. With
+// `persistence: 'memory'` (see posthog-provider.tsx) these live only for the
+// current page session — nothing is written to cookies or localStorage, so
+// this stays within the privacy policy's §6 "no tracking storage" promise.
+const UTM_PARAMS = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_content',
+  'utm_term',
+] as const
+
+export function registerCampaignParams(): void {
+  if (typeof window === 'undefined') return
+  const params = new URLSearchParams(window.location.search)
+  const found: Record<string, string> = {}
+  for (const key of UTM_PARAMS) {
+    const value = params.get(key)
+    if (value) found[key] = value
+  }
+  if (Object.keys(found).length > 0) {
+    withPosthog(() => posthog.register(found))
   }
 }

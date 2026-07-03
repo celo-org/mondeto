@@ -134,6 +134,11 @@ export function useBuyPixels(mapId?: MapId) {
       })) as bigint
 
       if (currentAllowance < approveAmount) {
+        // Funnel step between started and succeeded: fired only when the
+        // wallet actually surfaces an approval prompt. Buys that clear on a
+        // standing allowance skip this, so the drop-off here measures the
+        // approval wall specifically.
+        track('pixel_buy_approve_shown', eventProps)
         const approveHash = await writeContractAsync({
           address: tokenAddress,
           abi: ERC20_ABI,
