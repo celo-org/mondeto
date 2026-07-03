@@ -31,4 +31,15 @@ describe('StatsRow', () => {
     render(<StatsRow pixels={0} balance="0.00" rank={0} />)
     expect(screen.getByText('-')).toBeInTheDocument()
   })
+
+  it('shows the rank-gap nudge under the rank when provided', () => {
+    render(<StatsRow pixels={42} balance="10.00" rank={4} rankGapLabel="12 PX FROM #3" />)
+    expect(screen.getByText('#4')).toBeInTheDocument()
+    expect(screen.getByText('12 PX FROM #3')).toBeInTheDocument()
+  })
+
+  it('does not show a rank-gap nudge when unranked, even if passed', () => {
+    render(<StatsRow pixels={0} balance="0.00" rank={0} rankGapLabel="RULER" />)
+    expect(screen.queryByText('RULER')).not.toBeInTheDocument()
+  })
 })

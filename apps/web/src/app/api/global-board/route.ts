@@ -4,6 +4,8 @@ import { fetchGlobalSnapshots } from '@/lib/maps/snapshots'
 import {
   allGlobalLeaderboards,
   leaderboardMostPixels,
+  rankGap,
+  type RankGap,
 } from '@/lib/maps/leaderboards'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain } from '@/lib/maps/contracts'
@@ -25,12 +27,23 @@ import { logger } from '@/lib/logger'
  * state per request (cached briefly in-memory), with no persistence or
  * historical queries. The Envio indexer remains the durable answer when we
  * need seasons / history / many maps.
+ *
+ * `?address=0x…` additionally returns `you` — the caller's rank + gap to the
+ * rank above per board, located against the UNTRUNCATED ranking so a player
+ * below the top-N still gets their standing. The full boards stay in the
+ * warm-instance cache; the response ships only the top-N plus that one row.
  */
 
 export const dynamic = 'force-dynamic'
 
 const TOP_N = 100
 const CACHE_TTL_MS = 30_000
+
+interface FullBoards {
+  area: LeaderEntry[]
+  empire: LeaderEntry[]
+  tycoons: LeaderEntry[]
+}
 
 interface BoardPayload {
   area: LeaderEntry[]
@@ -40,16 +53,49 @@ interface BoardPayload {
   fetchedAt: number
 }
 
+interface YouPayload {
+  area: RankGap | null
+  empire: RankGap | null
+  tycoons: RankGap | null
+}
+
 // Warm-instance cache so repeat requests within the TTL don't re-read every
 // map. Vercel may run several instances, each with its own cache — fine.
-let cache: { ts: number; payload: BoardPayload } | null = null
+// The full (untruncated) boards are kept alongside the trimmed payload so a
+// per-address `you` lookup never triggers a re-read.
+let cache: { ts: number; payload: BoardPayload; full: FullBoards } | null = null
 
-export async function GET() {
+function locateViewer(full: FullBoards, address: string): YouPayload {
+  return {
+    area: rankGap(full.area, address),
+    empire: rankGap(full.empire, address),
+    tycoons: rankGap(full.tycoons, address),
+  }
+}
+
+function respond(
+  payload: BoardPayload,
+  full: FullBoards,
+  address: string | null,
+  cacheControl: string,
+) {
+  const body = address
+    ? { ...payload, you: locateViewer(full, address) }
+    : payload
+  return NextResponse.json(body, { headers: { 'Cache-Control': cacheControl } })
+}
+
+export async function GET(request: Request) {
   const now = Date.now()
+  const address = new URL(request.url).searchParams.get('address')
+
   if (cache && now - cache.ts < CACHE_TTL_MS) {
-    return NextResponse.json(cache.payload, {
-      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
-    })
+    return respond(
+      cache.payload,
+      cache.full,
+      address,
+      's-maxage=30, stale-while-revalidate=60',
+    )
   }
 
   try {
@@ -62,8 +108,15 @@ export async function GET() {
     const maps = getMapsForChain(celo.id, revealedIds)
     const snapshots = await fetchGlobalSnapshots(read, maps)
 
+    // Rank every owner (no limit) so viewer lookups below the top-N work;
+    // the response payload trims to TOP_N.
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
-      allGlobalLeaderboards(snapshots, TOP_N)
+      allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
+    const full: FullBoards = {
+      area: mostPixels,
+      empire: biggestConnectedArea,
+      tycoons: mostExpensivePixel,
+    }
 
     const rulers: Record<MapId, string | null> = {}
     for (const snap of snapshots) {
@@ -72,25 +125,21 @@ export async function GET() {
     }
 
     const payload: BoardPayload = {
-      area: mostPixels,
-      empire: biggestConnectedArea,
-      tycoons: mostExpensivePixel,
+      area: full.area.slice(0, TOP_N),
+      empire: full.empire.slice(0, TOP_N),
+      tycoons: full.tycoons.slice(0, TOP_N),
       rulers,
       fetchedAt: now,
     }
-    cache = { ts: now, payload }
+    cache = { ts: now, payload, full }
 
-    return NextResponse.json(payload, {
-      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
-    })
+    return respond(payload, full, address, 's-maxage=30, stale-while-revalidate=60')
   } catch (err) {
     logger.error('global-board read failed', { err: String(err) })
     // Serve the last good payload if we have one, so a transient blip doesn't
     // blank the board.
     if (cache) {
-      return NextResponse.json(cache.payload, {
-        headers: { 'Cache-Control': 'no-store' },
-      })
+      return respond(cache.payload, cache.full, address, 'no-store')
     }
     return NextResponse.json(
       { area: [], empire: [], tycoons: [], rulers: {}, fetchedAt: now, error: true },

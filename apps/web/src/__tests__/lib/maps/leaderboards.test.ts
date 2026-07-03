@@ -267,3 +267,53 @@ describe("globalTerritoryShare (normalized AREA)", () => {
     expect(board).toEqual([{ address: "0xA", value: 0.25 }]);
   });
 });
+
+import { rankGap } from "@/lib/maps/leaderboards";
+import type { LeaderEntry } from "@/lib/maps/types";
+
+describe("rankGap", () => {
+  const board: LeaderEntry[] = [
+    { address: "0xAAA", value: 50 },
+    { address: "0xBBB", value: 30 },
+    { address: "0xCCC", value: 12 },
+  ];
+
+  it("locates a mid-board player and measures the gap to the rank above", () => {
+    expect(rankGap(board, "0xCCC")).toEqual({ rank: 3, value: 12, gap: 18 });
+  });
+
+  it("returns a null gap for rank 1 (nobody above)", () => {
+    expect(rankGap(board, "0xAAA")).toEqual({ rank: 1, value: 50, gap: null });
+  });
+
+  it("reports a zero gap for value ties (address tiebreak splits ranks)", () => {
+    // Same value, ranked by address asc — the lower-ranked twin is 0 away.
+    const tied: LeaderEntry[] = [
+      { address: "0xA", value: 10 },
+      { address: "0xB", value: 10 },
+    ];
+    expect(rankGap(tied, "0xB")).toEqual({ rank: 2, value: 10, gap: 0 });
+  });
+
+  it("returns null for a player not on the board", () => {
+    expect(rankGap(board, "0xDDD")).toBeNull();
+    expect(rankGap([], "0xAAA")).toBeNull();
+  });
+
+  it("matches addresses case-insensitively (checksummed vs lowercase)", () => {
+    const checksummed: LeaderEntry[] = [
+      { address: "0xAbCd000000000000000000000000000000000001", value: 9 },
+      { address: "0xabcd000000000000000000000000000000000002", value: 4 },
+    ];
+    expect(
+      rankGap(checksummed, "0xabcd000000000000000000000000000000000001"),
+    ).toEqual({ rank: 1, value: 9, gap: null });
+    expect(
+      rankGap(checksummed, "0xABCD000000000000000000000000000000000002"),
+    ).toEqual({ rank: 2, value: 4, gap: 5 });
+  });
+
+  it("measures against the immediate rank above, not the leader", () => {
+    expect(rankGap(board, "0xBBB")).toEqual({ rank: 2, value: 30, gap: 20 });
+  });
+});

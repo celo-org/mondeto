@@ -115,6 +115,46 @@ export function leaderboardBiggestConnectedArea(
   return rank(bestComponent, limit);
 }
 
+/* ------------------------------------------------------------------ *
+ * Rank proximity — where a player sits on a board and how far the next
+ * rank up is. Powers the "N PX FROM #K" nudges on /ranks and the profile
+ * RANK card.
+ * ------------------------------------------------------------------ */
+
+export interface RankGap {
+  /** 1-based position of the player on the board. */
+  rank: number;
+  /** The player's raw board value (px count, block size, price, share). */
+  value: number;
+  /**
+   * How much MORE the entry one rank above holds (their value minus the
+   * player's). `null` for rank 1 — nobody is above. Can be 0 when the two
+   * are value-tied and only the deterministic address tiebreak separates
+   * them.
+   */
+  gap: number | null;
+}
+
+/**
+ * Locate `address` on a ranked board and measure the distance to the rank
+ * above. Address comparison is case-insensitive (boards may carry
+ * checksummed or lowercase addresses). Returns `null` when the player is
+ * not on the board at all.
+ */
+export function rankGap(
+  entries: LeaderEntry[],
+  address: string
+): RankGap | null {
+  const target = address.toLowerCase();
+  const idx = entries.findIndex((e) => e.address.toLowerCase() === target);
+  if (idx < 0) return null;
+  return {
+    rank: idx + 1,
+    value: entries[idx].value,
+    gap: idx === 0 ? null : entries[idx - 1].value - entries[idx].value,
+  };
+}
+
 /** Convenience: all three boards for a map in one call. */
 export function allLeaderboards(map: MapSnapshot, limit = 10) {
   return {
