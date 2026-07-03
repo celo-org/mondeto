@@ -1,6 +1,6 @@
 // Mondeto support bot entry point.
 //
-// Phase 1 of the rollout from docs/planning/SUPPORT_AGENTS_PLAN.md:
+// Phase 1 of the support-agents rollout:
 //   - Listen on the Telegram support group
 //   - Route each message via the Haiku classifier
 //   - Generate a specialist draft (UI/UX | Financial | Campaign)
