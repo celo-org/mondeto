@@ -1,6 +1,5 @@
 /**
  * Mondeto — map assignment, referral placement & migration
- * Lena · DevRel Lead, Celo Core Co · 2026-05-15
  *
  * Model: every wallet has ONE "home map" — where the UI drops them by default
  * and where load-balancing places them. The home pointer is:

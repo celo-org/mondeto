@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { useMaps } from '@/hooks/useMaps'
 import { useShouldOpenNextMap } from '@/hooks/useShouldOpenNextMap'
 import type { MapId } from '@/lib/maps/types'
-import { track } from '@/lib/analytics'
 
 /**
  * Top-bar map switcher.
@@ -44,7 +43,6 @@ export default function MapSwitcher() {
   }
 
   const handlePick = (id: MapId) => {
-    track('map_switched', { fromMapId: currentMapId, toMapId: id })
     setCurrentMapId(id)
     setOpen(false)
   }

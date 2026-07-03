@@ -3,7 +3,6 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 import { WalletProvider } from "@/components/wallet-provider"
 import { PostHogProvider } from "@/components/posthog-provider"
-import { AnalyticsIdentify } from "@/components/analytics-identify"
 import { CurrentMapProvider } from "@/hooks/useMaps"
 import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 
@@ -70,7 +69,6 @@ export default function RootLayout({
             <WalletProvider>
                 <RevealsProvider>
                   <CurrentMapProvider>
-                    <AnalyticsIdentify />
                     <main className="flex-1">
                       {children}
                     </main>

@@ -11,23 +11,25 @@ const nextConfig = {
     return config
   },
   // PostHog reverse proxy — the browser hits `/ingest/*` on our own origin,
-  // which we then forward to PostHog EU Cloud. This bypasses adblockers /
-  // privacy extensions that block `*.posthog.com` and `*.i.posthog.com`
-  // by default, which would otherwise drop ~30-40% of our analytics
-  // (especially desktop / power-user traffic).
+  // which we then forward to PostHog US Cloud (the company org — the key in
+  // NEXT_PUBLIC_POSTHOG_KEY must be a US-project key, or events are
+  // silently rejected). This bypasses adblockers / privacy extensions that
+  // block `*.posthog.com` and `*.i.posthog.com` by default, which would
+  // otherwise drop ~30-40% of our analytics (especially desktop /
+  // power-user traffic).
   async rewrites() {
     return [
       {
         source: '/ingest/static/:path*',
-        destination: 'https://eu-assets.i.posthog.com/static/:path*',
+        destination: 'https://us-assets.i.posthog.com/static/:path*',
       },
       {
         source: '/ingest/:path*',
-        destination: 'https://eu.i.posthog.com/:path*',
+        destination: 'https://us.i.posthog.com/:path*',
       },
       {
         source: '/ingest/decide',
-        destination: 'https://eu.i.posthog.com/decide',
+        destination: 'https://us.i.posthog.com/decide',
       },
     ];
   },

@@ -1,94 +1,66 @@
-// Central funnel + attribution events. Browser-only (posthog-js), per the
-// logging convention: PostHog `capture` for anything that needs measuring,
-// console for anything that only needs devtools.
-//
-// Every event name lives in this union so dashboards never chase typos.
-// `track` is a safe no-op until PostHog is initialized (no key in dev).
+'use client'
 
 import posthog from 'posthog-js'
 
-export type AnalyticsEvent =
-  // acquisition / identity
-  | 'wallet_connected'
-  // buy funnel (source of truth for conversion + revenue dashboards)
-  | 'buy_started'
-  | 'buy_approve_shown'
-  | 'buy_confirmed'
-  | 'buy_failed'
-  // engagement surfaces
-  | 'pixel_info_viewed'
-  | 'leaderboard_viewed'
-  | 'map_switched'
-  | 'map_view_toggled'
-  | 'intro_completed'
+/**
+ * Thin wrapper around PostHog for the browser.
+ *
+ * All product analytics go through here so the event schema stays in one
+ * place. The event set is deliberately tiny and funnel-tied — volume
+ * scales with buyers, not visitors (see posthog-provider.tsx for why).
+ *
+ * Event schema:
+ *   wallet_connected      { isMiniPay, chainId }
+ *   pixel_buy_started     { mapId, pixelCount, totalPriceUsd, token, ref? }
+ *   pixel_buy_succeeded   { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
+ *   pixel_buy_failed      { mapId, pixelCount, totalPriceUsd, token, reason, ref? }
+ *   map_switched          { fromMapId, toMapId }
+ *   referral_landed       { ref, mapId? }
+ *   invite_shared         { mapId }
+ *   support_form_opened   {}
+ */
 
-export type AnalyticsProps = Record<string, string | number | boolean | null | undefined>
-
-export function track(event: AnalyticsEvent, props?: AnalyticsProps): void {
-  if (typeof window === 'undefined' || !posthog.__loaded) return
-  posthog.capture(event, props)
-}
-
-// ---------------------------------------------------------------------------
-// Acquisition attribution — first-touch `ref` / `utm_*` params, persisted and
-// registered as super-properties so a buy days after the click still carries
-// its source. First touch wins: a stored attribution is never overwritten.
-// ---------------------------------------------------------------------------
-
-const ATTRIBUTION_KEY = 'mondeto-attribution'
-const ATTRIBUTION_PARAMS = [
-  'ref',
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_content',
-  'utm_term',
-] as const
-
-export function registerAttribution(): void {
-  if (typeof window === 'undefined' || !posthog.__loaded) return
-  try {
-    let stored: Record<string, string> | null = null
-    const raw = window.localStorage.getItem(ATTRIBUTION_KEY)
-    if (raw) stored = JSON.parse(raw) as Record<string, string>
-
-    if (!stored) {
-      const params = new URLSearchParams(window.location.search)
-      const found: Record<string, string> = {}
-      for (const key of ATTRIBUTION_PARAMS) {
-        const value = params.get(key)
-        if (value) found[key] = value
-      }
-      if (Object.keys(found).length > 0) {
-        found.landed_at = new Date().toISOString()
-        window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(found))
-        stored = found
-      }
-    }
-
-    if (stored) posthog.register(stored)
-  } catch (err) {
-    console.warn('attribution registration skipped:', err)
+// PostHog init happens in a parent effect, which React runs AFTER child
+// effects on first mount — so early calls (e.g. MiniPay auto-connect)
+// retry briefly instead of being dropped. If no key is configured init
+// never happens and the retries drain silently.
+function withPosthog(fn: () => void, attempts = 10): void {
+  if (posthog.__loaded) {
+    fn()
+    return
   }
+  if (attempts <= 0) return
+  setTimeout(() => withPosthog(fn, attempts - 1), 300)
 }
 
-// First-buy flag for `buy_confirmed { isFirstBuy }` — activation metric.
-const HAS_BOUGHT_KEY = 'mondeto-has-bought'
-
-export function hasBoughtBefore(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.localStorage.getItem(HAS_BOUGHT_KEY) === '1'
-  } catch {
-    return false
-  }
+export function track(event: string, properties?: Record<string, unknown>): void {
+  withPosthog(() => posthog.capture(event, properties))
 }
 
-export function markHasBought(): void {
-  if (typeof window === 'undefined') return
+/** Tie the PostHog person to the connected wallet. With
+ *  `person_profiles: 'identified_only'` this is the only path that
+ *  creates a person profile — anonymous visitors never get one. */
+export function identifyWallet(address: string): void {
+  withPosthog(() => posthog.identify(address.toLowerCase()))
+}
+
+// --- Referral attribution -------------------------------------------------
+
+// sessionStorage (not localStorage): attribution shouldn't outlive the
+// visit — the privacy policy promises no persistent client-side tracking
+// state, and session-scoped is enough to attribute a same-visit buy.
+const REF_KEY = 'mondeto-ref'
+
+export function storeReferrer(ref: string): void {
   try {
-    window.localStorage.setItem(HAS_BOUGHT_KEY, '1')
+    sessionStorage.setItem(REF_KEY, ref)
+  } catch {}
+}
+
+export function getReferrer(): string | null {
+  try {
+    return sessionStorage.getItem(REF_KEY)
   } catch {
-    // storage unavailable — flag is best-effort
+    return null
   }
 }
