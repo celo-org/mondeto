@@ -19,7 +19,7 @@ const RETRY_DELAYS_MS = [1500, 4000, 8000]
  *
  * Pass a `mapId` to read from a specific deployed contract. Omitting it
  * (the single-map launch state) keeps the existing behavior — reads route
- * to the first revealed map.
+ * to the world map (id 0).
  */
 export function usePixelMap(mapId?: MapId) {
   const readClient = useReadClient()

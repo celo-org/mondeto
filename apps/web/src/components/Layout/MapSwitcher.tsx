@@ -200,7 +200,7 @@ export default function MapSwitcher() {
           whiteSpace: 'nowrap',
         }}
       >
-        MAP {displayIndex}/{revealedMaps.length - 1}
+        MAP {displayIndex + 1}/{revealedMaps.length}
       </button>
 
       {open && mounted ? createPortal(sheet, document.body) : null}

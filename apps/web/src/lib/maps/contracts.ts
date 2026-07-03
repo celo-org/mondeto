@@ -14,12 +14,14 @@
  * pointer.
  *
  * Which maps are visible is gradual and marketing-driven: the launch shows
- * only WORLD, and continents open over time. The hardcoded `revealed` flag
- * is the baseline (WORLD only). It can be overridden at deploy time by the
- * NEXT_PUBLIC_REVEALED_MAP_IDS env var (comma-separated ids, e.g. "0,1,2"
- * reveals World + Africa + Asia) so a continent can be opened by changing one
- * Vercel setting and redeploying — no code change. A future admin board will
- * manage this; the env var is the bridge until then.
+ * only WORLD, and continents open over time. Reveal precedence (see
+ * lib/maps/reveals.ts): the Edge Config key `revealedMapIds` (runtime,
+ * admin-board-controlled, served via /api/reveals) wins; else the
+ * NEXT_PUBLIC_REVEALED_MAP_IDS env var (deploy-time, comma-separated ids,
+ * e.g. "0,1,2" reveals World + Africa + Asia); else the hardcoded `revealed`
+ * flags below (WORLD only). Note the runtime list only reaches code that
+ * passes it in explicitly (React callers via useRevealedMapIds) — the sync
+ * helpers here can only see the env/static fallbacks.
  */
 
 import { celo, celoSepolia } from 'viem/chains'
@@ -226,36 +228,37 @@ export function getMapsForChain(
 /**
  * Resolve a (mapId, chainId) pair to its deployed contract address.
  *
- * Falls back to the first revealed map for the chain if the id is
- * unknown, keeping the single-map flow working when the registry is
- * sparse.
+ * Known ids resolve from the full registry regardless of reveal state:
+ * reveal gating is a UI concern (useMaps validates currentMapId and guards
+ * setCurrentMapId against the runtime reveals), and this module cannot see
+ * the runtime Edge Config list — filtering here made maps revealed via the
+ * admin board silently resolve to the world contract. Ids not in the
+ * registry at all still fall back to the first revealed map so the
+ * single-map flow keeps working when the registry is sparse.
  */
 export function getContractByMapId(
   id: MapId,
   chainId?: ChainId,
 ): `0x${string}` {
-  const list = getMapsForChain(chainId)
-  const entry = list.find((m) => m.id === id)
-  if (entry) return entry.address
-  if (list.length === 0) {
-    throw new Error('getContractByMapId: no revealed maps configured for chain')
-  }
-  return list[0].address
+  return getMapContractById(id, chainId).address
 }
 
 /**
  * Resolve a (mapId, chainId) pair to its full contract record (address +
- * dimensions + slug). Used by per-map dimension lookups.
- *
- * Falls back to the first revealed map for the chain when the id is unknown.
+ * dimensions + slug). Same semantics as `getContractByMapId`: known ids
+ * resolve registry-wide; only unknown ids fall back to the first revealed
+ * map.
  */
 export function getMapContractById(
   id: MapId,
   chainId?: ChainId,
 ): MapContract {
+  const effective = chainId ?? celo.id
+  const known = getRegistry().find(
+    (m) => m.id === id && m.chainId === effective,
+  )
+  if (known) return known
   const list = getMapsForChain(chainId)
-  const entry = list.find((m) => m.id === id)
-  if (entry) return entry
   if (list.length === 0) {
     throw new Error('getMapContractById: no revealed maps configured for chain')
   }
