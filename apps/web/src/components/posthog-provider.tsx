@@ -4,6 +4,7 @@ import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider } from 'posthog-js/react'
 import { Suspense, useEffect } from 'react'
 import { PostHogPageView } from './posthog-pageview'
+import { registerAttribution } from '@/lib/analytics'
 
 /**
  * PostHog client provider for the Next.js App Router.
@@ -34,6 +35,10 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       // PostHog's built-in unhandled error / promise rejection capture.
       capture_exceptions: true,
     })
+
+    // First-touch ref/utm super-properties, so every later event (including
+    // a buy days after the click) stays attributed to its source.
+    registerAttribution()
   }, [])
 
   return (

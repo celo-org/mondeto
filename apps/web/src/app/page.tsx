@@ -24,6 +24,7 @@ import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import { isLandXY } from '@/lib/landMask'
+import { track } from '@/lib/analytics'
 import { MONDETO_ABI } from '@/lib/contract'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
@@ -414,7 +415,11 @@ export default function Home() {
                 </span>
               )}
               <button
-                onClick={() => setMapView(mapView === v ? 'normal' : v)}
+                onClick={() => {
+                  const next = mapView === v ? 'normal' : v
+                  setMapView(next)
+                  track('map_view_toggled', { view: next })
+                }}
                 className="font-display"
                 style={{
                   fontSize: 10,

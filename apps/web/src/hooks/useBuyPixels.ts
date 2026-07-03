@@ -6,6 +6,7 @@ import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getBuilderCodeSuffix } from '@/lib/builderCode'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
+import { track, hasBoughtBefore, markHasBought } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
 export type TxStep = 'idle' | 'approving' | 'buying' | 'confirming' | 'success' | 'error'
@@ -67,6 +68,14 @@ export function useBuyPixels(mapId?: MapId) {
 
     const tokenAddress = preferred.address
     const tokenDecimals = preferred.decimals
+    const isFirstBuy = !hasBoughtBefore()
+
+    track('buy_started', {
+      mapId: mapId ?? 0,
+      pixelCount: ids.length,
+      token: preferred.symbol,
+      isFirstBuy,
+    })
 
     try {
       setStep('approving')
@@ -118,6 +127,7 @@ export function useBuyPixels(mapId?: MapId) {
       })) as bigint
 
       if (currentAllowance < approveAmount) {
+        track('buy_approve_shown', { mapId: mapId ?? 0, pixelCount: ids.length })
         const approveHash = await writeContractAsync({
           address: tokenAddress,
           abi: ERC20_ABI,
@@ -167,6 +177,15 @@ export function useBuyPixels(mapId?: MapId) {
         throw new Error('Transaction reverted on-chain')
       }
 
+      track('buy_confirmed', {
+        mapId: mapId ?? 0,
+        pixelCount: ids.length,
+        totalUsd: Number(canonicalPrice) / 10 ** priceDecimals,
+        token: preferred.symbol,
+        isFirstBuy,
+      })
+      markHasBought()
+
       setStep('success')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Transaction failed'
@@ -186,6 +205,7 @@ export function useBuyPixels(mapId?: MapId) {
                   : msg.includes('insufficient') || msg.includes('ERC20')
                     ? `Insufficient ${preferred.symbol} balance or allowance`
                     : msg.slice(0, 200)
+      track('buy_failed', { mapId: mapId ?? 0, pixelCount: ids.length, reason: short })
       setError(short)
       setStep('error')
     }
