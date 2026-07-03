@@ -1,0 +1,9 @@
+# Envio codegen output (regenerate with `pnpm codegen`)
+.envio/
+# V2-era codegen dir, in case an older envio binary is used by mistake
+generated/
+
+node_modules/
+.env
+*.log
+logs/

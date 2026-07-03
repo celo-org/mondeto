@@ -13,8 +13,8 @@
  *                                  already ship inside the client bundle),
  *                                  so there's no security benefit to a
  *                                  separate server-only copy.
- *   POSTHOG_OTEL_LOGS_ENDPOINT — full URL, defaults to the EU cloud
- *                                  (`https://eu.i.posthog.com/i/v0/otel/v1/logs`).
+ *   POSTHOG_OTEL_LOGS_ENDPOINT — full URL, defaults to the US cloud
+ *                                  (`https://us.i.posthog.com/i/v0/otel/v1/logs`).
  *
  * If the key is missing we fall back to no-op so local dev without
  * secrets isn't broken.
@@ -30,7 +30,7 @@ export async function register() {
 
   const endpoint =
     process.env.POSTHOG_OTEL_LOGS_ENDPOINT ??
-    'https://eu.i.posthog.com/i/v0/otel/v1/logs'
+    'https://us.i.posthog.com/i/v0/otel/v1/logs'
 
   const { logs } = await import('@opentelemetry/api-logs')
   const { LoggerProvider, BatchLogRecordProcessor } = await import(

@@ -1,6 +1,5 @@
 /**
  * Mondeto — per-map leaderboards
- * Lena · DevRel Lead, Celo Core Co · 2026-05-15
  *
  * Three boards per map (auto-assign model => leaderboards must be per-map):
  *   1. mostPixels            — count of land pixels owned

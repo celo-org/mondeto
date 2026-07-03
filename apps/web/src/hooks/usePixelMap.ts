@@ -1,6 +1,7 @@
 'use client'
 import { useRef, useState, useCallback, useEffect } from 'react'
 import type { PixelView } from '@/lib/mock'
+import type { PriceConfig } from '@/lib/priceCalc'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
@@ -29,9 +30,27 @@ export function usePixelMap(mapId?: MapId) {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [version, setVersion] = useState(0)
   const [changedIds, setChangedIds] = useState<number[]>([])
+  // The map's on-chain pricing config (halvingTime, initialPrice, …),
+  // captured from the same config() read that prices the pixels. Used by
+  // the falling-price UI (info panel line + DEALS view).
+  const [priceConfig, setPriceConfig] = useState<PriceConfig | null>(null)
   const retryCountRef = useRef(0)
 
   const contractAddress = contract.address
+
+  // Only swap the config object when a field actually changed, so the
+  // 30s poll doesn't re-render consumers with an identical config.
+  const handleConfig = useCallback((cfg: PriceConfig) => {
+    setPriceConfig(prev =>
+      prev &&
+      prev.initialPrice === cfg.initialPrice &&
+      prev.minPrice === cfg.minPrice &&
+      prev.halvingStartTimestamp === cfg.halvingStartTimestamp &&
+      prev.halvingTime === cfg.halvingTime
+        ? prev
+        : cfg,
+    )
+  }, [])
 
   const fetchData = useCallback(async (): Promise<PixelView[]> => {
     return await fetchAllPixelsFromContract(
@@ -40,8 +59,9 @@ export function usePixelMap(mapId?: MapId) {
       contract.width,
       contract.height,
       mask,
+      handleConfig,
     )
-  }, [readClient, contractAddress, contract.width, contract.height, mask])
+  }, [readClient, contractAddress, contract.width, contract.height, mask, handleConfig])
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +85,7 @@ export function usePixelMap(mapId?: MapId) {
     pixelDataRef.current = []
     retryCountRef.current = 0
     setLoadState('loading')
+    setPriceConfig(null)
     setVersion(v => v + 1)
   }, [contractAddress])
 
@@ -149,5 +170,5 @@ export function usePixelMap(mapId?: MapId) {
     }
   }, [refresh, load])
 
-  return { pixelDataRef, loadState, load, refresh, version, changedIds }
+  return { pixelDataRef, loadState, load, refresh, version, changedIds, priceConfig }
 }

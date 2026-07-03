@@ -8,7 +8,7 @@
 // and confusable Unicode characters — these work across Latin scripts.
 //
 // Devanagari Hindi is not yet matched (transformers strip non-alphabetic
-// chars). See PRODUCT_BACKLOG for follow-ups.
+// chars) — needs a separate matcher as a follow-up.
 
 import {
   RegExpMatcher,

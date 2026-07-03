@@ -26,7 +26,7 @@ import { logger } from '@/lib/logger'
  * This is the lightweight stand-in for a full indexer: it still reads live
  * state per request (cached briefly in-memory), with no persistence or
  * historical queries. The Envio indexer remains the durable answer when we
- * need seasons / history / many maps (see docs/leaderboard-rewards-roadmap).
+ * need seasons / history / many maps.
  *
  * `?address=0x…` additionally returns `you` — the caller's rank + gap to the
  * rank above per board, located against the UNTRUNCATED ranking so a player

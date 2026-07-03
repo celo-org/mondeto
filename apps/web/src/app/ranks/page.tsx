@@ -15,6 +15,7 @@ import {
 } from '@/hooks/useLeaderboard'
 import { useMaps } from '@/hooks/useMaps'
 import type { MapId } from '@/lib/maps/types'
+import { track } from '@/lib/analytics'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
@@ -67,6 +68,14 @@ export default function RanksPage() {
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('AREA')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    track('leaderboard_viewed', {
+      board: activeTab,
+      scope: isGlobal ? 'global' : 'local',
+      mapId: isGlobal ? null : (boardSel as MapId),
+    })
+  }, [activeTab, boardSel, isGlobal])
 
   // Offer the board selector once there's more than one map to compare.
   // GLOBAL leads (the default), then each individual map.

@@ -1,0 +1,25 @@
+{
+  "name": "indexer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Envio HyperIndex indexer for the Mondeto map contracts on Celo",
+  "type": "module",
+  "scripts": {
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "start": "envio start",
+    "stop": "envio stop",
+    "type-check": "if [ -f .envio/types.d.ts ]; then tsc --noEmit; else echo '[indexer] type-check skipped: .envio/types.d.ts missing — run pnpm --filter indexer codegen first'; fi",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "envio": "3.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

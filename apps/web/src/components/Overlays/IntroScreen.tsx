@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import { track } from '@/lib/analytics'
 
 // Five-slide onboarding carousel. Each slide tells one beat of the story
 // (own → 2x → decay → rewards → paint) and pairs a short headline with a
@@ -174,6 +175,7 @@ export default function IntroScreen() {
 
   const dismiss = () => {
     sessionStorage.setItem('mondeto-intro-seen', '1')
+    track('intro_completed', { lastSlideIndex: index })
     setVisible(false)
   }
 

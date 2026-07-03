@@ -285,6 +285,7 @@ export default function SelectionDrawer({
           {/* Buy button */}
           <button
             onClick={onBuy}
+            disabled={insufficient || priceLoading}
             className="pixel-btn pixel-btn-filled font-display"
             style={{
               width: '100%',

@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import WorldCanvas, { type WorldCanvasRef } from '@/components/Map/WorldCanvas'
 import TopBar from '@/components/Layout/TopBar'
@@ -7,6 +8,7 @@ import MapSwitcher from '@/components/Layout/MapSwitcher'
 import AwayFromHomeIndicator from '@/components/Layout/AwayFromHomeIndicator'
 import PaintModeBanner from '@/components/Map/PaintModeBanner'
 import HeatmapLegend from '@/components/Map/HeatmapLegend'
+import DealsLegend from '@/components/Map/DealsLegend'
 import ZoomHintToast from '@/components/Layout/ZoomHintToast'
 import CampaignBanner from '@/components/Layout/CampaignBanner'
 import BridgeBanner from '@/components/Layout/BridgeBanner'
@@ -23,13 +25,14 @@ import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
-import { isLandXY } from '@/lib/landMask'
 import { MONDETO_ABI } from '@/lib/contract'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
+import { storeReferrer, track } from '@/lib/analytics'
+import type { MapId } from '@/lib/maps/types'
 
 export default function Home() {
   // Dark is the only theme now; downstream map components still take the flag
@@ -42,11 +45,36 @@ export default function Home() {
   // resolved yet or because Privy's WagmiProvider hasn't initialized.
   const publicClient = useReadClient()
 
-  const { currentMapId } = useMaps()
+  const { currentMapId, setCurrentMapId } = useMaps()
   const mapMeta = useCurrentMapMeta()
   const mondetoAddress = mapMeta.address
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const { pixelDataRef, loadState, load, refresh, version, changedIds } = usePixelMap(currentMapId)
+  // Invite/referral deep-links: /?map=<id>&ref=<wallet>. The map param
+  // jumps straight to that map (validated inside setCurrentMapId), the
+  // ref is kept for the visit and attached to buy events for
+  // attribution. Params are stripped from the URL afterwards so
+  // reloads/shares from the address bar don't re-fire.
+  useEffect(() => {
+    const mapParam = searchParams.get('map')
+    const refParam = searchParams.get('ref')
+    if (mapParam === null && refParam === null) return
+
+    if (mapParam !== null) {
+      const id = Number(mapParam)
+      if (Number.isInteger(id)) setCurrentMapId(id as MapId)
+    }
+    if (refParam) {
+      storeReferrer(refParam)
+      track('referral_landed', { ref: refParam, mapId: mapParam ?? undefined })
+    }
+    router.replace('/', { scroll: false })
+    // Run once for the URL the page was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const { pixelDataRef, loadState, load, refresh, version, changedIds, priceConfig } = usePixelMap(currentMapId)
   const {
     selectedIds,
     togglePixel,
@@ -66,7 +94,7 @@ export default function Home() {
   const [drawerProfiles, setDrawerProfiles] = useState<Map<string, { label: string; url: string }>>(new Map())
   const [mapProfiles, setMapProfiles] = useState<Map<string, { label: string; url?: string; color?: string }>>(new Map())
 
-  const [mapView, setMapView] = useState<'normal' | 'heatmap' | 'myland'>('normal')
+  const [mapView, setMapView] = useState<'normal' | 'heatmap' | 'myland' | 'deals'>('normal')
   const [currentScale, setCurrentScale] = useState(1)
   const [activeOverlay, setActiveOverlay] = useState<'none' | 'drawer' | 'info'>('none')
   const [tappedPixelId, setTappedPixelId] = useState<number | null>(null)
@@ -146,7 +174,6 @@ export default function Home() {
         if (mapMeta.slug !== 'world') return
         const { x, y } = geoToPixel(lat, lng)
         const targetId = pixelIdFn(x, y, mapMeta.width)
-        const landed = isLandXY(x, y, mapMeta.width, mapMeta.mask)
 
         // The canvas ref + its internal TransformWrapper need a few
         // frames to be ready after loadState flips to 'ready'. Retry
@@ -166,9 +193,6 @@ export default function Home() {
             try {
               sessionStorage.setItem('mondeto-geo-zoomed', '1')
             } catch {}
-            console.log(
-              `[geo] zoomed to pixel (${x}, ${y}) from lat/lng ${lat.toFixed(2)},${lng.toFixed(2)} — land=${landed} via /api/geo (${data.city ?? '?'}, ${data.country ?? '?'})`,
-            )
             return
           }
           if (Date.now() - start > 2000) {
@@ -384,7 +408,7 @@ export default function Home() {
       {/* Top bar */}
       <TopBar title="MONDETO" />
 
-      {/* HEATMAP / MY LAND toggle — sits under the TopBar on the lime band */}
+      {/* HEATMAP / MY LAND / DEALS toggle — sits under the TopBar on the lime band */}
       <div
         style={{
           position: 'absolute',
@@ -401,7 +425,8 @@ export default function Home() {
           gap: 6,
         }}
       >
-        {(['heatmap', 'myland'] as const).map((v, i) => {
+        {/* analytics: deals_view_opened lands with the analytics baseline */}
+        {(['heatmap', 'myland', 'deals'] as const).map((v, i) => {
           const active = mapView === v
           return (
             <React.Fragment key={v}>
@@ -414,7 +439,11 @@ export default function Home() {
                 </span>
               )}
               <button
-                onClick={() => setMapView(mapView === v ? 'normal' : v)}
+                onClick={() => {
+                  const next = mapView === v ? 'normal' : v
+                  setMapView(next)
+                  track('map_view_toggled', { view: next })
+                }}
                 className="font-display"
                 style={{
                   fontSize: 10,
@@ -428,7 +457,7 @@ export default function Home() {
                   textTransform: 'uppercase',
                 }}
               >
-                {v === 'myland' ? 'MY LAND' : 'HEATMAP'}
+                {v === 'myland' ? 'MY LAND' : v === 'deals' ? 'DEALS' : 'HEATMAP'}
               </button>
             </React.Fragment>
           )
@@ -461,6 +490,7 @@ export default function Home() {
           loadState={loadState}
           userAddress={addrStr}
           userColor={profile.color}
+          initialPrice={priceConfig?.initialPrice}
           changedIds={changedIds}
           profilesMap={mapProfiles}
         />
@@ -513,6 +543,12 @@ export default function Home() {
       {/* Heatmap legend */}
       <HeatmapLegend visible={mapView === 'heatmap'} />
 
+      {/* Deals legend */}
+      <DealsLegend
+        visible={mapView === 'deals'}
+        halvingTimeSeconds={priceConfig ? Number(priceConfig.halvingTime) : undefined}
+      />
+
       {/* Zoom hint toast */}
       <ZoomHintToast hasZoomedPast4x={hasZoomedPast4xRef.current} />
 
@@ -541,7 +577,7 @@ export default function Home() {
           ZOOM IN TO SELECT A PIXEL
         </div>
       )}
-      {/* <CampaignBanner /> */}
+      <CampaignBanner />
       {/* Browser-only — points users with empty Celo wallets at Squid to
           bridge in. The component self-hides in MiniPay (where the in-drawer
           TOP UP BALANCE deeplink to MiniPay Add Cash handles the same case). */}
@@ -631,6 +667,8 @@ export default function Home() {
           visible={true}
           pixel={tappedPixel}
           pixelId={tappedPixelId ?? 0}
+          halvingTime={priceConfig?.halvingTime}
+          initialPrice={priceConfig?.initialPrice}
           onBuyThisPixel={handleBuyThisPixel}
           onDismiss={handleDismissOverlay}
         />
