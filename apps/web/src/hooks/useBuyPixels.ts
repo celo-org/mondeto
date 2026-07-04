@@ -40,6 +40,39 @@ const DEADLINE_SECONDS = (() => {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 20 * 60
 })()
 
+// Pull the most specific message out of a (possibly viem-wrapped) error. viem
+// masks provider failures as "An unknown RPC error occurred" at the top level
+// while the real reason lives in `.cause`/`.details`/`.data` — surface that so
+// MiniPay failures show why instead of a generic string.
+function extractErrorDetail(e: unknown): string {
+  if (!e || typeof e !== 'object') return typeof e === 'string' ? e : 'Transaction failed'
+  const err = e as {
+    shortMessage?: string
+    details?: string
+    message?: string
+    cause?: {
+      shortMessage?: string
+      details?: string
+      message?: string
+      data?: { message?: string }
+      cause?: { shortMessage?: string; message?: string; details?: string }
+    }
+  }
+  return (
+    err.cause?.cause?.details ||
+    err.cause?.cause?.shortMessage ||
+    err.cause?.cause?.message ||
+    err.cause?.data?.message ||
+    err.cause?.details ||
+    err.cause?.shortMessage ||
+    err.cause?.message ||
+    err.details ||
+    err.shortMessage ||
+    err.message ||
+    'Transaction failed'
+  )
+}
+
 export function useBuyPixels(mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
   const { address } = useAccount()
@@ -143,15 +176,33 @@ export function useBuyPixels(mapId?: MapId) {
         // standing allowance skip this, so the drop-off here measures the
         // approval wall specifically.
         track('pixel_buy_approve_shown', eventProps)
+        // Estimate gas WITH feeCurrency via the read client and pass it
+        // explicitly (see buyPixels below for why). undefined on failure so the
+        // wallet falls back to estimating itself.
+        let approveGas: bigint | undefined
+        try {
+          const g = await publicClient.estimateContractGas({
+            address: tokenAddress,
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [contractAddress, safeApprove],
+            account: address,
+            ...(feeCurrency ? { feeCurrency } : {}),
+          })
+          approveGas = (g * 12n) / 10n
+        } catch (err) {
+          console.warn('approve gas estimate failed; wallet will estimate:', err)
+        }
         const approveHash = await writeContractAsync({
           address: tokenAddress,
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [contractAddress, safeApprove],
           dataSuffix,
-          // feeCurrency is a Celo (CIP-64) field wagmi's generic write type
-          // doesn't surface; spread it so the rest stays type-checked.
+          // feeCurrency + gas are Celo (CIP-64) fields wagmi's generic write
+          // type doesn't surface; spread them so the rest stays type-checked.
           ...(feeCurrency ? { feeCurrency } : {}),
+          ...(approveGas ? { gas: approveGas } : {}),
         })
         await publicClient.waitForTransactionReceipt({ hash: approveHash })
         // Wait for nonce to propagate on sequencer
@@ -160,6 +211,25 @@ export function useBuyPixels(mapId?: MapId) {
 
       // Step 2: Buy pixels with the chosen token.
       setStep('buying')
+      // Estimate gas WITH feeCurrency via the read client (Forno) and pass it
+      // explicitly. A fee-currency (CIP-64) tx costs more intrinsic gas, and
+      // letting MiniPay estimate a fee-currency tx itself is a prime cause of
+      // the opaque "unknown RPC error" — pre-estimating means the wallet only
+      // has to sign + send. undefined on failure -> wallet estimates itself.
+      let buyGas: bigint | undefined
+      try {
+        const g = await publicClient.estimateContractGas({
+          address: contractAddress,
+          abi: MONDETO_ABI,
+          functionName: 'buyPixels',
+          args: [bigIds, tokenAddress, maxTotalCost, deadline],
+          account: address,
+          ...(feeCurrency ? { feeCurrency } : {}),
+        })
+        buyGas = (g * 12n) / 10n
+      } catch (err) {
+        console.warn('buyPixels gas estimate failed; wallet will estimate:', err)
+      }
       const buyHash = await writeContractAsync({
         address: contractAddress,
         abi: MONDETO_ABI,
@@ -167,6 +237,7 @@ export function useBuyPixels(mapId?: MapId) {
         args: [bigIds, tokenAddress, maxTotalCost, deadline],
         dataSuffix,
         ...(feeCurrency ? { feeCurrency } : {}),
+        ...(buyGas ? { gas: buyGas } : {}),
       })
 
       setTxHash(buyHash)
@@ -197,23 +268,27 @@ export function useBuyPixels(mapId?: MapId) {
       track('pixel_buy_succeeded', { ...eventProps, txHash: buyHash })
       setStep('success')
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Transaction failed'
-      console.error('Buy failed:', msg)
-      const short = msg.includes('User rejected')
+      // Unwrap the wallet-masked error so a real reason survives. Match against
+      // both the top-level message and the unwrapped detail.
+      const detail = extractErrorDetail(e)
+      const msg = e instanceof Error ? e.message : String(e)
+      const hay = `${msg} ${detail}`
+      console.error('Buy failed:', detail, e)
+      const short = hay.includes('User rejected')
         ? 'Transaction rejected by user'
-        : msg.includes('nonce')
+        : hay.includes('nonce')
           ? 'Nonce error — please try again in a few seconds'
-          : msg.includes('NotLand')
+          : hay.includes('NotLand')
             ? 'Selected pixel is not land'
-            : msg.includes('TokenNotAccepted')
+            : hay.includes('TokenNotAccepted')
               ? `${preferred.symbol} is not accepted by this map yet`
-              : msg.includes('SlippageExceeded')
+              : hay.includes('SlippageExceeded')
                 ? 'Price moved above your limit — please review and try again'
-                : msg.includes('DeadlineExpired')
+                : hay.includes('DeadlineExpired')
                   ? 'Transaction expired — please try again'
-                  : msg.includes('insufficient') || msg.includes('ERC20')
+                  : hay.includes('insufficient') || hay.includes('ERC20')
                     ? `Insufficient ${preferred.symbol} balance or allowance`
-                    : msg.slice(0, 200)
+                    : detail.slice(0, 200)
       track('pixel_buy_failed', { ...eventProps, reason: short })
       setError(short)
       setStep('error')
