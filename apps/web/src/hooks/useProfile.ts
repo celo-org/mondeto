@@ -6,6 +6,7 @@ import { MONDETO_ABI } from '@/lib/contract'
 import { uint24ToHex, hexToUint24, ownerDefaultColor } from '@/lib/colorUtils'
 import { decodeBytes } from '@/lib/decodeBytes'
 import { getAttributionSuffix } from '@/lib/attribution'
+import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { generateUsername } from '@/lib/username'
 import type { MapId } from '@/lib/maps/types'
@@ -125,6 +126,14 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
         functionName: 'updateProfile',
         args: [hexToUint24(color), name, url],
         dataSuffix: getAttributionSuffix(),
+        // In MiniPay, pay gas in cUSD (CIP-64) — the wallet holds no CELO.
+        // Profile edits don't move a payment token, so default to cUSD rather
+        // than pulling in a balance read. Spread because wagmi's write type
+        // omits the Celo-specific feeCurrency field.
+        ...(() => {
+          const feeCurrency = getFeeCurrency()
+          return feeCurrency ? { feeCurrency } : {}
+        })(),
       })
     } catch {
       setSaveState('error')

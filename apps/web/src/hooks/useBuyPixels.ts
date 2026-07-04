@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react'
 import { useWriteContract, useAccount, usePublicClient } from 'wagmi'
 import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getAttributionSuffix } from '@/lib/attribution'
+import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { getReferrer, track } from '@/lib/analytics'
@@ -90,6 +91,9 @@ export function useBuyPixels(mapId?: MapId) {
 
       const bigIds = ids.map((id) => BigInt(id))
       const dataSuffix = getAttributionSuffix()
+      // In MiniPay, pay gas in the same stablecoin being spent (CIP-64) — the
+      // wallet holds no CELO. undefined elsewhere, so other wallets are unchanged.
+      const feeCurrency = getFeeCurrency(tokenAddress)
 
       // Read the canonical price + canonical-to-token decimal conversion.
       // `selectionPrice` returns the price in PRICE_DECIMALS units (the
@@ -145,6 +149,9 @@ export function useBuyPixels(mapId?: MapId) {
           functionName: 'approve',
           args: [contractAddress, safeApprove],
           dataSuffix,
+          // feeCurrency is a Celo (CIP-64) field wagmi's generic write type
+          // doesn't surface; spread it so the rest stays type-checked.
+          ...(feeCurrency ? { feeCurrency } : {}),
         })
         await publicClient.waitForTransactionReceipt({ hash: approveHash })
         // Wait for nonce to propagate on sequencer
@@ -159,6 +166,7 @@ export function useBuyPixels(mapId?: MapId) {
         functionName: 'buyPixels',
         args: [bigIds, tokenAddress, maxTotalCost, deadline],
         dataSuffix,
+        ...(feeCurrency ? { feeCurrency } : {}),
       })
 
       setTxHash(buyHash)
