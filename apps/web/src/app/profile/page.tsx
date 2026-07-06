@@ -329,44 +329,67 @@ export default function ProfilePage() {
         }}
       >
         {!addrStr && (
+          // Overlay, not an inline card — floats over the (zeroed) profile
+          // content instead of pushing it down. Covers the content region
+          // between the TopBar (56px) and the bottom nav (56px) so both stay
+          // usable; sits below the TopBar's zIndex 20.
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Connect to play"
             style={{
-              background: 'var(--card-bg)',
-              border: '2px solid var(--brand-lime)',
-              padding: '16px 18px',
-              margin: '0 16px 16px',
-              maxWidth: 460,
-              width: 'calc(100% - 32px)',
+              position: 'fixed',
+              top: 60,
+              bottom: 56,
+              left: 0,
+              right: 0,
+              zIndex: 19,
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
-              gap: 12,
-              textAlign: 'center',
+              justifyContent: 'center',
+              padding: 16,
+              background: 'rgba(0, 0, 0, 0.72)',
+              backdropFilter: 'blur(2px)',
             }}
           >
             <div
               style={{
-                fontSize: 10,
-                fontFamily: "'Press Start 2P', monospace",
-                letterSpacing: 2,
-                color: 'var(--text)',
+                background: 'var(--card-bg)',
+                border: '2px solid var(--brand-lime)',
+                padding: '16px 18px',
+                maxWidth: 460,
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+                textAlign: 'center',
               }}
             >
-              CONNECT TO PLAY
+              <div
+                style={{
+                  fontSize: 10,
+                  fontFamily: "'Press Start 2P', monospace",
+                  letterSpacing: 2,
+                  color: 'var(--text)',
+                }}
+              >
+                CONNECT TO PLAY
+              </div>
+              <div
+                style={{
+                  fontSize: 7,
+                  fontFamily: "'Press Start 2P', monospace",
+                  letterSpacing: 1.5,
+                  lineHeight: 1.6,
+                  color: 'var(--text-muted)',
+                  maxWidth: 320,
+                }}
+              >
+                link a wallet to claim pixels, set your color, and save your name on-chain
+              </div>
+              <ConnectButton />
             </div>
-            <div
-              style={{
-                fontSize: 7,
-                fontFamily: "'Press Start 2P', monospace",
-                letterSpacing: 1.5,
-                lineHeight: 1.6,
-                color: 'var(--text-muted)',
-                maxWidth: 320,
-              }}
-            >
-              link a wallet to claim pixels, set your color, and save your name on-chain
-            </div>
-            <ConnectButton />
           </div>
         )}
         <AvatarBlock color={color} name={name} />
