@@ -4,8 +4,10 @@
 
 export const MINIPAY_DEPOSIT_URL = 'https://link.minipay.xyz/add_cash' as const
 
-// Support intake — a Google Form (private sheet + email notifications).
-// Set NEXT_PUBLIC_SUPPORT_FORM_URL once the form exists; until then the
-// legacy Telegram group keeps the in-app support link functional.
+// Support intake — a Google Form (private responses sheet + email
+// notifications). Committed as the default so the in-app SUPPORT button opens
+// the form on every deployment; NEXT_PUBLIC_SUPPORT_FORM_URL still overrides
+// per-env. Being NEXT_PUBLIC_, the URL ships in the client bundle regardless.
 export const SUPPORT_URL =
-  process.env.NEXT_PUBLIC_SUPPORT_FORM_URL ?? 'https://t.me/mondetoSupport'
+  process.env.NEXT_PUBLIC_SUPPORT_FORM_URL ??
+  'https://docs.google.com/forms/d/e/1FAIpQLScrrV1YNYorWMSgH14E9aVq-GPFiYO55p2_9d9RRr9hnF78bQ/viewform'
