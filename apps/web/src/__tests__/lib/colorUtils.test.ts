@@ -4,7 +4,9 @@ import {
   uint24ToHex,
   formatUSDT,
   isValidHex,
+  ownerDefaultColor,
 } from '@/lib/colorUtils'
+import { ZERO_ADDRESS } from '@/constants/map'
 
 describe('hexToUint24', () => {
   it('converts black', () => {
@@ -61,6 +63,28 @@ describe('formatUSDT', () => {
 
   it('formats large value', () => {
     expect(formatUSDT(123456789n)).toBe('123.45')
+  })
+})
+
+describe('ownerDefaultColor', () => {
+  // Regression: the map uses the contract's lowercase `pixel.owner`, while the
+  // profile seed uses wagmi's checksummed address. Both must resolve to the
+  // same color, or an owner's own pixel changes color when they connect.
+  it('is case-insensitive (checksummed vs lowercase match)', () => {
+    const checksummed = '0xAbC1230000000000000000000000000000DeF456'
+    const lower = checksummed.toLowerCase()
+    expect(ownerDefaultColor(checksummed)).toBe(ownerDefaultColor(lower))
+  })
+
+  it('returns a stable color for a given address', () => {
+    const addr = '0x1234567890abcdef1234567890abcdef12345678'
+    expect(ownerDefaultColor(addr)).toBe(ownerDefaultColor(addr))
+  })
+
+  it('falls back to the first palette color for empty/zero address', () => {
+    const fallback = ownerDefaultColor(undefined)
+    expect(ownerDefaultColor(ZERO_ADDRESS)).toBe(fallback)
+    expect(ownerDefaultColor(ZERO_ADDRESS.toUpperCase())).toBe(fallback)
   })
 })
 
