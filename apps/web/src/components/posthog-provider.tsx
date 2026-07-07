@@ -3,7 +3,24 @@
 import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider } from 'posthog-js/react'
 import { useEffect } from 'react'
-import { registerCampaignParams } from '@/lib/analytics'
+import { registerCampaignParams, track } from '@/lib/analytics'
+
+// Fire `app_opened` at most once per browser session (not per route change)
+// so it works as a top-of-funnel denominator without inflating with every
+// client-side navigation. sessionStorage is cleared when the tab closes.
+const SESSION_OPEN_KEY = 'mondeto-session-open'
+
+function trackSessionOpen() {
+  try {
+    if (sessionStorage.getItem(SESSION_OPEN_KEY)) return
+    sessionStorage.setItem(SESSION_OPEN_KEY, '1')
+  } catch {
+    // sessionStorage unavailable (private mode) — fall through and fire once
+    // per mount rather than dropping the signal entirely.
+  }
+  const isMiniPay = !!(window.ethereum as { isMiniPay?: boolean } | undefined)?.isMiniPay
+  track('app_opened', { isMiniPay })
+}
 
 /**
  * PostHog client provider for the Next.js App Router.
@@ -57,6 +74,10 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     // Attach utm_* from the landing URL to every event as memory-only
     // super-properties (cleared on reload — no cookies/localStorage).
     registerCampaignParams()
+
+    // Top-of-funnel signal: one event per session gives DAU/MAU and a
+    // denominator for buy-conversion, without turning pageviews back on.
+    trackSessionOpen()
   }, [])
 
   return <PHProvider client={posthog}>{children}</PHProvider>

@@ -106,6 +106,9 @@ export default function Home() {
 
   const canvasRef = useRef<WorldCanvasRef | null>(null)
   const hasZoomedPast4xRef = useRef(false)
+  // Guards buy_blocked_not_connected so it fires once per disconnected
+  // selection session, not on every extra pixel tapped while signed out.
+  const blockedNotConnectedRef = useRef(false)
 
   const isPaintMode = currentScale >= PAINT_SCALE
 
@@ -280,6 +283,19 @@ export default function Home() {
     }
   }, [totalPrice, userBalance, buy.checkBalance])
 
+  // Fire once when a disconnected user has pixels selected but no wallet to
+  // buy with — the "connect your wallet to buy" hint. Resets when they
+  // connect or clear, so a later disconnected selection counts again.
+  useEffect(() => {
+    const blocked = pixelCount > 0 && activeOverlay === 'none' && !isConnected
+    if (blocked && !blockedNotConnectedRef.current) {
+      track('buy_blocked_not_connected', { pixelCount })
+      blockedNotConnectedRef.current = true
+    } else if (!blocked) {
+      blockedNotConnectedRef.current = false
+    }
+  }, [pixelCount, activeOverlay, isConnected])
+
   const handleScaleChange = useCallback((scale: number) => {
     setCurrentScale(scale)
     if (scale >= PAINT_SCALE) {
@@ -355,6 +371,13 @@ export default function Home() {
   const handleOpenDrawer = useCallback(async () => {
     buy.reset()
     setActiveOverlay('drawer')
+    // Intent step: pairs with the later pixel_buy_started to measure the
+    // drop-off between opening checkout and actually confirming in-wallet.
+    track('checkout_opened', {
+      mapId: currentMapId,
+      pixelCount: selectedIds.size,
+      totalPriceUsd: Number(totalPrice) / 1_000_000,
+    })
 
     // Fetch profiles for owners in selection
     if (publicClient) {
@@ -389,7 +412,7 @@ export default function Home() {
       }
       setDrawerProfiles(profiles)
     }
-  }, [buy, selectedIds, pixelDataRef, publicClient])
+  }, [buy, selectedIds, pixelDataRef, publicClient, currentMapId, totalPrice])
 
   const tappedPixel = tappedPixelId !== null ? pixelDataRef.current[tappedPixelId] ?? null : null
   const showDim = activeOverlay !== 'none'
