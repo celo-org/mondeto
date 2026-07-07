@@ -9,16 +9,26 @@ import posthog from 'posthog-js'
  * place. The event set is deliberately tiny and funnel-tied — volume
  * scales with buyers, not visitors (see posthog-provider.tsx for why).
  *
- * Event schema:
- *   wallet_connected        { isMiniPay, chainId }
- *   pixel_buy_started       { mapId, pixelCount, totalPriceUsd, token, ref? }
- *   pixel_buy_approve_shown { mapId, pixelCount, totalPriceUsd, token, ref? }
- *   pixel_buy_succeeded     { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
- *   pixel_buy_failed        { mapId, pixelCount, totalPriceUsd, token, reason, ref? }
- *   map_switched            { fromMapId, toMapId }
- *   referral_landed         { ref, mapId? }
- *   invite_shared           { mapId }
- *   support_form_opened     {}
+ * Event schema (this comment is the single source of truth — keep it in
+ * sync when adding or changing an event):
+ *   app_opened                { isMiniPay }                          once per session (top-of-funnel denominator)
+ *   wallet_connected          { isMiniPay, chainId }
+ *   referral_landed           { ref, mapId? }
+ *   intro_completed           { lastSlideIndex }
+ *   map_switched              { fromMapId, toMapId }
+ *   map_view_toggled          { view }                               heatmap / myland / deals / normal
+ *   leaderboard_viewed        { board, scope, mapId }
+ *   pixel_info_viewed         { pixelId, owned }
+ *   profile_saved             { hasUrl }                             fires when the updateProfile tx confirms
+ *   invite_shared             { mapId }
+ *   support_form_opened       {}
+ *   buy_blocked_not_connected { pixelCount }                         selected pixels while signed out
+ *   checkout_opened           { mapId, pixelCount, totalPriceUsd }   review drawer opened (buy intent)
+ *   topup_clicked             { mapId, shortfallUsd, token }         insufficient-funds wall
+ *   pixel_buy_started         { mapId, pixelCount, totalPriceUsd, token, ref? }
+ *   pixel_buy_approve_shown   { mapId, pixelCount, totalPriceUsd, token, ref? }
+ *   pixel_buy_succeeded       { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
+ *   pixel_buy_failed          { mapId, pixelCount, totalPriceUsd, token, reason, ref? }
  *
  * `utm_*` params from the landing URL are attached to every event as
  * super-properties via registerCampaignParams() below.

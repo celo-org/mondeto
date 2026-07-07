@@ -8,6 +8,8 @@ import { formatUSDT } from '@/lib/colorUtils'
 import { generateUsername } from '@/lib/username'
 import { MINIPAY_DEPOSIT_URL } from '@/lib/deeplinks'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
+import { useMaps } from '@/hooks/useMaps'
+import { track } from '@/lib/analytics'
 import TxProgress from './TxProgress'
 import SuccessState from './SuccessState'
 
@@ -69,6 +71,7 @@ export default function SelectionDrawer({
   // of needing explanation.
   const { preferred } = useStablecoinBalance()
   const payToken = preferred?.symbol ?? 'USDC'
+  const { currentMapId } = useMaps()
 
   // Compute insufficient locally from the values we already render. The
   // parent also derives this through useBuyPixels.checkBalance, but that path
@@ -208,6 +211,13 @@ export default function SelectionDrawer({
                 href={MINIPAY_DEPOSIT_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() =>
+                  track('topup_clicked', {
+                    mapId: currentMapId,
+                    shortfallUsd: Number(totalPrice - userBalance) / 1_000_000,
+                    token: payToken,
+                  })
+                }
                 className="pixel-btn pixel-btn-sm font-display"
                 style={{ fontSize: 8, letterSpacing: 2, textDecoration: 'none' }}
               >

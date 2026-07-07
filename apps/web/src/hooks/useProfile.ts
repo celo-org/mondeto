@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
 import { MONDETO_ABI } from '@/lib/contract'
 import { uint24ToHex, hexToUint24, ownerDefaultColor } from '@/lib/colorUtils'
@@ -9,6 +9,7 @@ import { getAttributionSuffix } from '@/lib/attribution'
 import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { generateUsername } from '@/lib/username'
+import { track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
 // Deterministic per-address default color, shared with the map renderer so
@@ -52,6 +53,10 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
     () => readPickedColor(address) ?? defaultColorFor(address),
   )
   const [saveState, setSaveState] = useState<ProfileSaveState>('idle')
+  // Details of the in-flight save, captured at submit time so the
+  // `profile_saved` event fires exactly once when the receipt confirms —
+  // reading state in the receipt effect avoids re-firing as fields change.
+  const pendingSaveRef = useRef<{ hasUrl: boolean } | null>(null)
 
   // UI color setter: persist the pick so the map (own pixels) and other
   // screens reflect it immediately, even before the on-chain save.
@@ -108,6 +113,10 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
     else if (isConfirming) setSaveState('confirming')
     else if (isSuccess) {
       setSaveState('saved')
+      if (pendingSaveRef.current) {
+        track('profile_saved', pendingSaveRef.current)
+        pendingSaveRef.current = null
+      }
       setTimeout(() => setSaveState('idle'), 2000)
     }
   }, [isPending, isConfirming, isSuccess])
@@ -120,6 +129,9 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
     }
 
     try {
+      // A name is always required to reach here (guarded above); flag whether
+      // the optional link was set so we can see how many people fill it in.
+      pendingSaveRef.current = { hasUrl: !!url.trim() }
       writeContract({
         address: contractAddress,
         abi: MONDETO_ABI,
