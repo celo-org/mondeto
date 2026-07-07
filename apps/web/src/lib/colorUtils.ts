@@ -20,10 +20,16 @@ export function uint24ToHex(n: number): string {
  * so the map matches what the owner sees as "their color".
  */
 export function ownerDefaultColor(address: string | undefined): string {
-  if (!address || address === ZERO_ADDRESS) return PROFILE_DEFAULT_PALETTE[0]
+  if (!address) return PROFILE_DEFAULT_PALETTE[0]
+  // Hash the lowercased address so a checksummed (EIP-55, mixed-case) form and
+  // a raw lowercase form of the same wallet map to the same color. Callers feed
+  // both: the map uses the contract's lowercase `pixel.owner`, while the profile
+  // seed uses wagmi's checksummed `useAccount().address`.
+  const a = address.toLowerCase()
+  if (a === ZERO_ADDRESS.toLowerCase()) return PROFILE_DEFAULT_PALETTE[0]
   let hash = 0
-  for (let i = 2; i < address.length; i++) {
-    hash = (hash * 31 + address.charCodeAt(i)) | 0
+  for (let i = 2; i < a.length; i++) {
+    hash = (hash * 31 + a.charCodeAt(i)) | 0
   }
   const idx = Math.abs(hash) % PROFILE_DEFAULT_PALETTE.length
   return PROFILE_DEFAULT_PALETTE[idx]
