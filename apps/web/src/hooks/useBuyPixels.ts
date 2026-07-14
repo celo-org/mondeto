@@ -331,24 +331,7 @@ export function useBuyPixels(mapId?: MapId) {
                     ? `Insufficient ${preferred.symbol} balance or allowance`
                     : detail.slice(0, 200)
       track('pixel_buy_failed', { ...eventProps, reason: short })
-      // TEMP DIAGNOSTIC (remove after MiniPay "permission denied" is fixed):
-      // MiniPay masks the real reason, so surface its raw error code/name/detail
-      // on-screen inside MiniPay only — desktop UX is unchanged.
-      const inMiniPay =
-        typeof window !== 'undefined' &&
-        Boolean((window.ethereum as { isMiniPay?: boolean } | undefined)?.isMiniPay)
-      if (inMiniPay) {
-        const anyE = e as {
-          code?: unknown
-          name?: unknown
-          cause?: { code?: unknown; name?: unknown }
-        }
-        const dbg = `code=${anyE?.code ?? anyE?.cause?.code} name=${anyE?.name ?? anyE?.cause?.name} :: ${detail.slice(0, 180)}`
-        console.error('BUY DEBUG (minipay):', dbg, e)
-        setError(`${short} — DEBUG ${dbg}`)
-      } else {
-        setError(short)
-      }
+      setError(short)
       setStep('error')
     } finally {
       inFlight.current = false
