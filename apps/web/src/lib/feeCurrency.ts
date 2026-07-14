@@ -8,23 +8,23 @@ import type { Address } from 'viem'
  * Passing a `feeCurrency` makes viem serialize a CIP-64 transaction whose gas is
  * paid in that stablecoin instead.
  *
- * MiniPay expects the plain **ERC-20 token address** here and resolves the
- * Celo FeeCurrencyDirectory adapter internally. Passing the raw adapter address
- * (which is what a node-submitted CIP-64 tx wants for 6-decimal tokens) makes
- * MiniPay reject the tx with "permission denied", because the adapter isn't on
- * its list of recognized fee currencies. So map every token to itself:
- *   USD₮  0x48065f… -> itself
- *   USDC  0xcebA93… -> itself
- *   cUSD  0x765DE8… -> itself
+ * Addresses are taken from the official MiniPay docs
+ * (https://docs.minipay.xyz/technical-references/send-transaction). MiniPay
+ * accepts USDT, USDC and USDm as fee currencies; for the 6-decimal tokens the
+ * value passed must be the **fee-currency adapter**, not the token itself:
+ *   USD₮  0x48065f… -> adapter 0x0E2A3e05…
+ *   USDC  0xcebA93… -> adapter 0x2F25deB3…
+ *   cUSD  0x765DE8… -> itself (a fee currency directly)
+ * MiniPay may also ignore `feeCurrency` and charge the token the user holds most.
  *
  * Gated to MiniPay: other wallets (desktop / Privy) keep their default CELO gas
  * path, so this changes nothing outside MiniPay.
  */
 const TOKEN_TO_FEE_CURRENCY: Record<string, Address> = {
-  // USD₮ (Tether) — MiniPay wants the token address, not the adapter
-  '0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e': '0x48065fBbE25f71C9282ddf5e1cd6D6A887483D5e',
-  // USDC — MiniPay wants the token address, not the adapter
-  '0xceba9300f2b948710d2653dd7b07f33a8b32118c': '0xcEBA9300f2b948710d2653dD7B07f33A8B32118C',
+  // USD₮ (Tether) -> its fee-currency adapter
+  '0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e': '0x0E2A3e05bc9A16F5292A6170456A710cb89C6f72',
+  // USDC -> its fee-currency adapter
+  '0xceba9300f2b948710d2653dd7b07f33a8b32118c': '0x2F25deB3848C207fc8E0c34035B3Ba7fC157602B',
   // cUSD (USDm) is a fee currency directly
   '0x765de816845861e75a25fca122bb6898b8b1282a': '0x765DE816845861e75A25fCA122bb6898B8B1282a',
 }
