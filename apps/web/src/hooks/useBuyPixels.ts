@@ -202,7 +202,10 @@ export function useBuyPixels(mapId?: MapId) {
           // feeCurrency + gas are Celo (CIP-64) fields wagmi's generic write
           // type doesn't surface; spread them so the rest stays type-checked.
           ...(feeCurrency ? { feeCurrency } : {}),
-          ...(approveGas ? { gas: approveGas } : {}),
+          // Only force a gas limit OUTSIDE MiniPay. MiniPay's own docs example
+          // sends `feeCurrency` with no explicit gas and estimates internally;
+          // handing it a pre-computed gas limit gets the tx rejected.
+          ...(approveGas && !feeCurrency ? { gas: approveGas } : {}),
         })
         await publicClient.waitForTransactionReceipt({ hash: approveHash })
         // Wait for nonce to propagate on sequencer
@@ -237,7 +240,8 @@ export function useBuyPixels(mapId?: MapId) {
         args: [bigIds, tokenAddress, maxTotalCost, deadline],
         dataSuffix,
         ...(feeCurrency ? { feeCurrency } : {}),
-        ...(buyGas ? { gas: buyGas } : {}),
+        // See approve above: no explicit gas in MiniPay — let the wallet estimate.
+        ...(buyGas && !feeCurrency ? { gas: buyGas } : {}),
       })
 
       setTxHash(buyHash)
@@ -290,7 +294,24 @@ export function useBuyPixels(mapId?: MapId) {
                     ? `Insufficient ${preferred.symbol} balance or allowance`
                     : detail.slice(0, 200)
       track('pixel_buy_failed', { ...eventProps, reason: short })
-      setError(short)
+      // TEMP DIAGNOSTIC (remove after MiniPay "permission denied" is fixed):
+      // MiniPay masks the real reason, so surface its raw error code/name/detail
+      // on-screen inside MiniPay only — desktop UX is unchanged.
+      const inMiniPay =
+        typeof window !== 'undefined' &&
+        Boolean((window.ethereum as { isMiniPay?: boolean } | undefined)?.isMiniPay)
+      if (inMiniPay) {
+        const anyE = e as {
+          code?: unknown
+          name?: unknown
+          cause?: { code?: unknown; name?: unknown }
+        }
+        const dbg = `code=${anyE?.code ?? anyE?.cause?.code} name=${anyE?.name ?? anyE?.cause?.name} :: ${detail.slice(0, 180)}`
+        console.error('BUY DEBUG (minipay):', dbg, e)
+        setError(`${short} — DEBUG ${dbg}`)
+      } else {
+        setError(short)
+      }
       setStep('error')
     } finally {
       inFlight.current = false
