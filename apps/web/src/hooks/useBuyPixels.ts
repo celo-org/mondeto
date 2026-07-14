@@ -73,6 +73,69 @@ function extractErrorDetail(e: unknown): string {
   )
 }
 
+// ---------------------------------------------------------------------------
+// TEMP MiniPay diagnostic (remove once the "permission denied" buy is fixed).
+// MiniPay masks the real reason and viem re-wraps it, so we can't tell WHICH
+// RPC method the wallet rejected. Patch the injected provider's `request` once
+// and keep a small ring buffer of recent {method, params, error} — the buy
+// catch then reports the exact call MiniPay denied.
+// ---------------------------------------------------------------------------
+type MiniPayCall = { method: string; params: string; error?: string }
+const miniPayCallLog: MiniPayCall[] = []
+let providerInstrumented = false
+
+function shortParams(params: unknown): string {
+  try {
+    // Only the tx object matters (to / feeCurrency / gas) — keep it tiny.
+    const s = JSON.stringify(params, (_k, v) =>
+      typeof v === 'bigint' ? `${v}` : v,
+    )
+    return s.length > 260 ? `${s.slice(0, 260)}…` : s
+  } catch {
+    return '<unserializable>'
+  }
+}
+
+function instrumentMiniPayProvider() {
+  if (providerInstrumented) return
+  if (typeof window === 'undefined') return
+  const eth = window.ethereum as
+    | { isMiniPay?: boolean; request?: (...a: unknown[]) => Promise<unknown> }
+    | undefined
+  if (!eth?.isMiniPay || typeof eth.request !== 'function') return
+  const original = eth.request.bind(eth)
+  try {
+    eth.request = async (...args: unknown[]) => {
+      const arg = (args[0] ?? {}) as { method?: string; params?: unknown }
+      const entry: MiniPayCall = {
+        method: String(arg?.method ?? '?'),
+        params: shortParams(arg?.params),
+      }
+      miniPayCallLog.push(entry)
+      if (miniPayCallLog.length > 12) miniPayCallLog.shift()
+      try {
+        return await original(...args)
+      } catch (e) {
+        entry.error = extractErrorDetail(e)
+        throw e
+      }
+    }
+    providerInstrumented = true
+  } catch (e) {
+    // Some providers freeze `request`; don't let instrumentation break buys.
+    console.warn('MiniPay provider instrument failed:', e)
+  }
+}
+
+// The most relevant call for the readout: the last one that errored, else the
+// last one attempted.
+function lastMiniPayFailure(): string {
+  const failed = [...miniPayCallLog].reverse().find((c) => c.error)
+  const c = failed ?? miniPayCallLog[miniPayCallLog.length - 1]
+  if (!c) return 'no provider calls captured'
+  return `${c.method} ${c.params}${c.error ? ` -> ${c.error.slice(0, 100)}` : ''}`
+}
+
 export function useBuyPixels(mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
   const { address } = useAccount()
@@ -117,6 +180,13 @@ export function useBuyPixels(mapId?: MapId) {
       ref: getReferrer() ?? undefined,
     }
     track('pixel_buy_started', eventProps)
+
+    // TEMP diagnostic: patch MiniPay's provider so a failure names the exact
+    // RPC call it rejected. Also record what we last handed the wallet.
+    instrumentMiniPayProvider()
+    const sendDiag: { step: string; to?: string; feeCurrency?: string; gas?: string } = {
+      step: 'init',
+    }
 
     try {
       setStep('approving')
@@ -212,6 +282,10 @@ export function useBuyPixels(mapId?: MapId) {
             }
           }
         }
+        sendDiag.step = 'approve'
+        sendDiag.to = tokenAddress
+        sendDiag.feeCurrency = feeCurrency ?? 'none'
+        sendDiag.gas = approveGas ? `${approveGas}` : 'none'
         const approveHash = await writeContractAsync({
           address: tokenAddress,
           abi: ERC20_ABI,
@@ -269,6 +343,10 @@ export function useBuyPixels(mapId?: MapId) {
           }
         }
       }
+      sendDiag.step = 'buy'
+      sendDiag.to = contractAddress
+      sendDiag.feeCurrency = feeCurrency ?? 'none'
+      sendDiag.gas = buyGas ? `${buyGas}` : 'none'
       const buyHash = await writeContractAsync({
         address: contractAddress,
         abi: MONDETO_ABI,
@@ -343,9 +421,13 @@ export function useBuyPixels(mapId?: MapId) {
           name?: unknown
           cause?: { code?: unknown; name?: unknown }
         }
-        const dbg = `code=${anyE?.code ?? anyE?.cause?.code} name=${anyE?.name ?? anyE?.cause?.name} :: ${detail.slice(0, 180)}`
-        console.error('BUY DEBUG (minipay):', dbg, e)
-        setError(`${short} — DEBUG ${dbg}`)
+        // Name the exact provider call MiniPay rejected + what we handed it, so
+        // a still-failing buy is self-explanatory on-device.
+        const sent = `[${sendDiag.step}] to=${sendDiag.to?.slice(0, 10)} fee=${sendDiag.feeCurrency?.slice(0, 10)} gas=${sendDiag.gas}`
+        const rpc = lastMiniPayFailure()
+        const dbg = `code=${anyE?.code ?? anyE?.cause?.code} name=${anyE?.name ?? anyE?.cause?.name} :: ${detail.slice(0, 120)}`
+        console.error('BUY DEBUG (minipay):', dbg, '|', sent, '| rpc:', rpc, e)
+        setError(`${short} — DEBUG ${dbg} | SENT ${sent} | RPC ${rpc}`)
       } else {
         setError(short)
       }
