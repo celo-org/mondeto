@@ -176,9 +176,8 @@ export function useBuyPixels(mapId?: MapId) {
         // standing allowance skip this, so the drop-off here measures the
         // approval wall specifically.
         track('pixel_buy_approve_shown', eventProps)
-        // Estimate gas WITH feeCurrency via the read client and pass it
-        // explicitly (see buyPixels below for why). undefined on failure so the
-        // wallet falls back to estimating itself.
+        // Estimate gas via the read client (Forno) and pass it explicitly
+        // (see buyPixels below for why this matters in MiniPay).
         let approveGas: bigint | undefined
         try {
           const g = await publicClient.estimateContractGas({
@@ -191,7 +190,27 @@ export function useBuyPixels(mapId?: MapId) {
           })
           approveGas = (g * 12n) / 10n
         } catch (err) {
-          console.warn('approve gas estimate failed; wallet will estimate:', err)
+          console.warn('approve gas estimate (feeCurrency) failed:', err)
+          // In MiniPay we must NEVER send without a gas limit — a gas-less send
+          // makes the wallet run its own eth_estimateGas, which returns
+          // "permission denied". Retry the estimate without feeCurrency (widely
+          // accepted), padding for the CIP-64 intrinsic overhead; last resort a
+          // safe ceiling so the tx still goes out with a limit.
+          if (feeCurrency) {
+            try {
+              const g = await publicClient.estimateContractGas({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'approve',
+                args: [contractAddress, safeApprove],
+                account: address,
+              })
+              approveGas = (g * 12n) / 10n + 60_000n
+            } catch (err2) {
+              console.warn('approve gas fallback failed; using ceiling:', err2)
+              approveGas = 150_000n
+            }
+          }
         }
         const approveHash = await writeContractAsync({
           address: tokenAddress,
@@ -202,10 +221,11 @@ export function useBuyPixels(mapId?: MapId) {
           // feeCurrency + gas are Celo (CIP-64) fields wagmi's generic write
           // type doesn't surface; spread them so the rest stays type-checked.
           ...(feeCurrency ? { feeCurrency } : {}),
-          // Only force a gas limit OUTSIDE MiniPay. MiniPay's own docs example
-          // sends `feeCurrency` with no explicit gas and estimates internally;
-          // handing it a pre-computed gas limit gets the tx rejected.
-          ...(approveGas && !feeCurrency ? { gas: approveGas } : {}),
+          // Always pass an explicit gas limit when we have one. REQUIRED in
+          // MiniPay (feeCurrency set): without it viem asks MiniPay to estimate
+          // and MiniPay returns "permission denied". This mirrors the on-chain
+          // config that worked (CIP-64 tx + explicit gas).
+          ...(approveGas ? { gas: approveGas } : {}),
         })
         await publicClient.waitForTransactionReceipt({ hash: approveHash })
         // Wait for nonce to propagate on sequencer
@@ -214,11 +234,10 @@ export function useBuyPixels(mapId?: MapId) {
 
       // Step 2: Buy pixels with the chosen token.
       setStep('buying')
-      // Estimate gas WITH feeCurrency via the read client (Forno) and pass it
-      // explicitly. A fee-currency (CIP-64) tx costs more intrinsic gas, and
-      // letting MiniPay estimate a fee-currency tx itself is a prime cause of
-      // the opaque "unknown RPC error" — pre-estimating means the wallet only
-      // has to sign + send. undefined on failure -> wallet estimates itself.
+      // Estimate gas via the read client (Forno) and pass it explicitly. A
+      // fee-currency (CIP-64) tx costs more intrinsic gas. Passing the limit is
+      // REQUIRED in MiniPay: a gas-less send makes viem call MiniPay's own
+      // eth_estimateGas, which returns "permission denied" and kills the buy.
       let buyGas: bigint | undefined
       try {
         const g = await publicClient.estimateContractGas({
@@ -231,7 +250,24 @@ export function useBuyPixels(mapId?: MapId) {
         })
         buyGas = (g * 12n) / 10n
       } catch (err) {
-        console.warn('buyPixels gas estimate failed; wallet will estimate:', err)
+        console.warn('buyPixels gas estimate (feeCurrency) failed:', err)
+        // MiniPay: never fall through to a gas-less send (see approve above).
+        // Retry without feeCurrency, then a pixel-count-scaled ceiling.
+        if (feeCurrency) {
+          try {
+            const g = await publicClient.estimateContractGas({
+              address: contractAddress,
+              abi: MONDETO_ABI,
+              functionName: 'buyPixels',
+              args: [bigIds, tokenAddress, maxTotalCost, deadline],
+              account: address,
+            })
+            buyGas = (g * 12n) / 10n + 100_000n
+          } catch (err2) {
+            console.warn('buyPixels gas fallback failed; using ceiling:', err2)
+            buyGas = 300_000n + BigInt(bigIds.length) * 80_000n
+          }
+        }
       }
       const buyHash = await writeContractAsync({
         address: contractAddress,
@@ -240,8 +276,9 @@ export function useBuyPixels(mapId?: MapId) {
         args: [bigIds, tokenAddress, maxTotalCost, deadline],
         dataSuffix,
         ...(feeCurrency ? { feeCurrency } : {}),
-        // See approve above: no explicit gas in MiniPay — let the wallet estimate.
-        ...(buyGas && !feeCurrency ? { gas: buyGas } : {}),
+        // See approve above: always pass an explicit gas limit — required in
+        // MiniPay so viem never asks the wallet to estimate.
+        ...(buyGas ? { gas: buyGas } : {}),
       })
 
       setTxHash(buyHash)
