@@ -32,12 +32,18 @@ export function ShareButton({
   params,
   label,
   filled = true,
+  compact = false,
+  icon,
 }: {
   kind: ShareKind
   params: ShareParams
   label: string
   /** Render the button in the filled (lime) pixel style. */
   filled?: boolean
+  /** Compact icon+label trigger that flexes to share a row (secondary action). */
+  compact?: boolean
+  /** Leading glyph for the trigger (shown in compact mode). */
+  icon?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -80,13 +86,22 @@ export function ShareButton({
   }
 
   return (
-    <div ref={rootRef} style={{ position: 'relative', width: '100%' }}>
+    <div
+      ref={rootRef}
+      style={{ position: 'relative', width: compact ? 'auto' : '100%', flex: compact ? '1 1 0' : undefined, minWidth: 0 }}
+    >
       <button
         onClick={onShare}
+        aria-label={compact ? label : undefined}
         className={`pixel-btn font-display${filled ? ' pixel-btn-filled' : ''}`}
-        style={{ display: 'block', width: '100%', fontSize: 10, letterSpacing: 2, padding: 12, cursor: 'pointer' }}
+        style={
+          compact
+            ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', fontSize: 9, letterSpacing: 1.5, padding: '11px 8px', cursor: 'pointer' }
+            : { display: 'block', width: '100%', fontSize: 10, letterSpacing: 2, padding: 12, cursor: 'pointer' }
+        }
       >
-        {copied ? 'LINK COPIED' : label}
+        {icon ? <span style={{ display: 'flex', width: 14, height: 14 }}>{icon}</span> : null}
+        {copied ? 'COPIED' : label}
       </button>
 
       {open && (

@@ -22,12 +22,26 @@ export function InviteButton() {
   return (
     <ShareButton
       kind="invite"
-      label="INVITE A RIVAL"
+      label="INVITE"
+      compact
+      filled={false}
+      icon={<InviteGlyph />}
       params={{
         mapId: currentMapId,
         mapName: mapMeta.displayName,
         ref: address.toLowerCase(),
       }}
     />
+  )
+}
+
+/** user-plus glyph. */
+function InviteGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M15 19a6 6 0 00-12 0" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M19 8v6M22 11h-6" />
+    </svg>
   )
 }

@@ -504,30 +504,33 @@ export default function ProfilePage() {
             {saveLabel}
           </button>
 
-          {/* Flex the player's standing on X with a dynamic preview card;
-              the shared link carries their referral code. Only offered once
-              they actually hold pixels — no brag to make otherwise. */}
-          {addrStr && pixelCount > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <ShareButton
-                kind="positions"
-                label={rank === 1 ? 'SHARE MY REIGN' : 'SHARE MY MAP'}
-                params={{
-                  name,
-                  value: String(pixelCount),
-                  ruler: rank === 1,
-                  mapId: currentMapId,
-                  mapName: mondetoContract.displayName,
-                  ref: addrStr.toLowerCase(),
-                  color: (color || '').replace('#', ''),
-                }}
-              />
+          {/* Share actions — grouped and secondary to Save (compact icon
+              buttons in a row), so they read as "spread the word", not a second
+              primary action. Share needs pixels to brag about; Invite always
+              shows. Each opens the share menu (X / WhatsApp / Telegram / copy). */}
+          {addrStr && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              {pixelCount > 0 && (
+                <ShareButton
+                  kind="positions"
+                  label="SHARE"
+                  compact
+                  filled={false}
+                  icon={<ShareGlyph />}
+                  params={{
+                    name,
+                    value: String(pixelCount),
+                    ruler: rank === 1,
+                    mapId: currentMapId,
+                    mapName: mondetoContract.displayName,
+                    ref: addrStr.toLowerCase(),
+                    color: (color || '').replace('#', ''),
+                  }}
+                />
+              )}
+              <InviteButton />
             </div>
           )}
-
-          {/* Invite link — lands the invitee on this player's current map
-              with their wallet as the referral code. */}
-          <InviteButton />
 
           {/* Support + legal footer — boxed card so it reads as a distinct
               section. MiniPay requires Support / Terms / Privacy to be
@@ -622,5 +625,15 @@ export default function ProfilePage() {
       </div>
       <BottomNav activeRoute="/profile" />
     </div>
+  )
+}
+
+/** Share (upload/arrow-out) glyph for the compact share button. */
+function ShareGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
+      <path d="M12 3v13M8 7l4-4 4 4" />
+    </svg>
   )
 }
