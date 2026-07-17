@@ -149,10 +149,14 @@ export function buildTelegramUrl(text: string, url: string): string {
   return `https://t.me/share/url?${q.toString()}`
 }
 
-/** WhatsApp share URL. WhatsApp takes a single text field, so fold the link in. */
+/**
+ * WhatsApp share URL. Uses api.whatsapp.com/send (not wa.me/?text=, which needs
+ * a phone number and shows an "invalid number" page when shared without one).
+ * WhatsApp takes a single text field, so the link is folded into the message.
+ */
 export function buildWhatsAppUrl(message: string): string {
   const q = new URLSearchParams({ text: message })
-  return `https://wa.me/?${q.toString()}`
+  return `https://api.whatsapp.com/send?${q.toString()}`
 }
 
 /**

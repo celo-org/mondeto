@@ -16,17 +16,15 @@ import {
 /**
  * One "Share" button for the share-to-X flywheel.
  *
- * Preferred action is the phone's NATIVE share sheet (Web Share API) — it lets
- * the player pick X / Instagram / Telegram / WhatsApp / wherever, with their own
- * default first, and it's a single tap. We don't force X.
+ * Tapping it opens our own small menu of targets — X, WhatsApp, Telegram, Copy
+ * link — the same on every device. We intentionally do NOT use the Web Share
+ * API: on iOS it popped the system sheet and then this menu (a double popup),
+ * and it buried our chosen channels behind the OS picker. Instagram has no web
+ * share URL, so it isn't offered here.
  *
- * Only when there's no native sheet (mostly desktop) do we reveal an explicit
- * menu of targets, so the options don't crowd the UI until asked for. Instagram
- * has no web share URL, so it's reachable only through the native sheet.
- *
- * Every path carries the text with the link: the X intent takes text+url; the
- * native sheet + WhatsApp get a single string with the link folded in (some
- * apps drop a Web Share payload's text when a url is also set).
+ * The text always travels with the link: the X intent takes text+url; WhatsApp
+ * + Copy get a single string with the link folded in (some apps drop a payload's
+ * text when a url is also set).
  */
 export function ShareButton({
   kind,
@@ -58,18 +56,11 @@ export function ShareButton({
   const text = composeShareText(kind, params)
   const message = composeShareMessage(kind, params)
 
-  const onShare = async () => {
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      track('share_clicked', { kind, platform: 'native', mapId: params.mapId ?? null })
-      try {
-        await navigator.share({ title: 'MONDETO', text: message })
-        return
-      } catch {
-        // Cancelled or unavailable at runtime — fall through to the menu.
-      }
-    }
-    setOpen((v) => !v)
-  }
+  // Our own menu is the single, consistent UI on every device. We deliberately
+  // don't call the Web Share API: on iOS it popped the system sheet AND then
+  // this menu, and it hid our chosen targets behind the OS picker. Tapping a
+  // target below opens it directly (each is a user-gesture window.open).
+  const onShare = () => setOpen((v) => !v)
 
   const openTarget = (platform: string, href: string) => {
     track('share_clicked', { kind, platform, mapId: params.mapId ?? null })
