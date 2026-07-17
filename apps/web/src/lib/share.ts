@@ -143,6 +143,18 @@ export function buildXIntentUrl(text: string, url: string): string {
   return `https://x.com/intent/tweet?${q.toString()}`
 }
 
+/** Telegram share URL (prefills the message with the link + brag text). */
+export function buildTelegramUrl(text: string, url: string): string {
+  const q = new URLSearchParams({ url, text })
+  return `https://t.me/share/url?${q.toString()}`
+}
+
+/** WhatsApp share URL. WhatsApp takes a single text field, so fold the link in. */
+export function buildWhatsAppUrl(message: string): string {
+  const q = new URLSearchParams({ text: message })
+  return `https://wa.me/?${q.toString()}`
+}
+
 /**
  * Message body for the native share sheet. Some targets (Telegram, notably)
  * keep ONLY the `url` when a Web Share payload carries both `text` and `url`,
