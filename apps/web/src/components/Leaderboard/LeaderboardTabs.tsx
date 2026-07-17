@@ -21,7 +21,7 @@ const tabConfig: {
     key: 'AREA',
     label: 'LAND',
     description: 'Who owns the most pixels on the map.',
-    globalDescription: 'Most territory owned across all maps (share of each board).',
+    globalDescription: 'Most land owned across all maps (share of each board).',
   },
   {
     key: 'EMPIRE',

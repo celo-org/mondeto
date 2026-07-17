@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dailyFallPct, dealDepth } from '@/lib/decay'
+import { dailyFallPct, dealDepth, halvingPeriodDays } from '@/lib/decay'
 
 const DAY = 86_400
 
@@ -33,6 +33,24 @@ describe('dailyFallPct', () => {
   it('returns 0 for non-finite halving time', () => {
     expect(dailyFallPct(Infinity)).toBe(0)
     expect(dailyFallPct(NaN)).toBe(0)
+  })
+})
+
+describe('halvingPeriodDays', () => {
+  it('returns the halving span in days', () => {
+    expect(halvingPeriodDays(30 * DAY)).toBe(30)
+    expect(halvingPeriodDays(14 * DAY)).toBe(14)
+  })
+
+  it('returns fractional days for sub-day precision', () => {
+    expect(halvingPeriodDays(DAY / 2)).toBeCloseTo(0.5, 10)
+  })
+
+  it('returns 0 for zero, negative, and non-finite inputs', () => {
+    expect(halvingPeriodDays(0)).toBe(0)
+    expect(halvingPeriodDays(-DAY)).toBe(0)
+    expect(halvingPeriodDays(Infinity)).toBe(0)
+    expect(halvingPeriodDays(NaN)).toBe(0)
   })
 })
 
