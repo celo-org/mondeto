@@ -14,6 +14,18 @@
 
 export const APP_ORIGIN = 'https://www.mondeto.app'
 
+/**
+ * The origin to build shareable links against. Uses the live deployment origin
+ * in the browser (so a link shared from a Vercel preview resolves on that
+ * preview instead of 404-ing against production, which may not have `/s` yet),
+ * and falls back to the canonical origin on the server.
+ */
+export function originBase(): string {
+  return typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : APP_ORIGIN
+}
+
 export type ShareKind = 'positions' | 'rank' | 'invite' | 'reward'
 
 /**
@@ -112,7 +124,7 @@ export function decodeShareParams(sp: URLSearchParams): { kind: ShareKind; param
 
 /** The crawlable landing link a player actually shares. */
 export function buildShareUrl(kind: ShareKind, params: ShareParams): string {
-  return `${APP_ORIGIN}/s?${encodeShareParams(kind, params).toString()}`
+  return `${originBase()}/s?${encodeShareParams(kind, params).toString()}`
 }
 
 /** The in-app deep-link the `/s` route redirects a human to (referral intact). */
@@ -121,13 +133,25 @@ export function buildDeepLink(params: ShareParams): string {
   if (typeof params.mapId === 'number') q.set('map', String(params.mapId))
   if (params.ref) q.set('ref', params.ref.toLowerCase())
   const qs = q.toString()
-  return qs ? `${APP_ORIGIN}/?${qs}` : `${APP_ORIGIN}/`
+  const base = originBase()
+  return qs ? `${base}/?${qs}` : `${base}/`
 }
 
 /** X/Twitter web-intent URL (opens the composer with text + link prefilled). */
 export function buildXIntentUrl(text: string, url: string): string {
   const q = new URLSearchParams({ text, url })
   return `https://x.com/intent/tweet?${q.toString()}`
+}
+
+/**
+ * Message body for the native share sheet. Some targets (Telegram, notably)
+ * keep ONLY the `url` when a Web Share payload carries both `text` and `url`,
+ * so the player's brag copy vanishes. To guarantee the text always travels, we
+ * fold the link into the text and share that as a single string — no separate
+ * `url` field for a target to prefer over the copy.
+ */
+export function composeShareMessage(kind: ShareKind, params: ShareParams): string {
+  return `${composeShareText(kind, params)}\n\n${buildShareUrl(kind, params)}`
 }
 
 /**

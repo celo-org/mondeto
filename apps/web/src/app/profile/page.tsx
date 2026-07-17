@@ -511,7 +511,7 @@ export default function ProfilePage() {
             <div style={{ marginBottom: 8 }}>
               <ShareButton
                 kind="positions"
-                label={rank === 1 ? 'SHARE — I RULE THIS MAP' : 'SHARE MY POSITIONS'}
+                label={rank === 1 ? 'SHARE MY REIGN' : 'SHARE MY MAP'}
                 params={{
                   name,
                   value: String(pixelCount),

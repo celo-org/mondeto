@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { track } from '@/lib/analytics'
 import {
   type ShareKind,
@@ -8,84 +8,88 @@ import {
   buildShareUrl,
   buildXIntentUrl,
   composeShareText,
+  composeShareMessage,
 } from '@/lib/share'
 
 /**
- * Reusable share entry point for the share-to-X flywheel.
+ * Share entry point for the share-to-X flywheel.
  *
- * Order of preference:
- *   1. Web Share API — the native sheet (best on mobile / MiniPay, and lets
- *      the player pick X, WhatsApp, Telegram, wherever their rivals are).
- *   2. X web-intent in a popup — desktop fallback, prefilled tweet.
- *   3. Clipboard copy — last resort when neither is available.
+ * X is the PRIMARY, one-tap action (opens the X composer prefilled with the
+ * brag + link) — the native share sheet buries X several icons deep, and this
+ * feature is specifically about seeding X. A secondary "more options" button
+ * keeps the native sheet (Telegram / WhatsApp / etc.) one tap away.
  *
- * Whatever path runs, the shared link is the crawlable `/s` URL so the
- * recipient sees a dynamic preview card, and the `ref` inside it keeps the
- * referral attribution flowing.
+ * Whichever path runs, the text always travels with the link:
+ *  - X intent carries `text` + `url` as separate params (X renders both).
+ *  - The native sheet gets text+link folded into ONE string — some targets
+ *    (Telegram) drop a Web Share payload's `text` when a `url` is also set, so
+ *    we never pass a separate `url` there (see composeShareMessage).
+ *
+ * The shared link is the crawlable `/s` URL (dynamic preview card), and its
+ * `ref` keeps referral attribution flowing.
  */
 export function ShareButton({
   kind,
   params,
   label,
-  filled = false,
+  filled = true,
 }: {
   kind: ShareKind
   params: ShareParams
   label: string
-  /** Render with the filled (lime) pixel-button style. */
+  /** Render the primary (X) button in the filled lime style. */
   filled?: boolean
 }) {
   const [copied, setCopied] = useState(false)
+  // Whether the native share sheet exists. Resolved after mount so SSR and the
+  // first client render agree (both start false → no hydration mismatch).
+  const [hasNativeShare, setHasNativeShare] = useState(false)
+  useEffect(() => {
+    setHasNativeShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function')
+  }, [])
 
-  const share = async () => {
+  const shareToX = () => {
     const url = buildShareUrl(kind, params)
     const text = composeShareText(kind, params)
+    track('share_clicked', { kind, platform: 'twitter', mapId: params.mapId ?? null })
+    window.open(buildXIntentUrl(text, url), '_blank', 'noopener,noreferrer')
+  }
 
-    // Web Share API — native sheet. Reported platform is 'native' because the
-    // OS picker chooses the destination; X-specific counts come from the
-    // intent path below.
+  const shareOther = async () => {
+    const message = composeShareMessage(kind, params) // text + link in one string
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       track('share_clicked', { kind, platform: 'native', mapId: params.mapId ?? null })
       try {
-        await navigator.share({ title: 'MONDETO', text, url })
+        await navigator.share({ title: 'MONDETO', text: message })
         return
       } catch {
-        // Sheet dismissed or unavailable — fall through to the intent/copy path.
+        // Sheet dismissed / unavailable — fall through to copy.
       }
     }
-
-    // Desktop: open the X composer prefilled. Popup dimensions match X's own
-    // share widget so it renders as the compact composer, not a full tab.
-    track('share_clicked', { kind, platform: 'twitter', mapId: params.mapId ?? null })
-    const intent = buildXIntentUrl(text, url)
-    const popup =
-      typeof window !== 'undefined'
-        ? window.open(intent, '_blank', 'width=550,height=420,noopener,noreferrer')
-        : null
-    if (popup) return
-
-    // Popup blocked or no window — copy the link so the player can paste it.
+    track('share_clicked', { kind, platform: 'clipboard', mapId: params.mapId ?? null })
     try {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(message)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {}
   }
 
   return (
-    <button
-      onClick={share}
-      className={`pixel-btn font-display${filled ? ' pixel-btn-filled' : ''}`}
-      style={{
-        display: 'block',
-        width: '100%',
-        fontSize: 10,
-        letterSpacing: 2,
-        padding: 12,
-        cursor: 'pointer',
-      }}
-    >
-      {copied ? 'LINK COPIED' : label}
-    </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        onClick={shareToX}
+        className={`pixel-btn font-display${filled ? ' pixel-btn-filled' : ''}`}
+        style={{ display: 'block', width: '100%', fontSize: 10, letterSpacing: 2, padding: 12, cursor: 'pointer' }}
+      >
+        {label} ON X
+      </button>
+      <button
+        onClick={shareOther}
+        className="pixel-btn font-display"
+        style={{ display: 'block', width: '100%', fontSize: 8, letterSpacing: 2, padding: 9, cursor: 'pointer', opacity: 0.85 }}
+      >
+        {copied ? 'LINK COPIED' : hasNativeShare ? 'MORE OPTIONS' : 'COPY LINK'}
+      </button>
+    </div>
   )
 }
