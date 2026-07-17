@@ -38,7 +38,7 @@ const QA: Array<{ q: string; a: string }> = [
   },
   {
     q: 'How do leaderboards work?',
-    a: 'Three boards: AREA (most pixels owned), EMPIRE (largest single connected territory), TYCOON (single most valuable pixel). Top players win prizes when campaigns are active.',
+    a: 'Three boards: AREA (most pixels owned), EMPIRE (largest single connected run of land), TYCOON (single most valuable pixel). Top players win prizes when campaigns are active.',
   },
   {
     q: 'I see weird names like "mango-curie". What are those?',

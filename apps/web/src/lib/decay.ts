@@ -25,6 +25,15 @@ export function dailyFallPct(halvingTimeSeconds: number): number {
   return (1 - Math.pow(2, -DAY_SECONDS / halvingTimeSeconds)) * 100
 }
 
+/**
+ * Days for one price halving: halvingTimeSeconds / 86400.
+ * Returns 0 for non-positive or non-finite inputs.
+ */
+export function halvingPeriodDays(halvingTimeSeconds: number): number {
+  if (!Number.isFinite(halvingTimeSeconds) || halvingTimeSeconds <= 0) return 0
+  return halvingTimeSeconds / DAY_SECONDS
+}
+
 // Fixed-point scale for the bigint → number conversion below. Prices are
 // 6-decimal micro-USDT bigints that can exceed Number's safe range, so we
 // take the ratio in bigint space first and only then convert.

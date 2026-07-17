@@ -136,7 +136,7 @@ export default function AtlasPage() {
             marginBottom: 12,
           }}
         >
-          pick a territory to claim
+          pick a map to claim
         </div>
 
         {loading && (

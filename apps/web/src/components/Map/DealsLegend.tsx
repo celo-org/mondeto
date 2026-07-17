@@ -1,6 +1,6 @@
 'use client'
 import React from 'react'
-import { dailyFallPct } from '@/lib/decay'
+import { dailyFallPct, halvingPeriodDays } from '@/lib/decay'
 
 interface DealsLegendProps {
   visible: boolean
@@ -16,10 +16,9 @@ interface DealsLegendProps {
 export default function DealsLegend({ visible, halvingTimeSeconds }: DealsLegendProps) {
   if (!visible) return null
 
-  const fallPct =
-    halvingTimeSeconds && halvingTimeSeconds > 0
-      ? dailyFallPct(halvingTimeSeconds)
-      : null
+  const hasHalving = Boolean(halvingTimeSeconds && halvingTimeSeconds > 0)
+  const fallPct = hasHalving ? dailyFallPct(halvingTimeSeconds!) : null
+  const halvingDays = hasHalving ? Math.round(halvingPeriodDays(halvingTimeSeconds!)) : null
 
   return (
     <div
@@ -66,15 +65,9 @@ export default function DealsLegend({ visible, halvingTimeSeconds }: DealsLegend
           lineHeight: 1.5,
         }}
       >
-        PRICED BELOW LAUNCH — BRIGHTER = BIGGER DISCOUNT
-        {fallPct !== null ? `, FALLING ~${fallPct.toFixed(1)}%/DAY` : ''}
-      </div>
-      {/* Sold land isn't a deal right now — matches the solid grey in the map. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5 }}>
-        <span style={{ width: 8, height: 8, background: '#5b5b5b', display: 'inline-block', flexShrink: 0 }} />
-        <span style={{ fontSize: 6, color: 'var(--text-muted)', fontFamily: "'Press Start 2P', monospace" }}>
-          SOLD — ALREADY OWNED
-        </span>
+        {fallPct !== null && halvingDays !== null
+          ? `BRIGHTER = BIGGER DISCOUNT. PRICE HALVES EVERY ~${halvingDays} DAYS, SO IT DROPS ~${fallPct.toFixed(1)}%/DAY UNTIL SOMEONE BUYS.`
+          : 'BRIGHTER = BIGGER DISCOUNT. THE LONGER LAND SITS UNSOLD, THE CHEAPER IT GETS.'}
       </div>
     </div>
   )
