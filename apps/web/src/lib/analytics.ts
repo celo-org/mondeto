@@ -21,6 +21,8 @@ import posthog from 'posthog-js'
  *   pixel_info_viewed         { pixelId, owned }
  *   profile_saved             { hasUrl }                             fires when the updateProfile tx confirms
  *   invite_shared             { mapId }
+ *   share_clicked             { kind, platform, mapId }               kind: positions|rank|invite|reward; platform: native|twitter
+ *   reward_viewed             { campaignId, amountUsd }               the "you won $X" announcement was shown
  *   support_form_opened       {}
  *   buy_blocked_not_connected { pixelCount }                         selected pixels while signed out
  *   checkout_opened           { mapId, pixelCount, totalPriceUsd }   review drawer opened (buy intent)

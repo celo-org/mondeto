@@ -21,6 +21,7 @@ import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
 import { InviteButton } from '@/components/InviteButton'
+import { ShareButton } from '@/components/ShareButton'
 import { track } from '@/lib/analytics'
 
 export default function ProfilePage() {
@@ -502,6 +503,27 @@ export default function ProfilePage() {
           >
             {saveLabel}
           </button>
+
+          {/* Flex the player's standing on X with a dynamic preview card;
+              the shared link carries their referral code. Only offered once
+              they actually hold pixels — no brag to make otherwise. */}
+          {addrStr && pixelCount > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <ShareButton
+                kind="positions"
+                label={rank === 1 ? 'SHARE — I RULE THIS MAP' : 'SHARE MY POSITIONS'}
+                params={{
+                  name,
+                  value: String(pixelCount),
+                  ruler: rank === 1,
+                  mapId: currentMapId,
+                  mapName: mondetoContract.displayName,
+                  ref: addrStr.toLowerCase(),
+                  color: (color || '').replace('#', ''),
+                }}
+              />
+            </div>
+          )}
 
           {/* Invite link — lands the invitee on this player's current map
               with their wallet as the referral code. */}

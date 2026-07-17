@@ -16,6 +16,7 @@ import {
 import { useMaps } from '@/hooks/useMaps'
 import type { MapId } from '@/lib/maps/types'
 import { track } from '@/lib/analytics'
+import { ShareButton } from '@/components/ShareButton'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
@@ -213,6 +214,27 @@ export default function RanksPage() {
         />
       )}
       <LeaderboardTabs activeTab={activeTab} scope={isGlobal ? 'global' : 'local'} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      {/* Flex the player's standing on the active board. Only shown when they
+          hold a rank on it — the shared card + link recruit challengers. */}
+      {youStanding && (
+        <div style={{ maxWidth: 500, width: '100%', margin: '0 auto', padding: '8px 16px 0' }}>
+          <ShareButton
+            kind="rank"
+            label="SHARE MY RANK"
+            params={{
+              name: youStanding.entry.label,
+              rank: youStanding.entry.rank,
+              value: youStanding.entry.value,
+              unit: youStanding.entry.unit,
+              board: activeTab === 'AREA' ? 'LAND' : activeTab,
+              mapId: isGlobal ? currentMapId : selectedMapId,
+              mapName: isGlobal ? undefined : mondetoContract.displayName,
+              ref: address?.toLowerCase(),
+              color: youStanding.entry.color?.replace('#', ''),
+            }}
+          />
+        </div>
+      )}
       <div
         style={{
           flex: 1,
