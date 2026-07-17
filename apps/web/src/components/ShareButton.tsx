@@ -10,6 +10,7 @@ import {
   buildTelegramUrl,
   buildWhatsAppUrl,
   composeShareText,
+  composeXText,
   composeShareMessage,
 } from '@/lib/share'
 
@@ -106,7 +107,7 @@ export function ShareButton({
             gap: 2,
           }}
         >
-          <TargetRow icon={<XGlyph />} label="X" onClick={() => openTarget('twitter', buildXIntentUrl(text, url))} />
+          <TargetRow icon={<XGlyph />} label="X" onClick={() => openTarget('twitter', buildXIntentUrl(composeXText(kind, params), url))} />
           <TargetRow icon={<WhatsAppGlyph />} label="WhatsApp" onClick={() => openTarget('whatsapp', buildWhatsAppUrl(message))} />
           <TargetRow icon={<TelegramGlyph />} label="Telegram" onClick={() => openTarget('telegram', buildTelegramUrl(text, url))} />
           <TargetRow icon={<LinkGlyph />} label={copied ? 'Copied' : 'Copy link'} onClick={copyLink} />

@@ -171,6 +171,16 @@ export function composeShareMessage(kind: ShareKind, params: ShareParams): strin
 }
 
 /**
+ * X/Twitter variant of the share copy — tags the @mondeto game and the @minipay
+ * platform so both accounts get pinged (x.com/mondeto, x.com/minipay). Only used
+ * for the X intent; other channels (Telegram/WhatsApp) don't resolve X handles,
+ * so they use the plain copy.
+ */
+export function composeXText(kind: ShareKind, params: ShareParams): string {
+  return `${composeShareText(kind, params)} via @mondeto on @minipay`
+}
+
+/**
  * Arcade-tone share copy — competitive, no emoji, no real-world-colonial
  * framing (per brand voice). The link is appended by the share sheet / intent,
  * so these strings never include the URL themselves.
