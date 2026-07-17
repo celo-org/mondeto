@@ -83,6 +83,10 @@ export function drawPixels(
   // Deals view: sold land that isn't a deal right now. Solid grey so it reads as
   // "taken", not as ocean — a translucent fade blends into the blue water below.
   const soldColor = '#5b5b5b'
+  // My-land view: everyone else's land as a SOLID muted grey so the continents
+  // stay readable (a translucent fade blends into the ocean and the whole map
+  // goes pale blue) while MY pixels pop in my color.
+  const myLandFaded = '#c8c8c8'
 
   // Resolve an owned pixel's fill:
   //   1. on-chain per-owner color (what everyone agrees on) wins;
@@ -176,9 +180,11 @@ export function drawPixels(
       const isMine = userAddr && isOwned && pixel.owner.toLowerCase() === userAddr
 
       if (isMine) {
-        ctx.fillStyle = ownedFill(pixel)
+        // My pixels in my current profile color (live), falling back to their
+        // on-chain color so they're always clearly "mine".
+        ctx.fillStyle = userColor ?? ownedFill(pixel)
       } else {
-        ctx.fillStyle = fadedColor
+        ctx.fillStyle = myLandFaded
       }
 
       ctx.beginPath()
