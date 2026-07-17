@@ -201,6 +201,12 @@ export function useLeaderboard(
     area: LeaderEntry[]
     empire: LeaderEntry[]
     tycoons: LeaderEntry[]
+    /**
+     * On-chain profiles keyed by lowercased address, resolved server-side (the
+     * global board's addresses span multiple map contracts, so the client can't
+     * read them itself the way the local board does).
+     */
+    profiles?: Record<string, OwnerProfileData>
     /** Server-located standing for `viewer` (works below the top-N cutoff). */
     you?: {
       area: RankGap | null
@@ -229,6 +235,7 @@ export function useLeaderboard(
           area: d.area ?? [],
           empire: d.empire ?? [],
           tycoons: d.tycoons ?? [],
+          profiles: d.profiles,
           you: d.you,
         })
         setGlobalLoading(false)
@@ -250,15 +257,20 @@ export function useLeaderboard(
     if (!globalRaw) {
       return { area: [], empire: [], tycoons: [], loading: stillLoading, you: NO_YOU }
     }
+    // Global-board names come from the API (the prop `profilesMap` only covers
+    // the currently-loaded single map, so it can't name cross-map addresses).
+    const globalProfiles = new Map<string, OwnerProfileData>(
+      Object.entries(globalRaw.profiles ?? {}),
+    )
     // Global AREA is the normalized territory-share board, so its value is
     // a fraction rendered as a percentage (not a raw pixel count).
-    const area = decorate(globalRaw.area, '', formatPercent, profilesMap)
-    const empire = decorate(globalRaw.empire, 'px', (v) => String(v), profilesMap)
+    const area = decorate(globalRaw.area, '', formatPercent, globalProfiles)
+    const empire = decorate(globalRaw.empire, 'px', (v) => String(v), globalProfiles)
     const tycoons = decorate(
       globalRaw.tycoons,
       'USDT',
       formatUSDTFromNumber,
-      profilesMap,
+      globalProfiles,
     )
     // Prefer the server-located standing (untruncated ranking); fall back to
     // scanning the truncated entries so an older API response still pins the
@@ -267,20 +279,20 @@ export function useLeaderboard(
       ? {
           area: toYou(
             globalRaw.you?.area ?? rankGap(globalRaw.area, viewer),
-            area, '', formatPercent, viewer, profilesMap,
+            area, '', formatPercent, viewer, globalProfiles,
           ),
           empire: toYou(
             globalRaw.you?.empire ?? rankGap(globalRaw.empire, viewer),
-            empire, 'px', String, viewer, profilesMap,
+            empire, 'px', String, viewer, globalProfiles,
           ),
           tycoons: toYou(
             globalRaw.you?.tycoons ?? rankGap(globalRaw.tycoons, viewer),
-            tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap,
+            tycoons, 'USDT', formatUSDTFromNumber, viewer, globalProfiles,
           ),
         }
       : NO_YOU
     return { area, empire, tycoons, loading: stillLoading, you }
-  }, [globalRaw, globalLoading, profilesMap, viewer])
+  }, [globalRaw, globalLoading, viewer])
 
   return scope === 'global' ? globalBoards : localBoards
 }
