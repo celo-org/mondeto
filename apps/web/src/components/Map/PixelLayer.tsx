@@ -80,6 +80,9 @@ export function drawPixels(
   const userAddr = userAddress?.toLowerCase()
   const unownedColor = '#dddddd'
   const fadedColor = 'rgba(221,221,221,0.25)'
+  // Deals view: sold land that isn't a deal right now. Solid grey so it reads as
+  // "taken", not as ocean — a translucent fade blends into the blue water below.
+  const soldColor = '#5b5b5b'
 
   // Resolve an owned pixel's fill:
   //   1. on-chain per-owner color (what everyone agrees on) wins;
@@ -151,9 +154,12 @@ export function drawPixels(
 
       if (depth > 0 && maxDepth > 0) {
         ctx.fillStyle = interpolateLimeGradient(depth / maxDepth)
+      } else if (pixelData[i].owner !== ZERO_ADDRESS) {
+        // Sold, and not a deal right now — solid grey (see soldColor) so it
+        // reads as "taken" instead of blending into the ocean.
+        ctx.fillStyle = soldColor
       } else {
-        // Not a deal (at or above entry price) — dim it, like myland
-        // dims land that isn't yours.
+        // Unsold and at/above entry price — dim it, like myland dims others'.
         ctx.fillStyle = fadedColor
       }
 
