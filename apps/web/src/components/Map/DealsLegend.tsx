@@ -50,7 +50,7 @@ export default function DealsLegend({ visible, halvingTimeSeconds }: DealsLegend
         }}
       >
         <span style={{ fontSize: 6, color: 'var(--text-muted)', fontFamily: "'Press Start 2P', monospace" }}>
-          UNDER ENTRY PRICE
+          BARELY CHEAPER
         </span>
         <span style={{ fontSize: 6, color: 'var(--text-muted)', fontFamily: "'Press Start 2P', monospace" }}>
           DEEPEST DEAL
@@ -63,10 +63,18 @@ export default function DealsLegend({ visible, halvingTimeSeconds }: DealsLegend
           fontFamily: "'Press Start 2P', monospace",
           marginTop: 4,
           letterSpacing: 0.5,
+          lineHeight: 1.5,
         }}
       >
-        CHEAP LAND, STILL FALLING
-        {fallPct !== null ? ` ~${fallPct.toFixed(1)}%/DAY` : ''}
+        PRICED BELOW LAUNCH — BRIGHTER = BIGGER DISCOUNT
+        {fallPct !== null ? `, FALLING ~${fallPct.toFixed(1)}%/DAY` : ''}
+      </div>
+      {/* Sold land isn't a deal right now — matches the solid grey in the map. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5 }}>
+        <span style={{ width: 8, height: 8, background: '#5b5b5b', display: 'inline-block', flexShrink: 0 }} />
+        <span style={{ fontSize: 6, color: 'var(--text-muted)', fontFamily: "'Press Start 2P', monospace" }}>
+          SOLD — ALREADY OWNED
+        </span>
       </div>
     </div>
   )
