@@ -78,16 +78,6 @@ function formatUSDTFromNumber(value: number): string {
   return trimmed.length === 0 ? '0.00' : trimmed
 }
 
-/**
- * Global AREA values are a sum of per-map ownership fractions (0..N for N
- * maps). Render as a percentage so "owns 22% of total territory" reads
- * naturally; can exceed 100% for a wallet dominating several maps. One
- * decimal under 10% so small-but-real holdings aren't shown as "0%".
- */
-function formatPercent(value: number): string {
-  const pct = value * 100
-  return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`
-}
 
 function decorate(
   entries: LeaderEntry[],
@@ -262,9 +252,9 @@ export function useLeaderboard(
     const globalProfiles = new Map<string, OwnerProfileData>(
       Object.entries(globalRaw.profiles ?? {}),
     )
-    // Global AREA is the normalized territory-share board, so its value is
-    // a fraction rendered as a percentage (not a raw pixel count).
-    const area = decorate(globalRaw.area, '', formatPercent, globalProfiles)
+    // Global AREA is the raw total pixels owned across all maps (px) — matching
+    // the local board and EMPIRE, not a territory-share percentage.
+    const area = decorate(globalRaw.area, 'px', (v) => String(v), globalProfiles)
     const empire = decorate(globalRaw.empire, 'px', (v) => String(v), globalProfiles)
     const tycoons = decorate(
       globalRaw.tycoons,
@@ -279,7 +269,7 @@ export function useLeaderboard(
       ? {
           area: toYou(
             globalRaw.you?.area ?? rankGap(globalRaw.area, viewer),
-            area, '', formatPercent, viewer, globalProfiles,
+            area, 'px', String, viewer, globalProfiles,
           ),
           empire: toYou(
             globalRaw.you?.empire ?? rankGap(globalRaw.empire, viewer),
