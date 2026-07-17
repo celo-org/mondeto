@@ -264,12 +264,12 @@ export function globalBiggestConnectedArea(
   return mergeMax(per, limit);
 }
 
-/** Convenience: all three global boards in one call. AREA is normalized by
- *  board size (`globalTerritoryShare`), so its value is a fraction (sum of
- *  per-map ownership shares) rather than a raw pixel count. */
+/** Convenience: all three global boards in one call. AREA is the raw total
+ *  pixels owned across all maps (an intuitive count, matching the local board
+ *  and the EMPIRE board) rather than the size-normalized territory share. */
 export function allGlobalLeaderboards(maps: MapSnapshot[], limit = 10) {
   return {
-    mostPixels: globalTerritoryShare(maps, limit),
+    mostPixels: globalMostPixels(maps, limit),
     biggestConnectedArea: globalBiggestConnectedArea(maps, limit),
     mostExpensivePixel: globalMostExpensivePixel(maps, limit),
   };

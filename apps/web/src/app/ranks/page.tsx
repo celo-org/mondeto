@@ -43,7 +43,6 @@ function gapCopy(tab: LeaderboardTab, isGlobal: boolean, you: YouStanding): stri
   const target = `#${you.entry.rank - 1}`
   if (you.gapValue === null) return ''
   if (tab === 'TYCOONS') return `$${you.gapValue} FROM ${target}`
-  if (tab === 'AREA' && isGlobal) return `${you.gapValue} FROM ${target}`
   return `${you.gapValue} PX FROM ${target}`
 }
 
