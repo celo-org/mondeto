@@ -10,8 +10,12 @@ import {
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain } from '@/lib/maps/contracts'
 import { readRevealedMapIdsServer } from '@/lib/maps/reveals'
+import { MONDETO_ABI } from '@/lib/contract'
+import { decodeBytes } from '@/lib/decodeBytes'
+import { uint24ToHex } from '@/lib/colorUtils'
 import { celo } from 'viem/chains'
-import type { LeaderEntry, MapId } from '@/lib/maps/types'
+import type { MapContract } from '@/lib/maps/contracts'
+import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { logger } from '@/lib/logger'
 
 /**
@@ -38,6 +42,9 @@ export const dynamic = 'force-dynamic'
 
 const TOP_N = 100
 const CACHE_TTL_MS = 30_000
+// Profile reads are batched so a map with hundreds of owners doesn't fan out
+// into hundreds of simultaneous RPC calls.
+const PROFILE_BATCH = 20
 
 interface FullBoards {
   area: LeaderEntry[]
@@ -45,11 +52,24 @@ interface FullBoards {
   tycoons: LeaderEntry[]
 }
 
+interface OwnerProfile {
+  label: string
+  url: string
+  color: string
+}
+
 interface BoardPayload {
   area: LeaderEntry[]
   empire: LeaderEntry[]
   tycoons: LeaderEntry[]
   rulers: Record<MapId, string | null>
+  /**
+   * On-chain profile data keyed by lowercased address, for the addresses that
+   * appear in the trimmed top-N boards (plus the requested viewer). Resolved
+   * server-side because reading many `profiles()` from a phone on MiniPay's RPC
+   * is unreliable — the same reason the board itself is computed here.
+   */
+  profiles: Record<string, OwnerProfile>
   fetchedAt: number
 }
 
@@ -62,8 +82,15 @@ interface YouPayload {
 // Warm-instance cache so repeat requests within the TTL don't re-read every
 // map. Vercel may run several instances, each with its own cache — fine.
 // The full (untruncated) boards are kept alongside the trimmed payload so a
-// per-address `you` lookup never triggers a re-read.
-let cache: { ts: number; payload: BoardPayload; full: FullBoards } | null = null
+// per-address `you` lookup never triggers a re-read. `maps` (the revealed
+// contracts) rides along so a warm-cache request can still resolve a viewer's
+// name on demand when they sit below the pre-resolved top-N.
+let cache: {
+  ts: number
+  payload: BoardPayload
+  full: FullBoards
+  maps: MapContract[]
+} | null = null
 
 function locateViewer(full: FullBoards, address: string): YouPayload {
   return {
@@ -73,15 +100,125 @@ function locateViewer(full: FullBoards, address: string): YouPayload {
   }
 }
 
-function respond(
+/**
+ * Read `profiles(addr)` for a set of owners from one map contract, batched to
+ * bound RPC fan-out. Returns a map keyed by lowercased address; addresses whose
+ * read fails are simply omitted (they fall back to a generated name client-side).
+ */
+async function readProfiles(
+  contract: `0x${string}`,
+  owners: string[],
+): Promise<Record<string, OwnerProfile>> {
+  const out: Record<string, OwnerProfile> = {}
+  for (let i = 0; i < owners.length; i += PROFILE_BATCH) {
+    const batch = owners.slice(i, i + PROFILE_BATCH)
+    const results = await Promise.allSettled(
+      batch.map((addr) =>
+        fallbackReadClient.readContract({
+          address: contract,
+          abi: MONDETO_ABI,
+          functionName: 'profiles',
+          args: [addr as `0x${string}`],
+        }),
+      ),
+    )
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j]
+      if (r.status !== 'fulfilled' || !r.value) continue
+      const [color, labelBytes, urlBytes] = r.value as unknown as [
+        number,
+        unknown,
+        unknown,
+      ]
+      out[batch[j].toLowerCase()] = {
+        label: decodeBytes(labelBytes),
+        url: decodeBytes(urlBytes),
+        color: color ? uint24ToHex(color) : '',
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Resolve on-chain profiles for the addresses in `needed`. Profiles live on the
+ * map contract where a wallet transacted, so each address is read from the
+ * map(s) where it owns pixels; when a wallet has names on more than one map the
+ * first non-empty label wins.
+ */
+async function resolveProfiles(
+  snapshots: MapSnapshot[],
+  maps: MapContract[],
+  needed: Set<string>,
+): Promise<Record<string, OwnerProfile>> {
+  const addrByMap = new Map<MapId, `0x${string}`>()
+  for (const m of maps) addrByMap.set(m.id, m.address)
+
+  const merged: Record<string, OwnerProfile> = {}
+  for (const snap of snapshots) {
+    const contract = addrByMap.get(snap.meta.id)
+    if (!contract) continue
+    const owners = new Set<string>()
+    for (const px of snap.pixels) {
+      if (!px.owner) continue
+      const lower = px.owner.toLowerCase()
+      if (needed.has(lower)) owners.add(lower)
+    }
+    if (owners.size === 0) continue
+    const resolved = await readProfiles(contract, [...owners])
+    for (const [addr, profile] of Object.entries(resolved)) {
+      const existing = merged[addr]
+      // First non-empty label wins across maps; otherwise keep the first hit so
+      // an on-chain color still lands even when no label is set.
+      if (!existing || (!existing.label && profile.label)) merged[addr] = profile
+    }
+  }
+  return merged
+}
+
+/**
+ * Ensure the requested viewer has a resolved profile. A viewer below the
+ * pre-resolved top-N (or one hitting a warm cache built by a different address)
+ * won't be in `profiles`; read their name from the revealed maps on demand so
+ * their pinned "you" row shows it.
+ */
+async function withViewerProfile(
+  profiles: Record<string, OwnerProfile>,
+  maps: MapContract[],
+  address: string | null,
+): Promise<Record<string, OwnerProfile>> {
+  if (!address) return profiles
+  const lower = address.toLowerCase()
+  if (profiles[lower]?.label) return profiles
+  let best: OwnerProfile | undefined = profiles[lower]
+  for (const m of maps) {
+    const resolved = await readProfiles(m.address, [lower])
+    const p = resolved[lower]
+    if (p && (!best || (!best.label && p.label))) best = p
+    if (best?.label) break
+  }
+  return best ? { ...profiles, [lower]: best } : profiles
+}
+
+/** Addresses appearing in the trimmed top-N across all three boards. */
+function topNAddresses(payload: BoardPayload): Set<string> {
+  const set = new Set<string>()
+  for (const board of [payload.area, payload.empire, payload.tycoons]) {
+    for (const e of board) set.add(e.address.toLowerCase())
+  }
+  return set
+}
+
+async function respond(
   payload: BoardPayload,
   full: FullBoards,
+  maps: MapContract[],
   address: string | null,
   cacheControl: string,
 ) {
-  const body = address
-    ? { ...payload, you: locateViewer(full, address) }
-    : payload
+  const profiles = await withViewerProfile(payload.profiles, maps, address)
+  const base = { ...payload, profiles }
+  const body = address ? { ...base, you: locateViewer(full, address) } : base
   return NextResponse.json(body, { headers: { 'Cache-Control': cacheControl } })
 }
 
@@ -93,6 +230,7 @@ export async function GET(request: Request) {
     return respond(
       cache.payload,
       cache.full,
+      cache.maps,
       address,
       's-maxage=30, stale-while-revalidate=60',
     )
@@ -124,25 +262,40 @@ export async function GET(request: Request) {
       rulers[snap.meta.id] = top.length > 0 ? top[0].address.toLowerCase() : null
     }
 
+    const area = full.area.slice(0, TOP_N)
+    const empire = full.empire.slice(0, TOP_N)
+    const tycoons = full.tycoons.slice(0, TOP_N)
+
+    // Resolve on-chain names only for the addresses actually shown (top-N of
+    // each board, plus the viewer). Bounded to a few hundred reads on Vercel's
+    // network — far cheaper and more reliable than doing them on the phone.
+    const needed = new Set<string>()
+    for (const board of [area, empire, tycoons]) {
+      for (const e of board) needed.add(e.address.toLowerCase())
+    }
+    if (address) needed.add(address.toLowerCase())
+    const profiles = await resolveProfiles(snapshots, maps, needed)
+
     const payload: BoardPayload = {
-      area: full.area.slice(0, TOP_N),
-      empire: full.empire.slice(0, TOP_N),
-      tycoons: full.tycoons.slice(0, TOP_N),
+      area,
+      empire,
+      tycoons,
       rulers,
+      profiles,
       fetchedAt: now,
     }
-    cache = { ts: now, payload, full }
+    cache = { ts: now, payload, full, maps }
 
-    return respond(payload, full, address, 's-maxage=30, stale-while-revalidate=60')
+    return respond(payload, full, maps, address, 's-maxage=30, stale-while-revalidate=60')
   } catch (err) {
     logger.error('global-board read failed', { err: String(err) })
     // Serve the last good payload if we have one, so a transient blip doesn't
     // blank the board.
     if (cache) {
-      return respond(cache.payload, cache.full, address, 'no-store')
+      return respond(cache.payload, cache.full, cache.maps, address, 'no-store')
     }
     return NextResponse.json(
-      { area: [], empire: [], tycoons: [], rulers: {}, fetchedAt: now, error: true },
+      { area: [], empire: [], tycoons: [], rulers: {}, profiles: {}, fetchedAt: now, error: true },
       { status: 200, headers: { 'Cache-Control': 'no-store' } },
     )
   }
