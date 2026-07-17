@@ -57,7 +57,11 @@ export function isCampaignActive(campaign: CampaignConfig, now: Date): boolean {
   return true
 }
 
-/** Compact "3D 4H" / "4H 12M" / "12M" countdown label, or null if no endsAt. */
+/**
+ * Two-unit countdown label, always showing the two most-significant units so it
+ * never collapses to a bare "12M": "3D 4H" / "4H 12M" / "0H 12M". Null if no
+ * endsAt. (Floors to "0H 1M" in the final seconds so it never reads "0H 0M".)
+ */
 export function timeRemainingLabel(campaign: CampaignConfig, now: Date): string | null {
   if (!campaign.endsAt) return null
   const end = Date.parse(campaign.endsAt)
@@ -70,7 +74,7 @@ export function timeRemainingLabel(campaign: CampaignConfig, now: Date): string 
   const mins = minutes % 60
   if (days > 0) return `${days}D ${hours}H`
   if (hours > 0) return `${hours}H ${mins}M`
-  return `${Math.max(mins, 1)}M`
+  return `0H ${Math.max(mins, 1)}M`
 }
 
 /**
