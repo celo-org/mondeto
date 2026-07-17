@@ -5,13 +5,35 @@ import { WalletProvider } from "@/components/wallet-provider"
 import { PostHogProvider } from "@/components/posthog-provider"
 import { CurrentMapProvider } from "@/hooks/useMaps"
 import { RevealsProvider } from "@/hooks/useRevealedMapIds"
+import RewardAnnouncement from "@/components/RewardAnnouncement"
+
+const APP_URL = 'https://www.mondeto.app'
+const TITLE = 'Mondeto — every pixel is up for grabs'
+const DESCRIPTION = 'Own the world, one pixel at a time. Live on MiniPay, built on Celo.'
+// Default share card for links to the app itself; per-share cards come from
+// the /s route's generateMetadata (see app/s/page.tsx).
+const DEFAULT_OG_IMAGE = `${APP_URL}/api/og?k=invite`
 
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   title: 'Mondeto',
-  description: 'Own the world, one pixel at a time',
+  description: DESCRIPTION,
   icons: {
     icon: '/brand/logo/Mondeto_Globe_Green.svg',
     apple: '/brand/logo/logo-256.png',
+  },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: APP_URL,
+    siteName: 'Mondeto',
+    images: [{ url: DEFAULT_OG_IMAGE, width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
   },
   other: {
     'talentapp:project_verification': 'a80e900fa7d73b76b19ceb2f9d6a5c7c7ea7a1c44a2e83a1008417c256b302e30a7961e29790868f11ebce8ca3477d21b934f544f4b1a676e1a097df4487dded',
@@ -72,6 +94,10 @@ export default function RootLayout({
                     <main className="flex-1">
                       {children}
                     </main>
+                    {/* Global "you won $X — flex it" announcement; renders
+                        nothing unless the connected wallet has an unseen
+                        campaign reward (Edge Config via /api/rewards). */}
+                    <RewardAnnouncement />
                   </CurrentMapProvider>
                 </RevealsProvider>
             </WalletProvider>

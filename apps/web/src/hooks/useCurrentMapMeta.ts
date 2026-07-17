@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useAccount } from 'wagmi'
 import { celo } from 'viem/chains'
 import { useMaps } from '@/hooks/useMaps'
-import { getMapContractById, type ChainId, type MapSlug } from '@/lib/maps/contracts'
+import { getMapContractById, getMapsForChain, type ChainId, type MapSlug } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
 
 export interface MapMeta {
@@ -30,7 +30,15 @@ export interface MapMeta {
 export function useCurrentMapMeta(): MapMeta {
   const { currentMapId } = useMaps()
   const { chainId } = useAccount()
-  const effectiveChain = (chainId ?? celo.id) as ChainId
+  // A connected wallet can report an arbitrary chain (e.g. a browser wallet on
+  // Ethereum) that has no maps configured. Passing that straight to
+  // getMapContractById makes it throw ("no revealed maps configured for
+  // chain") — and because this hook renders on every route (including from the
+  // root layout), that throw would take down the whole app. Fall back to the
+  // default chain whenever the connected one has no maps.
+  const connected = (chainId ?? celo.id) as ChainId
+  const effectiveChain: ChainId =
+    getMapsForChain(connected).length > 0 ? connected : (celo.id as ChainId)
 
   return useMemo<MapMeta>(() => {
     const contract = getMapContractById(currentMapId, effectiveChain)

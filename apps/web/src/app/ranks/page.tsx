@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAccount } from 'wagmi'
 import TopBar from '@/components/Layout/TopBar'
 import BottomNav from '@/components/Layout/BottomNav'
@@ -16,6 +16,7 @@ import {
 import { useMaps } from '@/hooks/useMaps'
 import type { MapId } from '@/lib/maps/types'
 import { track } from '@/lib/analytics'
+import { ShareButton } from '@/components/ShareButton'
 import type { PixelView } from '@/lib/mock'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { MONDETO_ABI } from '@/lib/contract'
@@ -191,6 +192,18 @@ export default function RanksPage() {
   // copy of it is pinned at the bottom of the list viewport.
   const addrLower = address?.toLowerCase()
   const youStanding = addrLower ? youMap[activeTab] : null
+  // The player's BEST standing across all three boards (lowest rank number),
+  // tagged with its board — so the share always brags the strongest position and
+  // names which board it's on, no matter which tab is being viewed.
+  const bestBoard = useMemo(() => {
+    const opts = [
+      { board: 'LAND', s: you.area },
+      { board: 'EMPIRE', s: you.empire },
+      { board: 'TYCOONS', s: you.tycoons },
+    ].filter((o): o is { board: string; s: YouStanding } => !!o.s)
+    if (opts.length === 0) return null
+    return opts.reduce((best, o) => (o.s.entry.rank < best.s.entry.rank ? o : best))
+  }, [you.area, you.empire, you.tycoons])
   const youText = youStanding ? gapCopy(activeTab, isGlobal, youStanding) : undefined
   const youInView =
     !!youStanding &&
@@ -213,6 +226,28 @@ export default function RanksPage() {
         />
       )}
       <LeaderboardTabs activeTab={activeTab} scope={isGlobal ? 'global' : 'local'} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      {/* Flex the player's BEST standing across the three boards (with its board
+          name). Shown whenever they're ranked on any board — the shared card +
+          link recruit challengers. */}
+      {bestBoard && (
+        <div style={{ maxWidth: 500, width: '100%', margin: '0 auto', padding: '8px 16px 0' }}>
+          <ShareButton
+            kind="rank"
+            label="SHARE MY RANK"
+            params={{
+              name: bestBoard.s.entry.label,
+              rank: bestBoard.s.entry.rank,
+              value: bestBoard.s.entry.value,
+              unit: bestBoard.s.entry.unit,
+              board: bestBoard.board,
+              mapId: isGlobal ? currentMapId : selectedMapId,
+              mapName: isGlobal ? undefined : mondetoContract.displayName,
+              ref: address?.toLowerCase(),
+              color: bestBoard.s.entry.color?.replace('#', ''),
+            }}
+          />
+        </div>
+      )}
       <div
         style={{
           flex: 1,

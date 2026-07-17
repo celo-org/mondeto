@@ -1,64 +1,47 @@
 'use client'
 
-import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useMaps } from '@/hooks/useMaps'
-import { track } from '@/lib/analytics'
-
-const APP_ORIGIN = 'https://www.mondeto.app'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
+import { ShareButton } from '@/components/ShareButton'
 
 /**
- * Builds a shareable invite link that lands the invitee on the sender's
- * current map with the sender's wallet as the referral code:
- *   https://www.mondeto.app/?map=<id>&ref=<wallet>
- * The landing side is handled in app/page.tsx (referral_landed + map
- * deep-link); buys made in that visit carry the ref for attribution.
+ * "Invite a rival" — the recruit-a-player share. Delegates to ShareButton so
+ * it shares the crawlable `/s` link (with a preview card) rather than a bare
+ * URL, and gains the X web-intent fallback on desktop. The landing side is
+ * handled in app/page.tsx (referral_landed + map deep-link); buys made in
+ * that visit carry the ref for attribution.
  */
 export function InviteButton() {
   const { address } = useAccount()
   const { currentMapId } = useMaps()
-  const [copied, setCopied] = useState(false)
+  const mapMeta = useCurrentMapMeta()
 
   if (!address) return null
 
-  const link = `${APP_ORIGIN}/?map=${currentMapId}&ref=${address.toLowerCase()}`
-
-  const share = async () => {
-    track('invite_shared', { mapId: currentMapId })
-    const payload = {
-      title: 'MONDETO',
-      text: 'Claim your spot on my map before someone else does.',
-      url: link,
-    }
-    if (typeof navigator.share === 'function') {
-      try {
-        await navigator.share(payload)
-        return
-      } catch {
-        // Share sheet dismissed or unavailable — fall through to copy.
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {}
-  }
-
   return (
-    <button
-      onClick={share}
-      className="pixel-btn font-display"
-      style={{
-        display: 'block',
-        width: '100%',
-        fontSize: 10,
-        letterSpacing: 2,
-        padding: 12,
-        cursor: 'pointer',
+    <ShareButton
+      kind="invite"
+      label="INVITE"
+      compact
+      filled={false}
+      icon={<InviteGlyph />}
+      params={{
+        mapId: currentMapId,
+        mapName: mapMeta.displayName,
+        ref: address.toLowerCase(),
       }}
-    >
-      {copied ? 'LINK COPIED' : 'INVITE A RIVAL'}
-    </button>
+    />
+  )
+}
+
+/** user-plus glyph. */
+function InviteGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M15 19a6 6 0 00-12 0" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M19 8v6M22 11h-6" />
+    </svg>
   )
 }
