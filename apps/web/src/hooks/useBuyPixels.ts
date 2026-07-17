@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { useWriteContract, useAccount, usePublicClient } from 'wagmi'
+import { useWriteContract, useAccount, usePublicClient, useSwitchChain } from 'wagmi'
+import { celo } from 'viem/chains'
 import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getAttributionSuffix } from '@/lib/attribution'
 import { getFeeCurrency } from '@/lib/feeCurrency'
@@ -160,7 +161,8 @@ function lastMiniPayFailure(): string {
 
 export function useBuyPixels(mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
-  const { address } = useAccount()
+  const { address, chainId } = useAccount()
+  const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient()
   const { preferred } = useStablecoinBalance()
   const [step, setStep] = useState<TxStep>('idle')
@@ -184,6 +186,21 @@ export function useBuyPixels(mapId?: MapId) {
     if (!publicClient || !address) return
     if (inFlight.current) return
     inFlight.current = true
+
+    // The contracts live on Celo. If the wallet is on another chain (common when
+    // testing in a browser wallet that defaults to Ethereum), prompt a switch —
+    // which also ADDS Celo to the wallet if it's missing — before touching any
+    // funds. Without this the buy tx silently hangs on the wrong network.
+    if (chainId !== celo.id) {
+      try {
+        await switchChainAsync({ chainId: celo.id })
+      } catch {
+        setError('Switch your wallet to the Celo network to buy.')
+        setStep('error')
+        inFlight.current = false
+        return
+      }
+    }
 
     if (!preferred) {
       setError('No stablecoin balance — top up before buying.')
@@ -457,7 +474,7 @@ export function useBuyPixels(mapId?: MapId) {
     } finally {
       inFlight.current = false
     }
-  }, [writeContractAsync, publicClient, address, contractAddress, preferred, mapId])
+  }, [writeContractAsync, publicClient, address, chainId, switchChainAsync, contractAddress, preferred, mapId])
 
   const reset = useCallback(() => {
     setStep('idle')
