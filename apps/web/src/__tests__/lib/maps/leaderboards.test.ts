@@ -225,14 +225,17 @@ describe("global leaderboards", () => {
     ]);
   });
 
-  it("allGlobalLeaderboards uses normalized share for AREA", () => {
-    // mapA: 2 land, both 0xA -> share 1.0 ; mapB: 1 land, 0xB -> share 1.0.
+  it("allGlobalLeaderboards uses raw cross-map pixel counts for AREA", () => {
+    // `allGlobalLeaderboards` deliberately ranks AREA by raw total pixels owned
+    // across maps (see its doc comment) — an intuitive count matching the local
+    // and EMPIRE boards. `globalTerritoryShare` (normalized) is exercised in its
+    // own describe block below.
+    // mapA: 0xA owns 2 land pixels ; mapB: 0xB owns 1 land pixel.
     const mapA = namedMap(0, [px(0, 0, "0xA", 9), px(1, 0, "0xA", 2)]);
     const mapB = namedMap(1, [px(0, 0, "0xB", 3)]);
     const r = allGlobalLeaderboards([mapA, mapB]);
-    // AREA is now territory share (fraction), tie at 1.0 -> address asc.
-    expect(r.mostPixels[0].address).toBe("0xA");
-    expect(r.mostPixels[0].value).toBeCloseTo(1, 6);
+    expect(r.mostPixels[0]).toEqual({ address: "0xA", value: 2 });
+    expect(r.mostPixels[1]).toEqual({ address: "0xB", value: 1 });
     expect(r.mostExpensivePixel[0]).toEqual({ address: "0xA", value: 9 });
     expect(r.biggestConnectedArea[0]).toEqual({ address: "0xA", value: 2 });
   });
