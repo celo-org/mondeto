@@ -160,33 +160,40 @@ export function buildWhatsAppUrl(message: string): string {
 }
 
 /**
- * Message body for the native share sheet. Some targets (Telegram, notably)
- * keep ONLY the `url` when a Web Share payload carries both `text` and `url`,
- * so the player's brag copy vanishes. To guarantee the text always travels, we
- * fold the link into the text and share that as a single string — no separate
- * `url` field for a target to prefer over the copy.
- */
-export function composeShareMessage(kind: ShareKind, params: ShareParams): string {
-  return `${composeShareText(kind, params)}\n\n${buildShareUrl(kind, params)}`
-}
-
-/**
- * X/Twitter variant of the share copy — tags the @mondeto game and the @minipay
- * platform so both accounts get pinged (x.com/mondeto, x.com/minipay). Only used
- * for the X intent; other channels (Telegram/WhatsApp) don't resolve X handles,
- * so they use the plain copy.
- */
-/**
- * MiniPay "open in app" deeplink (campaign-tagged) — added to X shares so MiniPay
- * users can open Mondeto inside the wallet straight from a tweet. It's a FIXED
+ * MiniPay "open in app" Browse deeplink (campaign-tagged) — appended to EVERY
+ * share so any recipient can jump straight into the wallet. It's a FIXED
  * campaign link: MiniPay doesn't do referrals/dynamic links, so the per-player
- * `?ref=` rides the `/s` share URL (the tweet's card link), not this one.
+ * `?ref=` rides the `/s` share URL, not this one.
  */
 export const MINIPAY_BROWSE_URL =
   'https://link.minipay.xyz/browse?url=https%3A%2F%2Fopr.as%2Fw752&campaign=mondeto&source=external&medium=social'
+const MINIPAY_OPEN_LINE = `\n\nOpen in MiniPay: ${MINIPAY_BROWSE_URL}`
 
+/**
+ * Message body for the native share sheet / WhatsApp / Copy. Some targets
+ * (Telegram, notably) keep ONLY the `url` when a Web Share payload carries both
+ * `text` and `url`, so the brag copy vanishes — we fold the link into the text
+ * and share one string. The MiniPay open-line is appended too.
+ */
+export function composeShareMessage(kind: ShareKind, params: ShareParams): string {
+  return `${composeShareText(kind, params)}\n\n${buildShareUrl(kind, params)}${MINIPAY_OPEN_LINE}`
+}
+
+/**
+ * X/Twitter copy — tags @mondeto + @minipay (only X resolves the handles) and
+ * appends the MiniPay open-line. The `/s` link is the intent's separate `url`
+ * (the tweet's card).
+ */
 export function composeXText(kind: ShareKind, params: ShareParams): string {
-  return `${composeShareText(kind, params)} via @mondeto on @minipay\n\nOpen in MiniPay: ${MINIPAY_BROWSE_URL}`
+  return `${composeShareText(kind, params)} via @mondeto on @minipay${MINIPAY_OPEN_LINE}`
+}
+
+/**
+ * Telegram copy — the `/s` link is the intent's separate `url`, so this is the
+ * brag text + the MiniPay open-line.
+ */
+export function composeTelegramText(kind: ShareKind, params: ShareParams): string {
+  return `${composeShareText(kind, params)}${MINIPAY_OPEN_LINE}`
 }
 
 /**

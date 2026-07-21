@@ -9,8 +9,8 @@ import {
   buildXIntentUrl,
   buildTelegramUrl,
   buildWhatsAppUrl,
-  composeShareText,
   composeXText,
+  composeTelegramText,
   composeShareMessage,
 } from '@/lib/share'
 
@@ -60,7 +60,7 @@ export function ShareButton({
   }, [open])
 
   const url = buildShareUrl(kind, params)
-  const text = composeShareText(kind, params)
+  const telegramText = composeTelegramText(kind, params)
   const message = composeShareMessage(kind, params)
 
   // Our own menu is the single, consistent UI on every device. We deliberately
@@ -124,7 +124,7 @@ export function ShareButton({
         >
           <TargetRow icon={<XGlyph />} label="X" onClick={() => openTarget('twitter', buildXIntentUrl(composeXText(kind, params), url))} />
           <TargetRow icon={<WhatsAppGlyph />} label="WhatsApp" onClick={() => openTarget('whatsapp', buildWhatsAppUrl(message))} />
-          <TargetRow icon={<TelegramGlyph />} label="Telegram" onClick={() => openTarget('telegram', buildTelegramUrl(text, url))} />
+          <TargetRow icon={<TelegramGlyph />} label="Telegram" onClick={() => openTarget('telegram', buildTelegramUrl(telegramText, url))} />
           <TargetRow icon={<LinkGlyph />} label={copied ? 'Copied' : 'Copy link'} onClick={copyLink} />
         </div>
       )}
