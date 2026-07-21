@@ -12,14 +12,35 @@ import type { RewardEntry } from '@/lib/rewards'
 const PIXEL_FONT = "'Press Start 2P', monospace"
 const BRAND_LIME = '#A7FF05'
 
+const SEEN_KEY = 'mondeto-rewards-seen'
+
+/** A stable signature of the wallet's current reward set, so the modal
+ *  auto-shows once per distinct set of winnings and re-shows only when a
+ *  genuinely new payout lands (a new campaign id joins the set). */
+function rewardsSignature(rewards: RewardEntry[]): string {
+  return rewards
+    .map((r) => r.campaignId)
+    .sort()
+    .join(',')
+}
+
+/** Sum of all reward payouts, formatted like the source strings: a whole
+ *  number stays whole ("17"), anything with cents shows two places. */
+function totalEarned(rewards: RewardEntry[]): string {
+  const sum = rewards.reduce((acc, r) => acc + (Number(r.amountUsd) || 0), 0)
+  return Number.isInteger(sum) ? String(sum) : sum.toFixed(2)
+}
+
 /**
  * "You won $X in the campaign" — the witness-announcement half of the
- * share-to-X flywheel. When the connected wallet has an unseen reward (from
- * Edge Config via /api/rewards), this modal invites them to flex the win on X
- * with their referral link baked in, turning a payout into recruitment.
+ * share-to-X flywheel. When the connected wallet has campaign winnings (from
+ * Edge Config via /api/rewards), this modal invites them to flex the total on
+ * X with their referral link baked in, turning a payout into recruitment.
  *
- * Dismissal is per campaign id and per session (mirrors CampaignBanner): a new
- * campaign's payout shows again, but the same win won't nag on every reload.
+ * It auto-pops ONCE per distinct set of winnings: dismissal is persisted to
+ * localStorage keyed by the reward-set signature, so reopening the app doesn't
+ * nag. A brand-new payout (new campaign id) re-arms it. The persistent way to
+ * re-share afterwards lives on the profile page.
  */
 export default function RewardAnnouncement() {
   const { address } = useAccount()
@@ -28,33 +49,37 @@ export default function RewardAnnouncement() {
   const mapMeta = useCurrentMapMeta()
   const [dismissed, setDismissed] = useState(false)
 
-  // Show the highest-value reward the player hasn't dismissed this session.
-  const reward = useMemo<RewardEntry | null>(() => {
-    const unseen = rewards.filter((r) => {
-      try {
-        return sessionStorage.getItem(`mondeto-reward-seen-${r.campaignId}`) !== '1'
-      } catch {
-        return true
-      }
-    })
-    if (unseen.length === 0) return null
-    return unseen.reduce((best, r) =>
-      Number(r.amountUsd) > Number(best.amountUsd) ? r : best,
-    )
-  }, [rewards])
+  const signature = useMemo(() => rewardsSignature(rewards), [rewards])
+
+  // Suppress the auto-pop if this exact reward set was already dismissed.
+  const alreadySeen = useMemo(() => {
+    if (rewards.length === 0) return true
+    try {
+      return localStorage.getItem(SEEN_KEY) === signature
+    } catch {
+      return false
+    }
+  }, [rewards.length, signature])
+
+  const total = useMemo(() => totalEarned(rewards), [rewards])
+  // When a single payout is on the board we can name its rank/board; a
+  // multi-payout total can't, so it shows the aggregate line instead.
+  const single = rewards.length === 1 ? rewards[0] : null
+
+  const show = rewards.length > 0 && !alreadySeen && !dismissed && !!address
 
   useEffect(() => {
-    if (reward && !dismissed) {
-      track('reward_viewed', { campaignId: reward.campaignId, amountUsd: reward.amountUsd })
+    if (show) {
+      track('reward_viewed', { count: rewards.length, amountUsd: total })
     }
-  }, [reward, dismissed])
+  }, [show, rewards.length, total])
 
-  if (!reward || dismissed || !address) return null
+  if (!show) return null
 
   const dismiss = () => {
     setDismissed(true)
     try {
-      sessionStorage.setItem(`mondeto-reward-seen-${reward.campaignId}`, '1')
+      localStorage.setItem(SEEN_KEY, signature)
     } catch {}
   }
 
@@ -94,7 +119,7 @@ export default function RewardAnnouncement() {
           CAMPAIGN PAYOUT
         </div>
         <div style={{ fontSize: 32, fontFamily: PIXEL_FONT, letterSpacing: 2, color: BRAND_LIME, lineHeight: 1 }}>
-          ${reward.amountUsd}
+          ${total}
         </div>
         <div
           style={{
@@ -106,9 +131,9 @@ export default function RewardAnnouncement() {
             maxWidth: 320,
           }}
         >
-          {reward.board && reward.rank
-            ? `YOU FINISHED #${reward.rank} ON THE ${reward.board.toUpperCase()} BOARD AND BANKED $${reward.amountUsd}.`
-            : `YOU BANKED $${reward.amountUsd} IN THE CAMPAIGN.`}
+          {single && single.board && single.rank
+            ? `YOU FINISHED #${single.rank} ON THE ${single.board.toUpperCase()} BOARD AND BANKED $${total}.`
+            : `YOU BANKED $${total} IN THE CAMPAIGN.`}
           {' '}FLEX IT AND RECRUIT A RIVAL.
         </div>
 
@@ -118,10 +143,10 @@ export default function RewardAnnouncement() {
             filled
             label="FLEX MY WIN"
             params={{
-              amount: reward.amountUsd,
-              campaignId: reward.campaignId,
-              board: reward.board,
-              rank: reward.rank,
+              amount: total,
+              campaignId: single?.campaignId,
+              board: single?.board,
+              rank: single?.rank,
               mapId: currentMapId,
               mapName: mapMeta.displayName,
               ref: address.toLowerCase(),

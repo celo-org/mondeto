@@ -22,6 +22,7 @@ import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
 import { InviteButton } from '@/components/InviteButton'
 import { ShareButton } from '@/components/ShareButton'
+import { useRewards } from '@/hooks/useRewards'
 import { track } from '@/lib/analytics'
 
 export default function ProfilePage() {
@@ -44,6 +45,14 @@ export default function ProfilePage() {
     return revealedMaps.filter((m) => rulers[m.id] === me)
   }, [addrStr, revealedMaps, rulers])
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
+  // Campaign winnings (Edge Config via /api/rewards). The one-time popup
+  // (RewardAnnouncement) is the announcement; this is the persistent surface
+  // to re-share the total earnings any time.
+  const { rewards } = useRewards()
+  const rewardsTotal = useMemo(() => {
+    const sum = rewards.reduce((acc, r) => acc + (Number(r.amountUsd) || 0), 0)
+    return Number.isInteger(sum) ? String(sum) : sum.toFixed(2)
+  }, [rewards])
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
   // the user is browsing without a wallet (they just won't have personal
@@ -115,26 +124,16 @@ export default function ProfilePage() {
 
     fetchStats()
 
-    // Fetch P&L from PixelsPurchased events across the full contract history.
+    // P&L (spent / earned) comes from a wide PixelsPurchased log scan across
+    // the whole contract history. That scan is heavy and unreliable on the
+    // phone — on MiniPay's constrained network it routinely failed and left
+    // the profile showing $0/$0 — so it runs server-side at /api/pnl, where
+    // the reads hit Vercel's network. Values come back in 6-decimal
+    // "microcents" (the unit `formatUSDT` renders).
     //
-    // Strategy:
-    //   1. Read the contract's `halvingStartTimestamp()` (the block-time of
-    //      the first pixel sale, or 0 if none yet) and the current block's
-    //      timestamp to back-estimate how many blocks ago that first sale
-    //      happened. Celo post-L2 produces ~1 block / sec; using 1s here +
-    //      a safety buffer guarantees we never miss the first sale. If the
-    //      contract has had no sales, there's nothing to scan — bail out.
-    //   2. Chunked + parallel getLogs from estimated-first-sale to head.
-    //      Mirrors the pattern in useAnalytics — Forno occasionally rejects
-    //      large windows, so we cap each chunk at 50k blocks.
-    //   3. Stale-while-revalidate cache in localStorage: render whatever's
-    //      cached immediately (even if expired) so the user sees numbers
-    //      instantly, then refresh in the background. Skip the rescan only
-    //      if the cached entry is still fresh.
+    // A localStorage stale-while-revalidate cache renders the last-known
+    // numbers instantly, then the fetch refreshes them in the background.
     async function fetchPnL() {
-      const CHUNK_BLOCKS = 50_000n
-      const MAX_PARALLEL = 4
-      const SAFETY_BUFFER_BLOCKS = 100_000n
       const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${addrStr!.toLowerCase()}`
       const CACHE_TTL_MS = 10 * 60_000
 
@@ -149,144 +148,16 @@ export default function ProfilePage() {
       } catch {}
 
       try {
-        const { parseAbiItem } = await import('viem')
-        // Multi-token PixelsPurchased — `token` is the second indexed
-        // parameter as of contract v2.
-        const event = parseAbiItem(
-          'event PixelsPurchased(address indexed buyer, address indexed token, uint256[] ids, uint256 totalCost)',
+        const res = await fetch(
+          `/api/pnl?address=${addrStr!.toLowerCase()}&mapId=${currentMapId}`,
         )
-
-        const currentBlock = await publicClient!.getBlockNumber()
-
-        // Estimate the first-sale block from the contract's own clock.
-        let fromBlock = 0n
-        try {
-          const [halvingStartTs, head] = await Promise.all([
-            publicClient!.readContract({
-              address: mondetoAddress,
-              abi: MONDETO_ABI,
-              functionName: 'halvingStartTimestamp',
-            }) as Promise<bigint>,
-            publicClient!.getBlock({ blockNumber: currentBlock }),
-          ])
-          // 0 means no purchases yet — no logs to scan, and the initial
-          // 0/0 P&L state set above is already correct.
-          if (halvingStartTs === 0n) return
-          const secondsSinceStart = head.timestamp - halvingStartTs
-          // 1s/block on Celo L2 — overestimating is safe (fromBlock just
-          // ends up earlier than needed and the empty chunks are cheap).
-          const estimatedBlocks = secondsSinceStart + SAFETY_BUFFER_BLOCKS
-          fromBlock = currentBlock > estimatedBlocks ? currentBlock - estimatedBlocks : 0n
-        } catch (e) {
-          console.warn('Could not read halvingStartTimestamp; scanning from block 0:', e)
+        if (!res.ok) return
+        const { spent: s, earned: e } = (await res.json()) as {
+          spent: string
+          earned: string
         }
-
-        // Build chunk ranges.
-        const ranges: Array<{ from: bigint; to: bigint }> = []
-        for (let start = fromBlock; start <= currentBlock; start += CHUNK_BLOCKS) {
-          const end =
-            start + CHUNK_BLOCKS - 1n > currentBlock
-              ? currentBlock
-              : start + CHUNK_BLOCKS - 1n
-          ranges.push({ from: start, to: end })
-        }
-
-        // Run in parallel batches, polite to Forno.
-        const client = publicClient!
-        type Log = Awaited<ReturnType<typeof client.getLogs<typeof event>>>[number]
-        const logs: Log[] = []
-        for (let i = 0; i < ranges.length; i += MAX_PARALLEL) {
-          const batch = ranges.slice(i, i + MAX_PARALLEL)
-          const results = await Promise.allSettled(
-            batch.map((r) =>
-              publicClient!.getLogs({
-                address: mondetoAddress,
-                event,
-                fromBlock: r.from,
-                toBlock: r.to,
-              }),
-            ),
-          )
-          for (const r of results) {
-            if (r.status === 'fulfilled') logs.push(...r.value)
-            else console.warn('P&L chunk failed:', r.reason)
-          }
-        }
-
-        // Sort chronologically so the running owner-of map reflects real
-        // purchase order — chunks return in batch order but logs within a
-        // chunk are block-ordered, and we want global block order to be
-        // safe even when chunks come back interleaved.
-        logs.sort((a, b) => {
-          const ab = a.blockNumber ?? 0n
-          const bb = b.blockNumber ?? 0n
-          if (ab !== bb) return ab < bb ? -1 : 1
-          const ai = a.logIndex ?? 0
-          const bi = b.logIndex ?? 0
-          return ai - bi
-        })
-
-        // Look up each unique payment token's decimals so we can normalize
-        // mixed-token totalCost values into a single 6-decimal "$ microcents"
-        // unit before summing. Without this, summing e18 USDm with e6 USDC
-        // would land in nonsense magnitudes.
-        const tokenDecimals = new Map<string, number>()
-        const uniqueTokens = new Set<string>()
-        for (const log of logs) {
-          uniqueTokens.add((log.args.token as string).toLowerCase())
-        }
-        await Promise.all(
-          [...uniqueTokens].map(async (token) => {
-            try {
-              const [, dec] = (await publicClient!.readContract({
-                address: mondetoAddress,
-                abi: MONDETO_ABI,
-                functionName: 'tokenConfig',
-                args: [token as `0x${string}`],
-              })) as readonly [boolean, number]
-              tokenDecimals.set(token, Number(dec))
-            } catch {
-              // Sensible fallback: 6-decimal stablecoin assumption.
-              tokenDecimals.set(token, 6)
-            }
-          }),
-        )
-
-        // Normalize amount to 6 decimals (the unit `formatUSDT` displays).
-        const toMicrocents = (cost: bigint, decimals: number): bigint => {
-          if (decimals === 6) return cost
-          if (decimals > 6) return cost / 10n ** BigInt(decimals - 6)
-          return cost * 10n ** BigInt(6 - decimals)
-        }
-
-        const addr = addrStr!.toLowerCase()
-        let totalSpent = 0n
-        let totalEarned = 0n
-        const ownerOf = new Map<string, string>()
-
-        for (const log of logs) {
-          const buyer = (log.args.buyer as string).toLowerCase()
-          const tokenAddr = (log.args.token as string).toLowerCase()
-          const ids = log.args.ids as bigint[]
-          const totalCost = log.args.totalCost as bigint
-          const normalized = toMicrocents(totalCost, tokenDecimals.get(tokenAddr) ?? 6)
-
-          if (buyer === addr) {
-            totalSpent += normalized
-          }
-
-          const perPixelCost = ids.length > 0 ? normalized / BigInt(ids.length) : 0n
-
-          for (const id of ids) {
-            const idStr = id.toString()
-            const prevOwner = ownerOf.get(idStr)
-            if (prevOwner === addr) {
-              totalEarned += perPixelCost
-            }
-            ownerOf.set(idStr, buyer)
-          }
-        }
-
+        const totalSpent = BigInt(s ?? '0')
+        const totalEarned = BigInt(e ?? '0')
         setSpent(totalSpent)
         setEarned(totalEarned)
 
@@ -306,7 +177,7 @@ export default function ProfilePage() {
     }
 
     fetchPnL()
-  }, [publicClient, addrStr, mondetoAddress, mondetoContract.width, mondetoContract.height])
+  }, [publicClient, addrStr, mondetoAddress, currentMapId, mondetoContract.width, mondetoContract.height])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :
@@ -432,6 +303,25 @@ export default function ProfilePage() {
           spent={formatUSDT(spent)}
           earned={formatUSDT(earned)}
         />
+
+        {addrStr && rewards.length > 0 && (
+          <div style={{ width: '100%', maxWidth: 460, padding: '10px 16px 0' }}>
+            <ShareButton
+              kind="reward"
+              filled
+              label={`FLEX $${rewardsTotal} IN WINNINGS`}
+              params={{
+                amount: rewardsTotal,
+                campaignId: rewards.length === 1 ? rewards[0].campaignId : undefined,
+                board: rewards.length === 1 ? rewards[0].board : undefined,
+                rank: rewards.length === 1 ? rewards[0].rank : undefined,
+                mapId: currentMapId,
+                mapName: mondetoContract.displayName,
+                ref: addrStr.toLowerCase(),
+              }}
+            />
+          </div>
+        )}
 
         <div style={{ width: '100%', maxWidth: 460, padding: '0 16px' }}>
           {/* Name field */}

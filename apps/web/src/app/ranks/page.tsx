@@ -14,6 +14,7 @@ import {
   type YouStanding,
 } from '@/hooks/useLeaderboard'
 import { useMaps } from '@/hooks/useMaps'
+import { useOwnedMaps } from '@/hooks/useOwnedMaps'
 import type { MapId } from '@/lib/maps/types'
 import { track } from '@/lib/analytics'
 import { ShareButton } from '@/components/ShareButton'
@@ -32,13 +33,12 @@ const BRAND_LIME = '#A7FF05'
 
 /**
  * Rank-proximity copy for the player's own row. The delta is phrased per
- * board: AREA/EMPIRE in pixels (global AREA is a territory share, so its
- * gap is already a percentage), TYCOONS as a price gap. Rank 1 gets the
+ * board: AREA/EMPIRE in pixels, TYCOONS as a price gap. Rank 1 gets the
  * defend-it line instead of a target.
  */
-function gapCopy(tab: LeaderboardTab, isGlobal: boolean, you: YouStanding): string {
+function gapCopy(tab: LeaderboardTab, you: YouStanding): string {
   if (you.entry.rank === 1) {
-    return isGlobal || tab === 'TYCOONS' ? 'TOP SPOT — DEFEND IT' : 'RULER — DEFEND IT'
+    return tab === 'TYCOONS' ? 'TOP SPOT — DEFEND IT' : 'RULER — DEFEND IT'
   }
   const target = `#${you.entry.rank - 1}`
   if (you.gapValue === null) return ''
@@ -52,15 +52,13 @@ export default function RanksPage() {
   const publicClient = useReadClient()
   const { address } = useAccount()
   const { revealedMaps, currentMapId } = useMaps()
-  // Which board to show: 'global' (the cross-map board) or a specific map id.
-  // Defaults to GLOBAL — the headline "who's winning overall" view — and the
-  // player can drill into any single map's board without leaving /ranks.
-  const [boardSel, setBoardSel] = useState<MapId | 'global'>('global')
-  const isGlobal = boardSel === 'global'
-  // The map whose pixel data + profiles we load. For the global board we still
-  // load the current map (its owners' profiles decorate rows; the global hook
-  // fetches all maps' pixel snapshots itself).
-  const selectedMapId: MapId = isGlobal ? currentMapId : boardSel
+  // Per-map boards only. A global/cross-map board is intentionally not offered
+  // here — if we want one later we'll add it back as its own option.
+  //
+  // The board shown follows the map the player is viewing (`currentMapId`)
+  // until they tap a different map's chip, which parks an explicit override.
+  const [override, setOverride] = useState<MapId | null>(null)
+  const selectedMapId: MapId = override ?? currentMapId
   const mondetoContract = getMapContractById(selectedMapId)
   const mondetoAddress = mondetoContract.address
   const [pixelData, setPixelData] = useState<PixelView[]>([])
@@ -70,30 +68,24 @@ export default function RanksPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    track('leaderboard_viewed', {
-      board: activeTab,
-      scope: isGlobal ? 'global' : 'local',
-      mapId: isGlobal ? null : (boardSel as MapId),
-    })
-  }, [activeTab, boardSel, isGlobal])
+    track('leaderboard_viewed', { board: activeTab, scope: 'local', mapId: selectedMapId })
+  }, [activeTab, selectedMapId])
 
-  // Offer the board selector once there's more than one map to compare.
-  // GLOBAL leads (the default), then each individual map.
-  const showSelector = revealedMaps.length > 1
-  const selectorOptions = [
-    { key: 'global', label: 'GLOBAL' },
-    ...revealedMaps.map((m) => ({ key: String(m.id), label: m.displayName })),
-  ]
+  // The switcher only lists maps the player actually owns pixels on — no point
+  // offering a board they're not in. The map currently being viewed is always
+  // included so its chip stays selectable even before the ownership scan
+  // resolves (or if they own nothing there yet). One map → no switcher.
+  const { counts } = useOwnedMaps()
+  const boardMaps = useMemo(() => {
+    const owned = revealedMaps.filter(
+      (m) => (counts[m.id] ?? 0) > 0 || m.id === selectedMapId,
+    )
+    return owned.sort((a, b) => a.id - b.id)
+  }, [revealedMaps, counts, selectedMapId])
+  const showSelector = boardMaps.length > 1
+  const selectorOptions = boardMaps.map((m) => ({ key: String(m.id), label: m.displayName }))
 
   useEffect(() => {
-    // The GLOBAL board comes from /api/global-board (server-side), so it does
-    // NOT need this on-device single-map read. Skipping it for global is also
-    // important: that read can hang on MiniPay's RPC, and the board display
-    // must not be gated behind it.
-    if (isGlobal) {
-      setLoading(false)
-      return
-    }
     async function load() {
       setLoading(true)
       let data: PixelView[] = []
@@ -157,16 +149,16 @@ export default function RanksPage() {
       setLoading(false)
     }
     load()
-  }, [isGlobal, publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
+  }, [publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
 
-  // A specific map shows that map's board (from the pixelData loaded above);
-  // GLOBAL shows the normalized cross-map board. `homeMapId` is the id the
-  // loaded pixelData belongs to so the local snapshot uses the right dims.
+  // The selected map's board, built from the pixelData loaded above.
+  // `homeMapId` is the id that pixelData belongs to so the snapshot uses the
+  // right dims.
   const { area, empire, tycoons, loading: boardsLoading, you } = useLeaderboard(
     pixelData,
     profilesMap,
     {
-      scope: isGlobal ? 'global' : 'local',
+      scope: 'local',
       homeMapId: selectedMapId,
       viewer: address,
     },
@@ -203,13 +195,11 @@ export default function RanksPage() {
     if (opts.length === 0) return null
     return opts.reduce((best, o) => (o.s.entry.rank < best.s.entry.rank ? o : best))
   }, [you.area, you.empire, you.tycoons])
-  const youText = youStanding ? gapCopy(activeTab, isGlobal, youStanding) : undefined
+  const youText = youStanding ? gapCopy(activeTab, youStanding) : undefined
   const youInView =
     !!youStanding &&
     displayData.some((e) => e.owner.toLowerCase() === addrLower)
-  // The global board never waits on the local single-map read (it comes from
-  // the server endpoint), so don't let a slow/hanging local read block it.
-  const isLoading = (isGlobal ? false : loading) || boardsLoading
+  const isLoading = loading || boardsLoading
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: 60 }}>
@@ -217,14 +207,14 @@ export default function RanksPage() {
       {showSelector && (
         <BoardSelector
           options={selectorOptions}
-          value={isGlobal ? 'global' : String(boardSel)}
+          value={String(selectedMapId)}
           onChange={(key) => {
-            setBoardSel(key === 'global' ? 'global' : (Number(key) as MapId))
+            setOverride(Number(key) as MapId)
             setShowAll(false)
           }}
         />
       )}
-      <LeaderboardTabs activeTab={activeTab} scope={isGlobal ? 'global' : 'local'} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
       {/* Flex the player's BEST standing across the three boards (with its board
           name). Shown whenever they're ranked on any board — the shared card +
           link recruit challengers. */}
@@ -239,8 +229,8 @@ export default function RanksPage() {
               value: bestBoard.s.entry.value,
               unit: bestBoard.s.entry.unit,
               board: bestBoard.board,
-              mapId: isGlobal ? currentMapId : selectedMapId,
-              mapName: isGlobal ? undefined : mondetoContract.displayName,
+              mapId: selectedMapId,
+              mapName: mondetoContract.displayName,
               ref: address?.toLowerCase(),
               color: bestBoard.s.entry.color?.replace('#', ''),
             }}
@@ -290,9 +280,6 @@ export default function RanksPage() {
                 minHeight: 32,
               }}
             >
-              {isLoading && isGlobal && (
-                <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>loading global board…</span>
-              )}
               {!isLoading && (
                 <>
                   <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
@@ -309,10 +296,8 @@ export default function RanksPage() {
                 <LeaderboardRow
                   key={entry.owner}
                   entry={entry}
-                  // The reigning "Ruler of <map>" is rank-1 of a single map's
-                  // LAND board. The global board is cross-map, so no per-map
-                  // crown there.
-                  isRuler={!isGlobal && activeTab === 'AREA' && entry.rank === 1}
+                  // The reigning "Ruler of <map>" is rank-1 of a map's LAND board.
+                  isRuler={activeTab === 'AREA' && entry.rank === 1}
                   isYou={isYou}
                   gapText={isYou ? youText : undefined}
                 />
