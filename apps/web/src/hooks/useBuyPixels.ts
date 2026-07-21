@@ -7,6 +7,7 @@ import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getAttributionSuffix } from '@/lib/attribution'
 import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
+import { classifyBuyError, isUserRejectedError } from '@/lib/buyErrors'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { getReferrer, track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
@@ -433,40 +434,15 @@ export function useBuyPixels(mapId?: MapId) {
       const hay = `${msg} ${detail}`
       // A wallet rejection is the user backing out on purpose, not a failure.
       // Silently return them to the buying frame (BUY button ready again) —
-      // no red error, nothing to dismiss. Covers wagmi/viem's
-      // UserRejectedRequestError plus EIP-1193 code 4001 / ethers'
-      // ACTION_REJECTED across MetaMask, MiniPay, and injected wallets.
-      const code = (e as { code?: unknown; cause?: { code?: unknown } })?.code
-      const causeCode = (e as { cause?: { code?: unknown } })?.cause?.code
-      const userRejected =
-        code === 4001 ||
-        causeCode === 4001 ||
-        hay.includes('User rejected') ||
-        hay.includes('User denied') ||
-        hay.includes('rejected the request') ||
-        hay.includes('ACTION_REJECTED')
-      if (userRejected) {
+      // no red error, nothing to dismiss.
+      if (isUserRejectedError(e, hay)) {
         track('pixel_buy_rejected', eventProps)
         setError(null)
         setStep('idle')
         return
       }
       console.error('Buy failed:', detail, e)
-      const short = hay.includes('User rejected')
-        ? 'Transaction rejected by user'
-        : hay.includes('nonce')
-          ? 'Nonce error — please try again in a few seconds'
-          : hay.includes('NotLand')
-            ? 'Selected pixel is not land'
-            : hay.includes('TokenNotAccepted')
-              ? `${preferred.symbol} is not accepted by this map yet`
-              : hay.includes('SlippageExceeded')
-                ? 'Price moved above your limit — please review and try again'
-                : hay.includes('DeadlineExpired')
-                  ? 'Transaction expired — please try again'
-                  : hay.includes('insufficient') || hay.includes('ERC20')
-                    ? `Insufficient ${preferred.symbol} balance or allowance`
-                    : detail.slice(0, 200)
+      const short = classifyBuyError(hay, preferred.symbol)
       track('pixel_buy_failed', { ...eventProps, reason: short })
       // TEMP DIAGNOSTIC (remove after MiniPay "permission denied" is fixed):
       // MiniPay masks the real reason, so surface its raw error code/name/detail
