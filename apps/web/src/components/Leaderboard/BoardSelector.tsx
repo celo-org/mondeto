@@ -15,10 +15,10 @@ const PIXEL_FONT = "'Press Start 2P', monospace"
 const BRAND_LIME = '#A7FF05'
 
 /**
- * Horizontal selector for which leaderboard to show — one chip per revealed
- * map plus a GLOBAL chip. Lets players view any map's board (and the
- * cross-map board) straight from /ranks instead of going back to the map to
- * switch first. Scrolls horizontally so it scales as more maps ship.
+ * Horizontal selector for which map's leaderboard to show — one chip per map.
+ * Lets players view any map's board straight from /ranks instead of going back
+ * to the map to switch first. Scrolls horizontally so it scales as more maps
+ * ship. Only rendered when there's more than one board to choose between.
  */
 export default function BoardSelector({ options, value, onChange }: BoardSelectorProps) {
   return (

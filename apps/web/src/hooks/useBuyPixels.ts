@@ -431,6 +431,26 @@ export function useBuyPixels(mapId?: MapId) {
       const detail = extractErrorDetail(e)
       const msg = e instanceof Error ? e.message : String(e)
       const hay = `${msg} ${detail}`
+      // A wallet rejection is the user backing out on purpose, not a failure.
+      // Silently return them to the buying frame (BUY button ready again) —
+      // no red error, nothing to dismiss. Covers wagmi/viem's
+      // UserRejectedRequestError plus EIP-1193 code 4001 / ethers'
+      // ACTION_REJECTED across MetaMask, MiniPay, and injected wallets.
+      const code = (e as { code?: unknown; cause?: { code?: unknown } })?.code
+      const causeCode = (e as { cause?: { code?: unknown } })?.cause?.code
+      const userRejected =
+        code === 4001 ||
+        causeCode === 4001 ||
+        hay.includes('User rejected') ||
+        hay.includes('User denied') ||
+        hay.includes('rejected the request') ||
+        hay.includes('ACTION_REJECTED')
+      if (userRejected) {
+        track('pixel_buy_rejected', eventProps)
+        setError(null)
+        setStep('idle')
+        return
+      }
       console.error('Buy failed:', detail, e)
       const short = hay.includes('User rejected')
         ? 'Transaction rejected by user'
