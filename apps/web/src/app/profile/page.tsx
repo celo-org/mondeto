@@ -22,7 +22,6 @@ import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
 import { InviteButton } from '@/components/InviteButton'
 import { ShareButton } from '@/components/ShareButton'
-import { useRewards } from '@/hooks/useRewards'
 import { track } from '@/lib/analytics'
 
 export default function ProfilePage() {
@@ -45,14 +44,6 @@ export default function ProfilePage() {
     return revealedMaps.filter((m) => rulers[m.id] === me)
   }, [addrStr, revealedMaps, rulers])
   const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
-  // Campaign winnings (Edge Config via /api/rewards). The one-time popup
-  // (RewardAnnouncement) is the announcement; this is the persistent surface
-  // to re-share the total earnings any time.
-  const { rewards } = useRewards()
-  const rewardsTotal = useMemo(() => {
-    const sum = rewards.reduce((acc, r) => acc + (Number(r.amountUsd) || 0), 0)
-    return Number.isInteger(sum) ? String(sum) : sum.toFixed(2)
-  }, [rewards])
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
   // the user is browsing without a wallet (they just won't have personal
@@ -131,19 +122,22 @@ export default function ProfilePage() {
     // the reads hit Vercel's network. Values come back in 6-decimal
     // "microcents" (the unit `formatUSDT` renders).
     //
-    // A localStorage stale-while-revalidate cache renders the last-known
-    // numbers instantly, then the fetch refreshes them in the background.
+    // A localStorage cache renders the last-known numbers instantly, then the
+    // fetch ALWAYS refreshes them in the background (true stale-while-
+    // revalidate). We deliberately do NOT early-return on a "fresh" cache:
+    // an earlier build cached $0/$0 while the scan was broken, and returning
+    // that stale zero without revalidating would pin the profile at 0. The
+    // server response is cached 60s server-side, so revalidating every view
+    // is cheap. Cache key is versioned (v2) so poisoned v1 entries are ignored.
     async function fetchPnL() {
-      const CACHE_KEY = `mondeto-pnl:${mondetoAddress.toLowerCase()}:${addrStr!.toLowerCase()}`
-      const CACHE_TTL_MS = 10 * 60_000
+      const CACHE_KEY = `mondeto-pnl-v2:${mondetoAddress.toLowerCase()}:${addrStr!.toLowerCase()}`
 
       try {
         const cached = localStorage.getItem(CACHE_KEY)
         if (cached) {
-          const parsed = JSON.parse(cached) as { ts: number; spent: string; earned: string }
+          const parsed = JSON.parse(cached) as { spent: string; earned: string }
           setSpent(BigInt(parsed.spent))
           setEarned(BigInt(parsed.earned))
-          if (Date.now() - parsed.ts < CACHE_TTL_MS) return
         }
       } catch {}
 
@@ -304,17 +298,14 @@ export default function ProfilePage() {
           earned={formatUSDT(earned)}
         />
 
-        {addrStr && rewards.length > 0 && (
+        {addrStr && earned > 0n && (
           <div style={{ width: '100%', maxWidth: 460, padding: '10px 16px 0' }}>
             <ShareButton
               kind="reward"
               filled
-              label={`FLEX $${rewardsTotal} IN WINNINGS`}
+              label="FLEX MY EARNINGS"
               params={{
-                amount: rewardsTotal,
-                campaignId: rewards.length === 1 ? rewards[0].campaignId : undefined,
-                board: rewards.length === 1 ? rewards[0].board : undefined,
-                rank: rewards.length === 1 ? rewards[0].rank : undefined,
+                amount: formatUSDT(earned),
                 mapId: currentMapId,
                 mapName: mondetoContract.displayName,
                 ref: addrStr.toLowerCase(),

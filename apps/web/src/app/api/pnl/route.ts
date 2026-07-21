@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { parseAbiItem } from 'viem'
 import { fallbackReadClient } from '@/lib/chain'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
+import { scanPurchaseLogs } from '@/lib/purchaseLogs'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
@@ -31,18 +31,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const CACHE_TTL_MS = 60_000
-// Public Celo RPCs (Forno, dRPC) reject eth_getLogs windows larger than
-// ~5k blocks — a 50k window fails outright, which silently zeroed every P&L.
-// Stay at 5k and lean on parallelism to keep the ~300-chunk scan fast.
-const CHUNK_BLOCKS = 5_000n
-const MAX_PARALLEL = 20
 const SAFETY_BUFFER_BLOCKS = 100_000n
-
-// Multi-token PixelsPurchased — `token` is the second indexed parameter as of
-// contract v2.
-const PURCHASE_EVENT = parseAbiItem(
-  'event PixelsPurchased(address indexed buyer, address indexed token, uint256[] ids, uint256 totalCost)',
-)
 
 interface Pnl {
   spent: string
@@ -86,43 +75,16 @@ async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
   const estimatedBlocks = secondsSinceStart + SAFETY_BUFFER_BLOCKS
   fromBlock = currentBlock > estimatedBlocks ? currentBlock - estimatedBlocks : 0n
 
-  const ranges: Array<{ from: bigint; to: bigint }> = []
-  for (let start = fromBlock; start <= currentBlock; start += CHUNK_BLOCKS) {
-    const end =
-      start + CHUNK_BLOCKS - 1n > currentBlock ? currentBlock : start + CHUNK_BLOCKS - 1n
-    ranges.push({ from: start, to: end })
-  }
-
-  type Log = Awaited<ReturnType<typeof client.getLogs<typeof PURCHASE_EVENT>>>[number]
-  const logs: Log[] = []
-  let failedChunks = 0
-  for (let i = 0; i < ranges.length; i += MAX_PARALLEL) {
-    const batch = ranges.slice(i, i + MAX_PARALLEL)
-    const results = await Promise.allSettled(
-      batch.map((r) =>
-        client.getLogs({
-          address: mondetoAddress,
-          event: PURCHASE_EVENT,
-          fromBlock: r.from,
-          toBlock: r.to,
-        }),
-      ),
-    )
-    for (const r of results) {
-      if (r.status === 'fulfilled') logs.push(...r.value)
-      else failedChunks++
-    }
-  }
+  const { logs, failedChunks, totalChunks } = await scanPurchaseLogs(
+    mondetoAddress,
+    fromBlock,
+    currentBlock,
+  )
   // A handful of dropped chunks skews P&L slightly; a wholesale failure means
   // the numbers are untrustworthy — surface it so a stale/zero result is
   // explainable rather than silently wrong.
   if (failedChunks > 0) {
-    logger.warn('P&L scan had failed chunks', {
-      failedChunks,
-      totalChunks: ranges.length,
-      mapId,
-      address: addr,
-    })
+    logger.warn('P&L scan had failed chunks', { failedChunks, totalChunks, mapId, address: addr })
   }
 
   // Chronological order so the running owner-of map reflects real purchase order.
