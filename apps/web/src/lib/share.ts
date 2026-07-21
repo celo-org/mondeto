@@ -176,8 +176,17 @@ export function composeShareMessage(kind: ShareKind, params: ShareParams): strin
  * for the X intent; other channels (Telegram/WhatsApp) don't resolve X handles,
  * so they use the plain copy.
  */
+/**
+ * MiniPay "open in app" deeplink (campaign-tagged) — added to X shares so MiniPay
+ * users can open Mondeto inside the wallet straight from a tweet. It's a FIXED
+ * campaign link: MiniPay doesn't do referrals/dynamic links, so the per-player
+ * `?ref=` rides the `/s` share URL (the tweet's card link), not this one.
+ */
+export const MINIPAY_BROWSE_URL =
+  'https://link.minipay.xyz/browse?url=https%3A%2F%2Fopr.as%2Fw752&campaign=mondeto&source=external&medium=social'
+
 export function composeXText(kind: ShareKind, params: ShareParams): string {
-  return `${composeShareText(kind, params)} via @mondeto on @minipay`
+  return `${composeShareText(kind, params)} via @mondeto on @minipay\n\nOpen in MiniPay: ${MINIPAY_BROWSE_URL}`
 }
 
 /**
