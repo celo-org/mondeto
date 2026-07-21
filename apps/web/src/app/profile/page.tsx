@@ -298,6 +298,11 @@ export default function ProfilePage() {
           earned={formatUSDT(earned)}
         />
 
+        {/* "FLEX MY EARNINGS" share is intentionally hidden for now. The
+            earnings number is reconstructed from a full PixelsPurchased log
+            scan (/api/pnl), which is only complete against an authenticated
+            Forno endpoint — bragging a wrong $ figure publicly is worse than
+            not offering it. Re-enable once the indexer backs these numbers.
         {addrStr && earned > 0n && (
           <div style={{ width: '100%', maxWidth: 460, padding: '10px 16px 0' }}>
             <ShareButton
@@ -312,7 +317,7 @@ export default function ProfilePage() {
               }}
             />
           </div>
-        )}
+        )} */}
 
         <div style={{ width: '100%', maxWidth: 460, padding: '0 16px' }}>
           {/* Name field */}
