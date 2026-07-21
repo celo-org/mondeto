@@ -26,10 +26,16 @@ import type { MapId } from '@/lib/maps/types'
  */
 
 export const dynamic = 'force-dynamic'
+// The full-history log scan is ~hundreds of small getLogs calls; give the
+// function room beyond the 10s default so a cold computation finishes.
+export const maxDuration = 60
 
 const CACHE_TTL_MS = 60_000
-const CHUNK_BLOCKS = 50_000n
-const MAX_PARALLEL = 6
+// Public Celo RPCs (Forno, dRPC) reject eth_getLogs windows larger than
+// ~5k blocks — a 50k window fails outright, which silently zeroed every P&L.
+// Stay at 5k and lean on parallelism to keep the ~300-chunk scan fast.
+const CHUNK_BLOCKS = 5_000n
+const MAX_PARALLEL = 20
 const SAFETY_BUFFER_BLOCKS = 100_000n
 
 // Multi-token PixelsPurchased — `token` is the second indexed parameter as of
@@ -89,9 +95,10 @@ async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
 
   type Log = Awaited<ReturnType<typeof client.getLogs<typeof PURCHASE_EVENT>>>[number]
   const logs: Log[] = []
+  let failedChunks = 0
   for (let i = 0; i < ranges.length; i += MAX_PARALLEL) {
     const batch = ranges.slice(i, i + MAX_PARALLEL)
-    const results = await Promise.all(
+    const results = await Promise.allSettled(
       batch.map((r) =>
         client.getLogs({
           address: mondetoAddress,
@@ -101,7 +108,21 @@ async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
         }),
       ),
     )
-    for (const r of results) logs.push(...r)
+    for (const r of results) {
+      if (r.status === 'fulfilled') logs.push(...r.value)
+      else failedChunks++
+    }
+  }
+  // A handful of dropped chunks skews P&L slightly; a wholesale failure means
+  // the numbers are untrustworthy — surface it so a stale/zero result is
+  // explainable rather than silently wrong.
+  if (failedChunks > 0) {
+    logger.warn('P&L scan had failed chunks', {
+      failedChunks,
+      totalChunks: ranges.length,
+      mapId,
+      address: addr,
+    })
   }
 
   // Chronological order so the running owner-of map reflects real purchase order.
