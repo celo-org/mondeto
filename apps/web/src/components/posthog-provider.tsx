@@ -25,11 +25,13 @@ function trackSessionOpen() {
 /**
  * PostHog client provider for the Next.js App Router.
  *
- * Tuned for a high-traffic launch: we capture ONLY the custom funnel
- * events we emit ourselves (wallet_connected, pixel_buy_*, …). Every
- * volume-multiplying default — autocapture, pageviews, pageleave,
- * session replay, heatmaps, dead/rage clicks, web vitals — is switched
- * off so event count scales with buyers, not with visitors.
+ * Tuned for a cost-controlled launch: we capture pageviews (for Web
+ * analytics) plus the custom funnel events we emit ourselves
+ * (wallet_connected, pixel_buy_*, …). The genuinely volume-multiplying
+ * defaults — autocapture (an event per click/input), session replay,
+ * heatmaps, dead/rage clicks, web vitals — stay OFF. Autocapture on the
+ * map UI is what drove event costs up, so it is the one that must not
+ * come back; pageviews fire ~once per navigation and are cheap.
  *
  * If the env var is missing (e.g. local dev without a key set), init is
  * a no-op and the app still renders normally.
@@ -54,12 +56,16 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       // visitors get a fresh id per visit (we don't care); identified
       // users are keyed by wallet address, which is stable by itself.
       persistence: 'memory',
-      // No pageviews — traffic volume is monitored in Vercel Analytics;
-      // PostHog is reserved for the buy funnel.
-      capture_pageview: false,
-      capture_pageleave: false,
+      // Pageviews power PostHog Web analytics (visitors, sessions, entry/exit
+      // pages, referrers). 'history_change' captures the initial load AND
+      // client-side App Router navigations — plain `true` would miss SPA soft
+      // navigations. Low volume: one event per navigation, not per click.
+      capture_pageview: 'history_change',
+      // Pageleave enables bounce rate + session duration in Web analytics.
+      capture_pageleave: true,
       // Autocapture would emit an event per click/input — the map UI
-      // generates thousands per session. Custom events only.
+      // generates thousands per session and is what spiked our bill. Our
+      // custom funnel events + pageviews cover what we need; keep it OFF.
       autocapture: false,
       disable_session_recording: true,
       capture_dead_clicks: false,
@@ -75,8 +81,8 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     // super-properties (cleared on reload — no cookies/localStorage).
     registerCampaignParams()
 
-    // Top-of-funnel signal: one event per session gives DAU/MAU and a
-    // denominator for buy-conversion, without turning pageviews back on.
+    // Deduped top-of-funnel signal: one event per session (pageviews fire
+    // per navigation) gives a stable DAU/MAU denominator for buy-conversion.
     trackSessionOpen()
   }, [])
 
