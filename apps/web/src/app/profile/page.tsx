@@ -43,7 +43,7 @@ export default function ProfilePage() {
     const me = addrStr.toLowerCase()
     return revealedMaps.filter((m) => rulers[m.id] === me)
   }, [addrStr, revealedMaps, rulers])
-  const { name, setName, color, setColor, saveState, save } = useProfile(addrStr, currentMapId)
+  const { name, setName, color, setColor, saveState, error: saveError, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
   // the user is browsing without a wallet (they just won't have personal
@@ -189,6 +189,7 @@ export default function ProfilePage() {
     saveState === 'saving' ? 'SAVING\u2026' :
     saveState === 'confirming' ? 'CONFIRMING\u2026' :
     saveState === 'saved' ? 'SAVED \u2713' :
+    saveState === 'error' ? 'TRY AGAIN' :
     'SAVE'
 
   return (
@@ -401,6 +402,21 @@ export default function ProfilePage() {
           >
             {saveLabel}
           </button>
+
+          {saveState === 'error' && saveError && (
+            <div
+              style={{
+                fontSize: 7,
+                fontFamily: "'Press Start 2P', monospace",
+                color: 'var(--error)',
+                letterSpacing: 1,
+                marginBottom: 8,
+                paddingLeft: 4,
+              }}
+            >
+              {saveError}
+            </div>
+          )}
 
           {/* Share actions — grouped and secondary to Save (compact icon
               buttons in a row), so they read as "spread the word", not a second
