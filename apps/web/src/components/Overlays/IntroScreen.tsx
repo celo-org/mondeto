@@ -161,26 +161,34 @@ const SLIDES: Slide[] = [
   },
 ]
 
-export default function IntroScreen() {
-  const [visible, setVisible] = useState(false)
+export default function IntroScreen({ inline = false }: { inline?: boolean } = {}) {
+  const [visible, setVisible] = useState(inline)
   const [index, setIndex] = useState(0)
   const touchStartX = useRef<number | null>(null)
 
   useEffect(() => {
-    const seen = sessionStorage.getItem('mondeto-intro-seen')
+    // Inline mode (embedded in the FAQ) always shows and never persists —
+    // it's a replayable showcase, not a one-time gate.
+    if (inline) {
+      setVisible(true)
+      return
+    }
+    const seen = localStorage.getItem('mondeto-intro-seen')
     if (!seen) setVisible(true)
-  }, [])
+  }, [inline])
 
   if (!visible) return null
 
   const dismiss = () => {
-    sessionStorage.setItem('mondeto-intro-seen', '1')
+    localStorage.setItem('mondeto-intro-seen', '1')
     track('intro_completed', { lastSlideIndex: index })
     setVisible(false)
   }
 
   const next = () => {
     if (index < SLIDES.length - 1) setIndex(index + 1)
+    // Inline carousel loops back to the start instead of dismissing.
+    else if (inline) setIndex(0)
     else dismiss()
   }
 
@@ -207,7 +215,7 @@ export default function IntroScreen() {
 
   return (
     <div
-      className="mi-root"
+      className={`mi-root ${inline ? 'mi-inline' : ''}`}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onClick={(e) => {
@@ -221,12 +229,14 @@ export default function IntroScreen() {
     >
       <style>{INTRO_CSS}</style>
 
-      <button
-        className="mi-skip font-display"
-        onClick={(e) => { e.stopPropagation(); dismiss() }}
-      >
-        SKIP
-      </button>
+      {!inline && (
+        <button
+          className="mi-skip font-display"
+          onClick={(e) => { e.stopPropagation(); dismiss() }}
+        >
+          SKIP
+        </button>
+      )}
 
       <div className="mi-track-wrap">
         <div
@@ -258,10 +268,10 @@ export default function IntroScreen() {
       <div className="mi-cta">
         {isLast ? (
           <button
-            onClick={(e) => { e.stopPropagation(); dismiss() }}
+            onClick={(e) => { e.stopPropagation(); inline ? setIndex(0) : dismiss() }}
             className="pixel-btn pixel-btn-filled font-display mi-start"
           >
-            START
+            {inline ? 'REPLAY' : 'START'}
           </button>
         ) : (
           <button
@@ -286,6 +296,17 @@ const INTRO_CSS = `
   overflow: hidden;
   cursor: pointer;
   user-select: none;
+}
+
+/* Inline variant: embedded in the FAQ page as an in-flow carousel rather
+   than a full-screen overlay. Bounded height so it sits in the document. */
+.mi-inline {
+  position: relative; inset: auto; z-index: 0;
+  height: 480px; max-width: 480px;
+  margin: 0 auto 8px;
+  padding: 20px 0 24px;
+  border: 2px solid var(--brand-lime);
+  border-radius: 10px;
 }
 
 .mi-skip {
