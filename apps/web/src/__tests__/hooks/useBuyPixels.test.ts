@@ -4,6 +4,9 @@ import { useBuyPixels } from '@/hooks/useBuyPixels'
 
 vi.mock('wagmi', () => ({
   useAccount: () => ({ chain: { id: 44787 }, address: '0x1234567890123456789012345678901234567890' }),
+  // useBuyPixels switches the wallet to Celo before touching funds (#154);
+  // stub it so the hook mounts in tests.
+  useSwitchChain: () => ({ switchChainAsync: vi.fn() }),
   useWriteContract: () => ({
     writeContractAsync: vi.fn(),
     writeContract: vi.fn(),
