@@ -457,6 +457,13 @@ export default function ProfilePage() {
             >
               HELP &amp; LEGAL
             </div>
+            <Link
+              href="/faq"
+              className="pixel-btn pixel-btn-filled font-display"
+              style={{ fontSize: 9, letterSpacing: 2, padding: '8px 18px', textDecoration: 'none' }}
+            >
+              HOW TO WIN
+            </Link>
             <a
               href={SUPPORT_URL}
               target="_blank"
@@ -478,19 +485,6 @@ export default function ProfilePage() {
                 flexWrap: 'wrap',
               }}
             >
-              <Link
-                href="/faq"
-                style={{
-                  fontSize: 7,
-                  fontFamily: "'Press Start 2P', monospace",
-                  letterSpacing: 2,
-                  color: 'var(--text-muted)',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: 3,
-                }}
-              >
-                help
-              </Link>
               <Link
                 href="/terms"
                 style={{

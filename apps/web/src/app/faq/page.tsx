@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import IntroScreen from '@/components/Overlays/IntroScreen'
 
 export const metadata: Metadata = {
   title: 'FAQ — Mondeto',
@@ -14,7 +15,7 @@ const QA: Array<{ q: string; a: string }> = [
   },
   {
     q: 'How do prices work?',
-    a: 'Each pixel starts at a base price (currently 0.003 USDT). Every time someone buys it, the price doubles. So the more times a pixel changes hands, the more expensive it gets.',
+    a: 'Each pixel has a base price. Every time someone buys it, the price doubles. So the more times a pixel changes hands, the more expensive it gets.',
   },
   {
     q: 'What if a pixel sits unsold?',
@@ -73,7 +74,7 @@ export default function FaqPage() {
           style={{
             fontSize: 16,
             fontFamily: PIXEL_FONT,
-            color: 'var(--text-muted)',
+            color: 'var(--brand-lime)',
             textDecoration: 'none',
             padding: '4px 10px',
             border: '1px solid var(--border)',
@@ -96,6 +97,22 @@ export default function FaqPage() {
       >
         FAQ
       </h1>
+
+      {/* Replayable onboarding carousel — the same walkthrough new players see
+          once, embedded here so "HOW TO WIN" can send them back to it anytime. */}
+      <IntroScreen inline />
+
+      <h2
+        style={{
+          fontSize: 11,
+          fontFamily: PIXEL_FONT,
+          letterSpacing: 2,
+          color: 'var(--text)',
+          margin: '28px 0 16px',
+        }}
+      >
+        READ MORE DETAILS
+      </h2>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {QA.map(({ q, a }, i) => (

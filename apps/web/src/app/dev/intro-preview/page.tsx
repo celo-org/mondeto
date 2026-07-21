@@ -12,12 +12,12 @@ export default function IntroPreviewPage() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    try { sessionStorage.removeItem('mondeto-intro-seen') } catch {}
+    try { localStorage.removeItem('mondeto-intro-seen') } catch {}
     setMounted(true)
   }, [key])
 
   const replay = () => {
-    try { sessionStorage.removeItem('mondeto-intro-seen') } catch {}
+    try { localStorage.removeItem('mondeto-intro-seen') } catch {}
     setMounted(false)
     setKey((k) => k + 1)
   }
