@@ -56,8 +56,10 @@ describe('timeRemainingLabel', () => {
     ).toBe('4H 12M')
   })
 
-  it('formats minutes under an hour, floored at 1M', () => {
-    expect(timeRemainingLabel({ ...base, endsAt: '2026-07-10T12:45:00Z' }, now)).toBe('45M')
-    expect(timeRemainingLabel({ ...base, endsAt: '2026-07-10T12:00:30Z' }, now)).toBe('1M')
+  it('formats minutes under an hour with a 0H prefix, floored at 1M', () => {
+    // The label never collapses to a bare "45M" — it keeps the "0H " prefix so
+    // the countdown always shows two units (see timeRemainingLabel).
+    expect(timeRemainingLabel({ ...base, endsAt: '2026-07-10T12:45:00Z' }, now)).toBe('0H 45M')
+    expect(timeRemainingLabel({ ...base, endsAt: '2026-07-10T12:00:30Z' }, now)).toBe('0H 1M')
   })
 })
