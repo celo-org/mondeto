@@ -56,6 +56,10 @@ export default function ProfilePage() {
   const [rankGapLabel, setRankGapLabel] = useState<string | undefined>(undefined)
   const [spent, setSpent] = useState(0n)
   const [earned, setEarned] = useState(0n)
+  // Whether the P&L fetch has produced a value yet (cache or network). Until it
+  // has, the SPENT/EARNED cards show a placeholder instead of a misleading
+  // "0.00" — the full-history scan behind /api/pnl takes a few seconds cold.
+  const [pnlReady, setPnlReady] = useState(false)
 
   // Fetch owned pixel count from contract
   useEffect(() => {
@@ -138,6 +142,9 @@ export default function ProfilePage() {
           const parsed = JSON.parse(cached) as { spent: string; earned: string }
           setSpent(BigInt(parsed.spent))
           setEarned(BigInt(parsed.earned))
+          // A cached value is enough to drop the placeholder; the fetch below
+          // still revalidates in the background.
+          setPnlReady(true)
         }
       } catch {}
 
@@ -167,9 +174,14 @@ export default function ProfilePage() {
         } catch {}
       } catch (e) {
         console.warn('Failed to fetch P&L:', e)
+      } finally {
+        // Resolve the placeholder either way — a failed fetch falls back to
+        // showing the last-known (or 0.00) rather than spinning forever.
+        setPnlReady(true)
       }
     }
 
+    setPnlReady(false)
     fetchPnL()
   }, [publicClient, addrStr, mondetoAddress, currentMapId, mondetoContract.width, mondetoContract.height])
 
@@ -294,8 +306,8 @@ export default function ProfilePage() {
           balanceSymbol={walletBalance.preferred?.symbol}
           rank={rank}
           rankGapLabel={rankGapLabel}
-          spent={formatUSDT(spent)}
-          earned={formatUSDT(earned)}
+          spent={addrStr && !pnlReady ? '…' : formatUSDT(spent)}
+          earned={addrStr && !pnlReady ? '…' : formatUSDT(earned)}
         />
 
         {/* "FLEX MY EARNINGS" share is intentionally hidden for now. The
