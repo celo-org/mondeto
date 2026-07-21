@@ -16,7 +16,7 @@
     "contracts:deploy:celo": "turbo run deploy:celo --filter=hardhat"
   },
   "devDependencies": {
-    "@types/node": "^20.8.0",
+    "@types/node": "^20.19.43",
     "turbo": "^2",
     "typescript": "^5.2.2"
   },
