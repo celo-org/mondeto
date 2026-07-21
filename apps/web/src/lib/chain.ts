@@ -27,12 +27,26 @@ const fornoRpcUrl = process.env.NEXT_PUBLIC_FORNO_RPC_URL
  * authenticated URL when NEXT_PUBLIC_FORNO_RPC_URL is set), then dRPC
  * and Ankr public endpoints — both respond from regions where Forno's
  * Cloudflare frontend gets throttled.
+ *
+ * Two settings make the failover actually protect throttled-region users
+ * (mainland China, parts of India, some VPN exits) instead of just eventually
+ * recovering:
+ *   - Per-transport `timeout` well under viem's 10s default, so a Forno
+ *     request that hangs behind Cloudflare fails over to dRPC/Ankr in seconds
+ *     rather than stalling every map/profile read for ~10s each.
+ *   - `rank: true` — viem periodically samples each transport's latency and
+ *     reorders them, so a user for whom Forno is slow/blocked is served by the
+ *     fastest reachable endpoint automatically, instead of retrying Forno first
+ *     on every single request.
  */
-export const celoTransport = fallback([
-  http(fornoRpcUrl),
-  http('https://celo.drpc.org'),
-  http('https://rpc.ankr.com/celo'),
-])
+export const celoTransport = fallback(
+  [
+    http(fornoRpcUrl, { timeout: 6_000 }),
+    http('https://celo.drpc.org', { timeout: 10_000 }),
+    http('https://rpc.ankr.com/celo', { timeout: 10_000 }),
+  ],
+  { rank: true, retryCount: 2 },
+)
 
 export const celoSepoliaTransport = http()
 
