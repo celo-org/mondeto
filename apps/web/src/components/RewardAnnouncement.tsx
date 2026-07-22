@@ -34,13 +34,18 @@ function totalEarned(rewards: RewardEntry[]): string {
 /**
  * "You won $X in the campaign" — the witness-announcement half of the
  * share-to-X flywheel. When the connected wallet has campaign winnings (from
- * Edge Config via /api/rewards), this modal invites them to flex the total on
- * X with their referral link baked in, turning a payout into recruitment.
+ * Edge Config via /api/rewards), this modal invites them to flex their newest
+ * payout on X with their referral link baked in, turning a payout into
+ * recruitment.
+ *
+ * The hero figure is the amount that JUST landed (the campaign ids not present
+ * at the last dismissal), so it matches what hit the wallet; the lifetime total
+ * across all campaigns is shown as a labeled secondary line only when it differs.
  *
  * It auto-pops ONCE per distinct set of winnings: dismissal is persisted to
- * localStorage keyed by the reward-set signature, so reopening the app doesn't
- * nag. A brand-new payout (new campaign id) re-arms it. The persistent way to
- * re-share afterwards lives on the profile page.
+ * localStorage keyed by the full reward-set signature, so reopening the app
+ * doesn't nag. A brand-new payout (new campaign id) re-arms it. The persistent
+ * way to re-share afterwards lives on the profile page.
  */
 export default function RewardAnnouncement() {
   const { address } = useAccount()
@@ -51,28 +56,50 @@ export default function RewardAnnouncement() {
 
   const signature = useMemo(() => rewardsSignature(rewards), [rewards])
 
-  // Suppress the auto-pop if this exact reward set was already dismissed.
-  const alreadySeen = useMemo(() => {
-    if (rewards.length === 0) return true
+  // The last-dismissed reward-set signature (sorted, comma-joined campaign ids).
+  // Read once so we can derive both "already seen this exact set" and "which
+  // campaign ids are genuinely new since the last dismissal". Empty when never
+  // dismissed on this device or when localStorage is unavailable.
+  const seenSignature = useMemo(() => {
     try {
-      return localStorage.getItem(SEEN_KEY) === signature
+      return localStorage.getItem(SEEN_KEY) ?? ''
     } catch {
-      return false
+      return ''
     }
-  }, [rewards.length, signature])
+  }, [signature])
 
-  const total = useMemo(() => totalEarned(rewards), [rewards])
-  // When a single payout is on the board we can name its rank/board; a
-  // multi-payout total can't, so it shows the aggregate line instead.
-  const single = rewards.length === 1 ? rewards[0] : null
+  // Suppress the auto-pop if this exact reward set was already dismissed.
+  const alreadySeen = rewards.length === 0 || seenSignature === signature
+
+  // The newest payout(s): campaign ids not present at the last dismissal. On a
+  // fresh device (nothing seen yet) the whole set is treated as new, so the
+  // hero equals the lifetime total and the "across all campaigns" line is hidden.
+  const heroEntries = useMemo(() => {
+    const seenIds = new Set(seenSignature ? seenSignature.split(',') : [])
+    const fresh = rewards.filter((r) => !seenIds.has(r.campaignId))
+    return fresh.length > 0 ? fresh : rewards
+  }, [rewards, seenSignature])
+
+  // Hero = the amount that just landed (matches the wallet). Lifetime = every
+  // payout ever; shown as a labeled secondary line only when it differs.
+  const heroTotal = useMemo(() => totalEarned(heroEntries), [heroEntries])
+  const lifetimeTotal = useMemo(() => totalEarned(rewards), [rewards])
+  const showLifetime = lifetimeTotal !== heroTotal
+  // When the new payout is a single entry we can name its rank/board; a
+  // multi-payout hero can't, so it shows the aggregate line instead.
+  const single = heroEntries.length === 1 ? heroEntries[0] : null
 
   const show = rewards.length > 0 && !alreadySeen && !dismissed && !!address
 
   useEffect(() => {
     if (show) {
-      track('reward_viewed', { count: rewards.length, amountUsd: total })
+      track('reward_viewed', {
+        count: rewards.length,
+        amountUsd: heroTotal,
+        lifetimeUsd: lifetimeTotal,
+      })
     }
-  }, [show, rewards.length, total])
+  }, [show, rewards.length, heroTotal, lifetimeTotal])
 
   if (!show) return null
 
@@ -119,7 +146,7 @@ export default function RewardAnnouncement() {
           CAMPAIGN PAYOUT
         </div>
         <div style={{ fontSize: 32, fontFamily: PIXEL_FONT, letterSpacing: 2, color: BRAND_LIME, lineHeight: 1 }}>
-          ${total}
+          ${heroTotal}
         </div>
         <div
           style={{
@@ -132,10 +159,23 @@ export default function RewardAnnouncement() {
           }}
         >
           {single && single.board && single.rank
-            ? `YOU FINISHED #${single.rank} ON THE ${single.board.toUpperCase()} BOARD AND BANKED $${total}.`
-            : `YOU BANKED $${total} IN THE CAMPAIGN.`}
+            ? `YOU FINISHED #${single.rank} ON THE ${single.board.toUpperCase()} BOARD AND BANKED $${heroTotal}.`
+            : `YOU BANKED $${heroTotal} IN THE LATEST CAMPAIGN.`}
           {' '}FLEX IT AND RECRUIT A RIVAL.
         </div>
+        {showLifetime ? (
+          <div
+            style={{
+              fontSize: 8,
+              fontFamily: PIXEL_FONT,
+              letterSpacing: 1.5,
+              lineHeight: 1.7,
+              color: 'var(--text-muted)',
+            }}
+          >
+            ${lifetimeTotal} BANKED ACROSS ALL CAMPAIGNS.
+          </div>
+        ) : null}
 
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
           <ShareButton
@@ -143,7 +183,7 @@ export default function RewardAnnouncement() {
             filled
             label="FLEX MY WIN"
             params={{
-              amount: total,
+              amount: heroTotal,
               campaignId: single?.campaignId,
               board: single?.board,
               rank: single?.rank,
