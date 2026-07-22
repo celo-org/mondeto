@@ -24,6 +24,20 @@ import { InviteButton } from '@/components/InviteButton'
 import { ShareButton } from '@/components/ShareButton'
 import { track } from '@/lib/analytics'
 
+// Shared "standard" secondary-button style — one source of truth so Support,
+// How-to-win, and the Share/Invite pair all read as the same size. Width matches
+// a single Share/Invite flex child (each = 50% minus half the 8px row gap), and
+// the 11px 8px padding mirrors ShareButton's compact style so heights line up
+// too. Applied on top of the `pixel-btn` class (which is inline-flex).
+const STANDARD_BTN_STYLE: React.CSSProperties = {
+  width: 'calc(50% - 4px)',
+  justifyContent: 'center',
+  fontSize: 9,
+  letterSpacing: 2,
+  padding: '11px 8px',
+  textDecoration: 'none',
+}
+
 export default function ProfilePage() {
   const { address } = useAccount()
   const addrStr = address as string | undefined
@@ -446,7 +460,23 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Support + legal footer — boxed card so it reads as a distinct
+          {/* Support — same standard width as one Share/Invite button, centered
+              below the row. Kept outside the addrStr guard so it stays reachable
+              before connecting a wallet (MiniPay requires Support in-app). */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+            <a
+              href={SUPPORT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('support_form_opened')}
+              className="pixel-btn pixel-btn-filled font-display"
+              style={STANDARD_BTN_STYLE}
+            >
+              SUPPORT
+            </a>
+          </div>
+
+          {/* Legal footer — boxed card so it reads as a distinct
               section. MiniPay requires Support / Terms / Privacy to be
               reachable in-app. Uses a 2px accent border so it pops in dark
               mode where card-bg is nearly identical to the page bg. */}
@@ -476,20 +506,10 @@ export default function ProfilePage() {
             <Link
               href="/faq"
               className="pixel-btn pixel-btn-filled font-display"
-              style={{ fontSize: 9, letterSpacing: 2, padding: '8px 18px', textDecoration: 'none' }}
+              style={STANDARD_BTN_STYLE}
             >
               HOW TO WIN
             </Link>
-            <a
-              href={SUPPORT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track('support_form_opened')}
-              className="pixel-btn pixel-btn-filled font-display"
-              style={{ fontSize: 9, letterSpacing: 2, padding: '8px 18px', textDecoration: 'none' }}
-            >
-              SUPPORT
-            </a>
             <div
               style={{
                 display: 'flex',
