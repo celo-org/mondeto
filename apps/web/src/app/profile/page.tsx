@@ -390,20 +390,6 @@ export default function ProfilePage() {
 
           <ColorPicker color={color} onChange={setColor} />
 
-          {/* How-to-win — the guide CTA, standalone above Save so it reads as a
-              distinct "learn the game" action, not part of the save/share group.
-              Standard secondary width, centered, with breathing room on both
-              sides. Always rendered (reachable before wallet connect). */}
-          <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
-            <Link
-              href="/faq"
-              className="pixel-btn pixel-btn-filled font-display"
-              style={STANDARD_BTN_STYLE}
-            >
-              HOW TO WIN
-            </Link>
-          </div>
-
           {/* Save button */}
           <button
             onClick={() => {
@@ -474,37 +460,35 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Support — standalone below the Share/Invite cluster (mirrors
-              How-to-win above Save), standard secondary width, centered, with
-              breathing room. Always rendered so it stays reachable before wallet
-              connect (MiniPay requires Support reachable in-app). */}
+          {/* How-to-win — the guide CTA, standalone below the Save/Share/Invite
+              cluster and above the Legal-and-Help box. Standard secondary width,
+              centered, with breathing room. Always rendered (reachable before
+              wallet connect). */}
           <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
-            <a
-              href={SUPPORT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track('support_form_opened')}
+            <Link
+              href="/faq"
               className="pixel-btn pixel-btn-filled font-display"
               style={STANDARD_BTN_STYLE}
             >
-              SUPPORT
-            </a>
+              HOW TO WIN
+            </Link>
           </div>
 
-          {/* Legal footer — terms/privacy only (Help/Support actions now live as
-              standalone buttons above). Lightweight boxed footer so legal reads
-              as low-priority chrome, not a prominent action. MiniPay requires
-              Terms / Privacy reachable in-app. */}
+          {/* Legal and Help — boxed section grouping the Support action with the
+              legal links. The card always renders, so Support stays reachable
+              before wallet connect (MiniPay requires Support / Terms / Privacy
+              in-app). 2px accent border pops in dark mode where card-bg ≈ page
+              bg. */}
           <div
             style={{
               marginTop: 32,
               background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
+              border: '2px solid var(--text-muted)',
               borderRadius: 10,
-              padding: '12px',
+              padding: '14px 12px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 10,
+              gap: 12,
               alignItems: 'center',
             }}
           >
@@ -516,12 +500,24 @@ export default function ProfilePage() {
                 letterSpacing: 2,
               }}
             >
-              LEGAL
+              LEGAL AND HELP
             </div>
+            <a
+              href={SUPPORT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('support_form_opened')}
+              className="pixel-btn pixel-btn-filled font-display"
+              style={STANDARD_BTN_STYLE}
+            >
+              SUPPORT
+            </a>
             <div
               style={{
                 display: 'flex',
                 gap: 18,
+                paddingTop: 10,
+                borderTop: '1px solid var(--text-muted)',
                 width: '100%',
                 justifyContent: 'center',
                 flexWrap: 'wrap',
