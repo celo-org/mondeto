@@ -24,6 +24,20 @@ import { InviteButton } from '@/components/InviteButton'
 import { ShareButton } from '@/components/ShareButton'
 import { track } from '@/lib/analytics'
 
+// Shared "standard" secondary-button style — one source of truth so Support,
+// How-to-win, and the Share/Invite pair all read as the same size. Width matches
+// a single Share/Invite flex child (each = 50% minus half the 8px row gap), and
+// the 11px 8px padding mirrors ShareButton's compact style so heights line up
+// too. Applied on top of the `pixel-btn` class (which is inline-flex).
+const STANDARD_BTN_STYLE: React.CSSProperties = {
+  width: 'calc(50% - 4px)',
+  justifyContent: 'center',
+  fontSize: 9,
+  letterSpacing: 2,
+  padding: '11px 8px',
+  textDecoration: 'none',
+}
+
 export default function ProfilePage() {
   const { address } = useAccount()
   const addrStr = address as string | undefined
@@ -446,10 +460,25 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Support + legal footer — boxed card so it reads as a distinct
-              section. MiniPay requires Support / Terms / Privacy to be
-              reachable in-app. Uses a 2px accent border so it pops in dark
-              mode where card-bg is nearly identical to the page bg. */}
+          {/* How-to-win — the guide CTA, standalone below the Save/Share/Invite
+              cluster and above the Legal-and-Help box. Standard secondary width,
+              centered, with breathing room. Always rendered (reachable before
+              wallet connect). */}
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
+            <Link
+              href="/faq"
+              className="pixel-btn pixel-btn-filled font-display"
+              style={STANDARD_BTN_STYLE}
+            >
+              HOW TO WIN
+            </Link>
+          </div>
+
+          {/* Legal and Help — boxed section grouping the Support action with the
+              legal links. The card always renders, so Support stays reachable
+              before wallet connect (MiniPay requires Support / Terms / Privacy
+              in-app). 2px accent border pops in dark mode where card-bg ≈ page
+              bg. */}
           <div
             style={{
               marginTop: 32,
@@ -471,22 +500,15 @@ export default function ProfilePage() {
                 letterSpacing: 2,
               }}
             >
-              HELP &amp; LEGAL
+              LEGAL AND HELP
             </div>
-            <Link
-              href="/faq"
-              className="pixel-btn pixel-btn-filled font-display"
-              style={{ fontSize: 9, letterSpacing: 2, padding: '8px 18px', textDecoration: 'none' }}
-            >
-              HOW TO WIN
-            </Link>
             <a
               href={SUPPORT_URL}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => track('support_form_opened')}
               className="pixel-btn pixel-btn-filled font-display"
-              style={{ fontSize: 9, letterSpacing: 2, padding: '8px 18px', textDecoration: 'none' }}
+              style={STANDARD_BTN_STYLE}
             >
               SUPPORT
             </a>
