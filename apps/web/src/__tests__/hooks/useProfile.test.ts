@@ -10,11 +10,13 @@ const mocks = vi.hoisted(() => ({
   waitForTransactionReceipt: vi.fn(),
   switchChainAsync: vi.fn(),
   chainId: 42220,
+  // Configurable `profiles` read: [color, label, url]. undefined = no data yet.
+  profileData: undefined as unknown,
 }))
 
 vi.mock('wagmi', () => ({
   useWriteContract: () => ({ writeContractAsync: mocks.writeContractAsync }),
-  useReadContract: () => ({ data: undefined }),
+  useReadContract: () => ({ data: mocks.profileData }),
   useAccount: () => ({ chainId: mocks.chainId }),
   usePublicClient: () => ({
     estimateContractGas: mocks.estimateContractGas,
@@ -29,6 +31,7 @@ describe('useProfile', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.chainId = 42220
+    mocks.profileData = undefined
     mocks.estimateContractGas.mockResolvedValue(100_000n)
     mocks.writeContractAsync.mockResolvedValue('0xtxhash')
     mocks.waitForTransactionReceipt.mockResolvedValue({ status: 'success' })
@@ -93,6 +96,24 @@ describe('useProfile', () => {
     expect(result.current.saveState).toBe('saved')
     const call = mocks.writeContractAsync.mock.calls[0][0]
     expect(call.gas).toBeUndefined()
+  })
+
+  it('keeps a name the user typed even when the contract read refetches (MiniPay churn)', () => {
+    // Chain returns an existing on-chain label; the hook seeds it on mount.
+    mocks.profileData = [0, 'oldname', '']
+    const { result, rerender } = renderHook(() => useProfile(ADDR))
+    expect(result.current.name).toBe('oldname')
+
+    // User types a new name but hasn't saved yet.
+    act(() => result.current.setName('lena'))
+    expect(result.current.name).toBe('lena')
+
+    // A background `profiles` refetch resolves again with the still-old
+    // on-chain label (new array reference re-runs the chain-load effect).
+    // The typed name must survive — this is the reported bug.
+    mocks.profileData = [0, 'oldname', '']
+    rerender()
+    expect(result.current.name).toBe('lena')
   })
 
   it('does not write when the name is empty', async () => {
