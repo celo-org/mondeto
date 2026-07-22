@@ -3,7 +3,7 @@
 import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider } from 'posthog-js/react'
 import { useEffect } from 'react'
-import { registerCampaignParams, track } from '@/lib/analytics'
+import { registerCampaignParams, registerPlatform, track } from '@/lib/analytics'
 
 // Fire `app_opened` at most once per browser session (not per route change)
 // so it works as a top-of-funnel denominator without inflating with every
@@ -80,6 +80,11 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     // Attach utm_* from the landing URL to every event as memory-only
     // super-properties (cleared on reload — no cookies/localStorage).
     registerCampaignParams()
+
+    // Attach isMiniPay to every event so the funnel can be segmented
+    // MiniPay vs desktop (the same 104-person top-of-funnel otherwise mixes
+    // both surfaces).
+    registerPlatform()
 
     // Deduped top-of-funnel signal: one event per session (pageviews fire
     // per navigation) gives a stable DAU/MAU denominator for buy-conversion.

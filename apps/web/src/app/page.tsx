@@ -331,11 +331,23 @@ export default function Home() {
   }, [])
 
   const handleDismissOverlay = useCallback(() => {
+    // Backdrop tap on the buy drawer, pre-transaction, is an abandonment —
+    // record it so the checkout_opened → pixel_buy_started drop-off can be
+    // split from the insufficient-funds / cleared cases.
+    if (activeOverlay === 'drawer' && (buy.step === 'idle' || buy.step === 'error')) {
+      track('checkout_dismissed', {
+        reason: 'closed',
+        mapId: currentMapId,
+        pixelCount: selectedIds.size,
+        totalPriceUsd: Number(totalPrice) / 1_000_000,
+        step: buy.step,
+      })
+    }
     setActiveOverlay('none')
     setTappedPixelId(null)
     canvasRef.current?.clearInspectRing()
     buy.reset()
-  }, [buy])
+  }, [buy, activeOverlay, currentMapId, selectedIds, totalPrice])
 
   const handleBuy = useCallback(() => {
     buy.execute([...selectedIds], totalPrice)
@@ -355,9 +367,18 @@ export default function Home() {
   }, [removePixel])
 
   const handleClear = useCallback(() => {
+    // CLEAR wipes the selection and closes the drawer without buying — the
+    // "gave up" flavour of abandonment, distinct from a backdrop close.
+    track('checkout_dismissed', {
+      reason: 'cleared',
+      mapId: currentMapId,
+      pixelCount: selectedIds.size,
+      totalPriceUsd: Number(totalPrice) / 1_000_000,
+      step: buy.step,
+    })
     clearSelection()
     setActiveOverlay('none')
-  }, [clearSelection])
+  }, [clearSelection, currentMapId, selectedIds, totalPrice, buy.step])
 
   const handleBuyThisPixel = useCallback((id: number) => {
     clearSelection()

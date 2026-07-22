@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect, useRef } from 'react'
 import type { PixelView } from '@/lib/mock'
 import type { TxStep } from '@/hooks/useBuyPixels'
 import { ZERO_ADDRESS } from '@/constants/map'
@@ -69,7 +69,7 @@ export default function SelectionDrawer({
   // Each buy is settled in a single stablecoin — the user's highest-balance
   // one. We surface that symbol in copy so the rule reads as obvious instead
   // of needing explanation.
-  const { preferred } = useStablecoinBalance()
+  const { preferred, totalAmount, isLoading: balancesLoading } = useStablecoinBalance()
   const payToken = preferred?.symbol ?? 'USDC'
   const { currentMapId } = useMaps()
 
@@ -78,6 +78,58 @@ export default function SelectionDrawer({
   // sets state in an effect and can lag the first render of the drawer —
   // computing here keeps the CTA state in sync with the numbers on screen.
   const insufficient = totalPrice > 0n && userBalance < totalPrice || insufficientBalance
+
+  // A "split currency" block is a distinct, fixable cause: the user holds
+  // enough across all their stablecoins combined, but each buy settles in a
+  // single coin (their highest-balance one), so the preferred balance alone
+  // falls short. Worth separating from being genuinely broke.
+  const totalPriceUsd = Number(totalPrice) / 1_000_000
+  const splitCurrencyBlocked = insufficient && totalPriceUsd > 0 && totalAmount >= totalPriceUsd
+
+  // Fire a single funnel impression per drawer-open once prices AND balances
+  // have settled, so the pre-buy drop-off (checkout_opened → pixel_buy_started)
+  // can be split into named causes instead of one opaque "62% left". The ref
+  // resets when the drawer closes so a later re-open counts again.
+  const insufficientFiredRef = useRef(false)
+  useEffect(() => {
+    if (!visible) {
+      insufficientFiredRef.current = false
+      return
+    }
+    if (insufficientFiredRef.current) return
+    // Wait for a settled idle state — during tx or while data loads the
+    // numbers can flip and would misclassify the cause.
+    if (txStep !== 'idle') return
+    if (priceLoading || balancesLoading) return
+    if (totalPrice <= 0n || !insufficient) return
+
+    insufficientFiredRef.current = true
+    const base = {
+      mapId: currentMapId,
+      needUsd: Number(totalPrice - userBalance) / 1_000_000,
+      balanceUsd: Number(userBalance) / 1_000_000,
+      token: payToken,
+      pixelCount,
+    }
+    if (splitCurrencyBlocked) {
+      track('checkout_split_currency_blocked', { ...base, totalUsd: totalAmount })
+    } else {
+      track('checkout_insufficient_funds', base)
+    }
+  }, [
+    visible,
+    txStep,
+    priceLoading,
+    balancesLoading,
+    totalPrice,
+    userBalance,
+    insufficient,
+    splitCurrencyBlocked,
+    totalAmount,
+    currentMapId,
+    payToken,
+    pixelCount,
+  ])
 
   // Group selected pixels by owner
   const groups = useMemo(() => {
