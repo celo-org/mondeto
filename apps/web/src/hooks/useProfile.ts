@@ -63,7 +63,7 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
   const { chainId } = useAccount()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient()
-  const [name, setName] = useState('')
+  const [name, setNameState] = useState('')
   const [url, setUrl] = useState('')
   const [color, setColorState] = useState<string>(
     () => readPickedColor(address) ?? defaultColorFor(address),
@@ -77,6 +77,19 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
   // `profile_saved` event fires exactly once when the receipt confirms —
   // reading state in the receipt effect avoids re-firing as fields change.
   const pendingSaveRef = useRef<{ hasUrl: boolean } | null>(null)
+  // Tracks whether the user has started editing the name. The chain-load
+  // effect churns in the MiniPay webview (profileData refetches on focus /
+  // reconnect); without this guard it would re-seed `name` from chain and
+  // silently clobber a value the user just typed but hasn't saved yet.
+  // Mirrors how `color` is protected via its persisted pick.
+  const nameTouchedRef = useRef(false)
+
+  // Public name setter (what the profile input calls): mark the field as
+  // edited so the chain-load effect stops overwriting it.
+  const setName = useCallback((v: string) => {
+    nameTouchedRef.current = true
+    setNameState(v)
+  }, [])
 
   // UI color setter: persist the pick so the map (own pixels) and other
   // screens reflect it immediately, even before the on-chain save.
@@ -92,6 +105,9 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
   // one, else the deterministic default. The contract-data effect below
   // still overrides this when an on-chain color is set.
   useEffect(() => {
+    // A genuine account switch (address string changes by value) should
+    // re-seed the name from the new wallet's chain data, so clear the flag.
+    nameTouchedRef.current = false
     if (address) setColorState(readPickedColor(address) ?? defaultColorFor(address))
   }, [address])
 
@@ -115,8 +131,12 @@ export function useProfile(address: string | undefined, mapId?: MapId) {
     if (contractColor) setColorState(uint24ToHex(contractColor))
     const label = decodeBytes(labelBytes)
     const url = decodeBytes(urlBytes)
-    if (label) setName(label)
-    else if (address) setName(generateUsername(address))
+    // Don't overwrite a name the user is actively editing. Use the raw state
+    // setter so seeding from chain doesn't count as a user edit.
+    if (!nameTouchedRef.current) {
+      if (label) setNameState(label)
+      else if (address) setNameState(generateUsername(address))
+    }
     if (url) setUrl(url)
   }, [profileData, address])
 
