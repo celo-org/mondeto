@@ -32,6 +32,7 @@ import { uint24ToHex } from '@/lib/colorUtils'
 import { PAINT_SCALE } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { geoToPixel, pixelId as pixelIdFn } from '@/lib/pixelMath'
+import { isLand } from '@/lib/landMask'
 import { storeReferrer, track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
@@ -386,12 +387,16 @@ export default function Home() {
   }, [clearSelection, currentMapId, selectedIds, totalPrice, buy.step])
 
   const handleBuyThisPixel = useCallback((id: number) => {
+    // Defense in depth: never route a water pixel into checkout — buyPixels
+    // reverts NotLand on-chain. The inspect gate in SelectionLayer already
+    // stops the panel opening for ocean; this guards any other caller.
+    if (!isLand(id, mapMeta.mask)) return
     clearSelection()
     addPixel(id)
     setActiveOverlay('drawer')
     canvasRef.current?.clearInspectRing()
     setTappedPixelId(null)
-  }, [clearSelection, addPixel])
+  }, [clearSelection, addPixel, mapMeta.mask])
 
   // Open drawer only when user taps the review pill
   const handleOpenDrawer = useCallback(async () => {
