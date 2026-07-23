@@ -11,8 +11,9 @@ import {
   composeShareMessage,
   composeXText,
   composeTelegramText,
+  formatMapName,
   originBase,
-  MINIPAY_BROWSE_URL,
+  SHARE_LINK,
   type ShareParams,
 } from '@/lib/share'
 
@@ -113,13 +114,28 @@ describe('URL builders', () => {
   })
 })
 
+describe('formatMapName', () => {
+  it('title-cases an all-caps map name', () => {
+    expect(formatMapName('WORLD')).toBe('World')
+    expect(formatMapName('NORTH AMERICA')).toBe('North America')
+  })
+})
+
 describe('composeShareText', () => {
-  it('reward: names the banked amount', () => {
-    expect(composeShareText('reward', { amount: '1.50', mapName: 'WORLD' })).toContain('$1.50')
+  it('reward: names the banked amount and reads "on the world map"', () => {
+    const t = composeShareText('reward', { amount: '1.50', mapName: 'WORLD' })
+    expect(t).toContain('$1.50')
+    expect(t).toContain('on the world map')
+    expect(t).toContain('@mondeto on @minipay')
+  })
+
+  it('reward: a continent map keeps proper-noun casing ("on the Europe map")', () => {
+    const t = composeShareText('reward', { amount: '1', mapName: 'NORTH AMERICA' })
+    expect(t).toContain('on the North America map')
   })
 
   it('reward: falls back to a generic prize line without an amount', () => {
-    expect(composeShareText('reward', {})).toContain('Mondeto prize')
+    expect(composeShareText('reward', {})).toContain('cashed out a prize')
   })
 
   it('rank: names the rank, board and value', () => {
@@ -127,11 +143,12 @@ describe('composeShareText', () => {
     expect(t).toContain('#3')
     expect(t).toContain('EMPIRE')
     expect(t).toContain('(42 px)')
+    expect(t).toContain('@mondeto on @minipay')
   })
 
   it('positions: ruler copy takes over when ruler + mapName are set', () => {
     expect(composeShareText('positions', { ruler: true, mapName: 'WORLD' })).toContain(
-      'ruler of WORLD',
+      'ruler of World',
     )
   })
 
@@ -147,22 +164,21 @@ describe('composeShareText', () => {
 describe('channel composers', () => {
   const params: ShareParams = { rank: 1, board: 'LAND', mapName: 'WORLD' }
 
-  it('composeShareMessage folds in the brag, the /s link and the MiniPay open-line', () => {
+  it('composeShareMessage folds in the brag and the single share link', () => {
     const msg = composeShareMessage('rank', params)
     expect(msg).toContain(composeShareText('rank', params))
-    expect(msg).toContain(buildShareUrl('rank', params))
-    expect(msg).toContain(MINIPAY_BROWSE_URL)
+    expect(msg).toContain(SHARE_LINK)
   })
 
-  it('composeXText tags the handles and appends the open-line', () => {
+  it('composeXText carries the brag with the handles woven in', () => {
     const t = composeXText('rank', params)
-    expect(t).toContain('via @mondeto on @minipay')
-    expect(t).toContain(MINIPAY_BROWSE_URL)
+    expect(t).toBe(composeShareText('rank', params))
+    expect(t).toContain('@mondeto on @minipay')
   })
 
-  it('composeTelegramText appends the open-line without handles', () => {
+  it('composeTelegramText carries the brag with the handles woven in', () => {
     const t = composeTelegramText('rank', params)
-    expect(t).toContain(MINIPAY_BROWSE_URL)
-    expect(t).not.toContain('@minipay')
+    expect(t).toBe(composeShareText('rank', params))
+    expect(t).toContain('@minipay')
   })
 })
