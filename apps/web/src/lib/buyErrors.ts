@@ -46,6 +46,6 @@ export function classifyBuyError(hay: string, symbol: string): string {
     return 'Price moved above your limit — please review and try again'
   if (hay.includes('DeadlineExpired')) return 'Transaction expired — please try again'
   if (hay.includes('insufficient') || hay.includes('ERC20'))
-    return `Insufficient ${symbol} balance or allowance`
+    return `Not enough ${symbol} — top up or pick fewer pixels`
   return GENERIC_RETRY_MESSAGE
 }

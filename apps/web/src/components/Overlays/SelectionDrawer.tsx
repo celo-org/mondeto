@@ -33,9 +33,9 @@ interface SelectionDrawerProps {
   userBalance: bigint
   txStep: TxStep
   txHash: string | null
-  /** Last error from the buy flow, if any. Surfaced verbatim under the
-   *  pixel list so the user (and we) can see what actually failed instead
-   *  of a generic "try again" string. */
+  /** Last error from the buy flow, if any — already mapped to a short,
+   *  human-readable line (see lib/buyErrors). Shown under the pixel list;
+   *  raw viem/wallet dumps are kept to the console, never rendered here. */
   txError: string | null
   userAddress?: string
   profilesMap?: Map<string, { label: string; url: string }>
@@ -283,9 +283,8 @@ export default function SelectionDrawer({
             })}
           </div>
 
-          {/* Error — show the real reason from the buy flow verbatim so
-              the user (and we) can see what actually failed. Fall back to
-              a generic line only when the error string is empty. */}
+          {/* Error — the short, human-readable reason from the buy flow.
+              Fall back to a generic line only when the error string is empty. */}
           {txStep === 'error' && (
             <div style={{ fontSize: 7, color: 'var(--error)', marginBottom: 4, flexShrink: 0, lineHeight: 1.5, wordBreak: 'break-word' }}>
               {txError && txError.trim().length > 0 ? txError : "That didn't work. Try again?"}
