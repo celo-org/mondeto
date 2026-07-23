@@ -42,8 +42,8 @@ describe('classifyBuyError', () => {
     expect(classifyBuyError('NotLand', 'USDT')).toMatch(/not land/)
     expect(classifyBuyError('DeadlineExpired', 'USDT')).toMatch(/expired/)
     expect(classifyBuyError('TokenNotAccepted', 'USDC')).toContain('USDC')
-    expect(classifyBuyError('ERC20: transfer amount exceeds balance', 'USDT')).toContain(
-      'Insufficient USDT',
+    expect(classifyBuyError('ERC20: transfer amount exceeds balance', 'USDT')).toMatch(
+      /Not enough USDT/,
     )
   })
 

@@ -21,6 +21,7 @@ import { usePixelMap } from '@/hooks/usePixelMap'
 import { useSelection } from '@/hooks/useSelection'
 import { usePixelPrice } from '@/hooks/usePixelPrice'
 import { useBuyPixels } from '@/hooks/useBuyPixels'
+import { useClearStaleBuyError } from '@/hooks/useClearStaleBuyError'
 import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
@@ -282,6 +283,10 @@ export default function Home() {
       buy.checkBalance(totalPrice, userBalance)
     }
   }, [totalPrice, userBalance, buy.checkBalance])
+
+  // Clear a stale buy error the moment the selection changes, so pruning an
+  // unaffordable selection down doesn't leave the old failure on the drawer.
+  useClearStaleBuyError(selectedIds, buy.step, buy.reset)
 
   // Fire once when a disconnected user has pixels selected but no wallet to
   // buy with — the "connect your wallet to buy" hint. Resets when they
