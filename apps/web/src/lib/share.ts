@@ -160,69 +160,72 @@ export function buildWhatsAppUrl(message: string): string {
 }
 
 /**
- * MiniPay "open in app" Browse deeplink (campaign-tagged) — appended to EVERY
- * share so any recipient can jump straight into the wallet. It's a FIXED
- * campaign link: MiniPay doesn't do referrals/dynamic links, so the per-player
- * `?ref=` rides the `/s` share URL, not this one.
+ * The single link every share carries — a static campaign short-link. It's the
+ * ONE URL in every message across every channel (no second MiniPay link, no
+ * per-player `/s` referral link). Whatever preview a recipient sees comes from
+ * wherever this short-link resolves, configured outside the app.
  */
-export const MINIPAY_BROWSE_URL =
-  'https://link.minipay.xyz/browse?url=https%3A%2F%2Fopr.as%2Fw752&campaign=mondeto&source=external&medium=social'
-const MINIPAY_OPEN_LINE = `\n\nOpen in MiniPay: ${MINIPAY_BROWSE_URL}`
+export const SHARE_LINK = 'https://qrco.de/bgvujx'
 
 /**
  * Message body for the native share sheet / WhatsApp / Copy. Some targets
  * (Telegram, notably) keep ONLY the `url` when a Web Share payload carries both
  * `text` and `url`, so the brag copy vanishes — we fold the link into the text
- * and share one string. The MiniPay open-line is appended too.
+ * and share one string.
  */
 export function composeShareMessage(kind: ShareKind, params: ShareParams): string {
-  return `${composeShareText(kind, params)}\n\n${buildShareUrl(kind, params)}${MINIPAY_OPEN_LINE}`
+  return `${composeShareText(kind, params)}\n\n${SHARE_LINK}`
 }
 
 /**
- * X/Twitter copy — tags @mondeto + @minipay (only X resolves the handles) and
- * appends the MiniPay open-line. The `/s` link is the intent's separate `url`
- * (the tweet's card).
+ * X/Twitter copy — the @mondeto + @minipay handles are already woven into the
+ * brag text (only X resolves them), and the link rides X's separate `url` param.
  */
 export function composeXText(kind: ShareKind, params: ShareParams): string {
-  return `${composeShareText(kind, params)} via @mondeto on @minipay${MINIPAY_OPEN_LINE}`
+  return composeShareText(kind, params)
 }
 
 /**
- * Telegram copy — the `/s` link is the intent's separate `url`, so this is the
- * brag text + the MiniPay open-line.
+ * Telegram copy — the link rides Telegram's separate `url` param, so this is
+ * just the brag text.
  */
 export function composeTelegramText(kind: ShareKind, params: ShareParams): string {
-  return `${composeShareText(kind, params)}${MINIPAY_OPEN_LINE}`
+  return composeShareText(kind, params)
+}
+
+/** 'WORLD' -> 'World', 'NORTH AMERICA' -> 'North America' (share-copy display). */
+export function formatMapName(name: string): string {
+  return name.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase())
 }
 
 /**
  * Arcade-tone share copy — competitive, no emoji, no real-world-colonial
- * framing (per brand voice). The link is appended by the share sheet / intent,
- * so these strings never include the URL themselves.
+ * framing (per brand voice). The @mondeto + @minipay handles are woven in (X
+ * resolves them; elsewhere they read as plain text). The link is appended by
+ * the share sheet / intent, so these strings never include the URL themselves.
  */
 export function composeShareText(kind: ShareKind, params: ShareParams): string {
-  const where = params.mapName ? ` on ${params.mapName}` : ''
+  const where = params.mapName ? ` on ${formatMapName(params.mapName)}` : ''
   switch (kind) {
     case 'reward':
       return params.amount
-        ? `Just banked $${params.amount} playing Mondeto${where}. Every pixel is up for grabs — come take a shot.`
-        : `Just cashed out a Mondeto prize${where}. Every pixel is up for grabs — come take a shot.`
+        ? `Just banked $${params.amount}${where} playing @mondeto on @minipay. Every pixel is up for grabs — come take a shot.`
+        : `Just cashed out a prize${where} playing @mondeto on @minipay. Every pixel is up for grabs — come take a shot.`
     case 'rank': {
       const board = params.board ?? 'LAND'
       const at = params.rank ? `#${params.rank}` : 'the board'
       const val = params.value ? ` (${params.value}${params.unit ? ' ' + params.unit : ''})` : ''
-      return `I'm ${at} on Mondeto's ${board} board${where}${val}. Think you can knock me off? Claim your pixels.`
+      return `I'm ${at} on the ${board} board${where}${val} playing @mondeto on @minipay. Think you can knock me off? Claim your pixels.`
     }
     case 'positions': {
       if (params.ruler && params.mapName) {
-        return `I'm the ruler of ${params.mapName} on Mondeto. Come take it from me — every pixel is up for grabs.`
+        return `I'm the ruler of ${formatMapName(params.mapName)} playing @mondeto on @minipay. Come take it from me — every pixel is up for grabs.`
       }
       const px = params.value ? `${params.value} pixels` : 'my turf'
-      return `I hold ${px}${where} on Mondeto. Paint the map before someone paints over you.`
+      return `I hold ${px}${where} playing @mondeto on @minipay. Paint the map before someone paints over you.`
     }
     case 'invite':
     default:
-      return `Claim your spot on my Mondeto map before someone else does. Every pixel is up for grabs.`
+      return `Claim your spot before someone else does — come play @mondeto on @minipay. Every pixel is up for grabs.`
   }
 }

@@ -5,7 +5,7 @@ import { track } from '@/lib/analytics'
 import {
   type ShareKind,
   type ShareParams,
-  buildShareUrl,
+  SHARE_LINK,
   buildXIntentUrl,
   buildTelegramUrl,
   buildWhatsAppUrl,
@@ -59,7 +59,7 @@ export function ShareButton({
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
-  const url = buildShareUrl(kind, params)
+  const url = SHARE_LINK
   const telegramText = composeTelegramText(kind, params)
   const message = composeShareMessage(kind, params)
 
