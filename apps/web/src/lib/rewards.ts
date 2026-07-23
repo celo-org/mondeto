@@ -27,6 +27,10 @@ export interface RewardEntry {
   board?: string
   /** Optional final rank on that board. */
   rank?: number
+  /** When the payout settled, ISO-8601 UTC. Optional — older entries (written
+   *  before the admin repo stamped it) omit it, in which case recency falls
+   *  back to array order. Written by the admin repo alongside the payout. */
+  paidAt?: string
 }
 
 function coerceEntry(value: unknown): RewardEntry | null {
@@ -44,7 +48,43 @@ function coerceEntry(value: unknown): RewardEntry | null {
   if (typeof v.rank === 'number' && Number.isInteger(v.rank) && v.rank > 0) {
     entry.rank = v.rank
   }
+  if (typeof v.paidAt === 'string' && v.paidAt !== '') entry.paidAt = v.paidAt
   return entry
+}
+
+/**
+ * The single most recent payout from a wallet's reward list — what the
+ * announcement headlines (never a sum of several wins).
+ *
+ * Recency prefers the explicit `paidAt` timestamp (ISO-8601) in descending
+ * order; an entry that carries a parseable timestamp always beats one that
+ * doesn't. When neither entry is timestamped (or two share the same instant),
+ * we fall back to array order and treat the later index as newer — the admin
+ * repo appends new campaigns last, so the last element is the newest win.
+ *
+ * Returns null for an empty list.
+ */
+export function latestReward(rewards: RewardEntry[]): RewardEntry | null {
+  if (rewards.length === 0) return null
+  let best = rewards[0]
+  let bestIdx = 0
+  for (let i = 1; i < rewards.length; i++) {
+    const r = rewards[i]
+    const rt = Date.parse(r.paidAt ?? '')
+    const bt = Date.parse(best.paidAt ?? '')
+    const rHas = Number.isFinite(rt)
+    const bHas = Number.isFinite(bt)
+    let newer: boolean
+    if (rHas && bHas) newer = rt > bt
+    else if (rHas) newer = true
+    else if (bHas) newer = false
+    else newer = i > bestIdx // neither timestamped → later index wins
+    if (newer) {
+      best = r
+      bestIdx = i
+    }
+  }
+  return best
 }
 
 function coerceRewards(value: unknown, address: string): RewardEntry[] {

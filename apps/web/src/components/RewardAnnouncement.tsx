@@ -7,7 +7,7 @@ import { useMaps } from '@/hooks/useMaps'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import { track } from '@/lib/analytics'
 import { ShareButton } from '@/components/ShareButton'
-import type { RewardEntry } from '@/lib/rewards'
+import { latestReward, type RewardEntry } from '@/lib/rewards'
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
 const BRAND_LIME = '#A7FF05'
@@ -24,13 +24,6 @@ function rewardsSignature(rewards: RewardEntry[]): string {
     .join(',')
 }
 
-/** Sum of all reward payouts, formatted like the source strings: a whole
- *  number stays whole ("17"), anything with cents shows two places. */
-function totalEarned(rewards: RewardEntry[]): string {
-  const sum = rewards.reduce((acc, r) => acc + (Number(r.amountUsd) || 0), 0)
-  return Number.isInteger(sum) ? String(sum) : sum.toFixed(2)
-}
-
 /**
  * "You won $X in the campaign" — the witness-announcement half of the
  * share-to-X flywheel. When the connected wallet has campaign winnings (from
@@ -38,9 +31,8 @@ function totalEarned(rewards: RewardEntry[]): string {
  * payout on X with their referral link baked in, turning a payout into
  * recruitment.
  *
- * The hero figure is the amount that JUST landed (the campaign ids not present
- * at the last dismissal), so it matches what hit the wallet; the lifetime total
- * across all campaigns is shown as a labeled secondary line only when it differs.
+ * The hero figure is a SINGLE win — the most recent payout (`latestReward`),
+ * never a sum across campaigns — so it matches exactly what hit the wallet.
  *
  * It auto-pops ONCE per distinct set of winnings: dismissal is persisted to
  * localStorage keyed by the full reward-set signature, so reopening the app
@@ -71,23 +63,11 @@ export default function RewardAnnouncement() {
   // Suppress the auto-pop if this exact reward set was already dismissed.
   const alreadySeen = rewards.length === 0 || seenSignature === signature
 
-  // The newest payout(s): campaign ids not present at the last dismissal. On a
-  // fresh device (nothing seen yet) the whole set is treated as new, so the
-  // hero equals the lifetime total and the "across all campaigns" line is hidden.
-  const heroEntries = useMemo(() => {
-    const seenIds = new Set(seenSignature ? seenSignature.split(',') : [])
-    const fresh = rewards.filter((r) => !seenIds.has(r.campaignId))
-    return fresh.length > 0 ? fresh : rewards
-  }, [rewards, seenSignature])
-
-  // Hero = the amount that just landed (matches the wallet). Lifetime = every
-  // payout ever; shown as a labeled secondary line only when it differs.
-  const heroTotal = useMemo(() => totalEarned(heroEntries), [heroEntries])
-  const lifetimeTotal = useMemo(() => totalEarned(rewards), [rewards])
-  const showLifetime = lifetimeTotal !== heroTotal
-  // When the new payout is a single entry we can name its rank/board; a
-  // multi-payout hero can't, so it shows the aggregate line instead.
-  const single = heroEntries.length === 1 ? heroEntries[0] : null
+  // Hero = the single most recent win, never a sum. `latestReward` picks the
+  // newest payout by its `paidAt` timestamp, falling back to array order (the
+  // admin repo appends new campaigns last) when a payout predates the stamp.
+  const heroEntry = useMemo(() => latestReward(rewards), [rewards])
+  const heroAmount = heroEntry?.amountUsd ?? '0'
 
   const show = rewards.length > 0 && !alreadySeen && !dismissed && !!address
 
@@ -95,11 +75,10 @@ export default function RewardAnnouncement() {
     if (show) {
       track('reward_viewed', {
         count: rewards.length,
-        amountUsd: heroTotal,
-        lifetimeUsd: lifetimeTotal,
+        amountUsd: heroAmount,
       })
     }
-  }, [show, rewards.length, heroTotal, lifetimeTotal])
+  }, [show, rewards.length, heroAmount])
 
   if (!show) return null
 
@@ -146,7 +125,7 @@ export default function RewardAnnouncement() {
           CAMPAIGN PAYOUT
         </div>
         <div style={{ fontSize: 32, fontFamily: PIXEL_FONT, letterSpacing: 2, color: BRAND_LIME, lineHeight: 1 }}>
-          ${heroTotal}
+          ${heroAmount}
         </div>
         <div
           style={{
@@ -158,24 +137,11 @@ export default function RewardAnnouncement() {
             maxWidth: 320,
           }}
         >
-          {single && single.board && single.rank
-            ? `YOU FINISHED #${single.rank} ON THE ${single.board.toUpperCase()} BOARD AND BANKED $${heroTotal}.`
-            : `YOU BANKED $${heroTotal} IN THE LATEST CAMPAIGN.`}
+          {heroEntry && heroEntry.board && heroEntry.rank
+            ? `YOU FINISHED #${heroEntry.rank} ON THE ${heroEntry.board.toUpperCase()} BOARD AND BANKED $${heroAmount}.`
+            : `YOU BANKED $${heroAmount} IN THE LATEST CAMPAIGN.`}
           {' '}FLEX IT AND RECRUIT A RIVAL.
         </div>
-        {showLifetime ? (
-          <div
-            style={{
-              fontSize: 8,
-              fontFamily: PIXEL_FONT,
-              letterSpacing: 1.5,
-              lineHeight: 1.7,
-              color: 'var(--text-muted)',
-            }}
-          >
-            ${lifetimeTotal} BANKED ACROSS ALL CAMPAIGNS.
-          </div>
-        ) : null}
 
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
           <ShareButton
@@ -183,10 +149,10 @@ export default function RewardAnnouncement() {
             filled
             label="FLEX MY WIN"
             params={{
-              amount: heroTotal,
-              campaignId: single?.campaignId,
-              board: single?.board,
-              rank: single?.rank,
+              amount: heroAmount,
+              campaignId: heroEntry?.campaignId,
+              board: heroEntry?.board,
+              rank: heroEntry?.rank,
               mapId: currentMapId,
               mapName: mapMeta.displayName,
               ref: address.toLowerCase(),
