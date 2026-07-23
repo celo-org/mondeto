@@ -122,11 +122,16 @@ describe('formatMapName', () => {
 })
 
 describe('composeShareText', () => {
-  it('reward: names the banked amount and title-cases the map', () => {
+  it('reward: names the banked amount and reads "on the world map"', () => {
     const t = composeShareText('reward', { amount: '1.50', mapName: 'WORLD' })
     expect(t).toContain('$1.50')
-    expect(t).toContain('on World')
+    expect(t).toContain('on the world map')
     expect(t).toContain('@mondeto on @minipay')
+  })
+
+  it('reward: a continent map keeps proper-noun casing ("on the Europe map")', () => {
+    const t = composeShareText('reward', { amount: '1', mapName: 'NORTH AMERICA' })
+    expect(t).toContain('on the North America map')
   })
 
   it('reward: falls back to a generic prize line without an amount', () => {

@@ -199,13 +199,24 @@ export function formatMapName(name: string): string {
 }
 
 /**
+ * The " on <map>" clause for share copy. WORLD reads as the common-noun
+ * "the world map"; the continent maps keep their proper-noun casing —
+ * "the Europe map", "the North America map".
+ */
+export function whereClause(mapName: string | undefined): string {
+  if (!mapName) return ''
+  if (mapName.toUpperCase() === 'WORLD') return ' on the world map'
+  return ` on the ${formatMapName(mapName)} map`
+}
+
+/**
  * Arcade-tone share copy — competitive, no emoji, no real-world-colonial
  * framing (per brand voice). The @mondeto + @minipay handles are woven in (X
  * resolves them; elsewhere they read as plain text). The link is appended by
  * the share sheet / intent, so these strings never include the URL themselves.
  */
 export function composeShareText(kind: ShareKind, params: ShareParams): string {
-  const where = params.mapName ? ` on ${formatMapName(params.mapName)}` : ''
+  const where = whereClause(params.mapName)
   switch (kind) {
     case 'reward':
       return params.amount
