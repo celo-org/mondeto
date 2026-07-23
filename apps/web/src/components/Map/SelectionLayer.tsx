@@ -104,14 +104,17 @@ export default function SelectionLayer({
       if (!pixel) return
 
       longPressTimerRef.current = setTimeout(() => {
-        if (!movedRef.current && onInspectPixel) {
+        // Only land is inspectable/buyable. Ocean has no on-chain record and
+        // buying it reverts NotLand, so a long-press on water is a no-op —
+        // same as a tap on water (see handlePointerUp's isLandXY gate).
+        if (!movedRef.current && onInspectPixel && isLandXY(pixel.x, pixel.y, WIDTH, mask)) {
           longPressFiredRef.current = true
           const pid = pixelId(pixel.x, pixel.y, WIDTH)
           onInspectPixel(pid)
         }
       }, 500)
     },
-    [isPaintMode, scale, onInspectPixel],
+    [isPaintMode, scale, onInspectPixel, mask, WIDTH],
   )
 
   const handlePointerMove = useCallback(
