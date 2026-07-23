@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dailyFallPct, dealDepth, halvingPeriodDays } from '@/lib/decay'
+import { dailyFallPct, dealDepth, dealTierRamps, DEAL_MIN_LIME, halvingPeriodDays } from '@/lib/decay'
 
 const DAY = 86_400
 
@@ -97,5 +97,74 @@ describe('dealDepth', () => {
   it('guards negative inputs', () => {
     expect(dealDepth(-1n, INITIAL)).toBe(0)
     expect(dealDepth(50_000n, -1n)).toBe(0)
+  })
+})
+
+describe('dealTierRamps', () => {
+  const P = (cents: number) => BigInt(cents) * 10_000n // ¢ → 6-decimal micro-USDT
+
+  it('anchors the deepest deal to the LOWEST live price, brightest lime', () => {
+    // Cheapest land is 8¢ → 8¢ is the deal, at full brightness.
+    const ramps = dealTierRamps([P(8), P(16), P(32), P(8)])
+    expect(ramps.get(P(8))).toBeCloseTo(1, 10)
+  })
+
+  it('works when everything is bought and bid up above entry price', () => {
+    // No pixel below the 10¢ entry — cheapest available is 20¢, still a deal.
+    const ramps = dealTierRamps([P(20), P(40), P(80)])
+    expect(ramps.get(P(20))).toBeCloseTo(1, 10)
+  })
+
+  it('makes several stages, cheapest brightest → last stage at the floor', () => {
+    const ramps = dealTierRamps([P(8), P(16), P(32), P(64)], 4)
+    expect(ramps.get(P(8))).toBeCloseTo(1, 10)
+    expect(ramps.get(P(64))).toBeCloseTo(DEAL_MIN_LIME, 10)
+    // Monotonic: cheaper is always brighter.
+    expect(ramps.get(P(8))!).toBeGreaterThan(ramps.get(P(16))!)
+    expect(ramps.get(P(16))!).toBeGreaterThan(ramps.get(P(32))!)
+    expect(ramps.get(P(32))!).toBeGreaterThan(ramps.get(P(64))!)
+  })
+
+  it('only lights the cheapest N tiers; pricier land is not a deal', () => {
+    const ramps = dealTierRamps([P(8), P(16), P(32), P(64), P(128)], 3)
+    expect(ramps.has(P(8))).toBe(true)
+    expect(ramps.has(P(16))).toBe(true)
+    expect(ramps.has(P(32))).toBe(true)
+    expect(ramps.has(P(64))).toBe(false) // beyond the 3 stages → greys out
+    expect(ramps.has(P(128))).toBe(false)
+  })
+
+  it('lights the whole map at full brightness when only one price exists', () => {
+    // Early game: every pixel is one price → all the deepest deal.
+    const ramps = dealTierRamps([P(10), P(10), P(10)])
+    expect(ramps.size).toBe(1)
+    expect(ramps.get(P(10))).toBeCloseTo(1, 10)
+  })
+
+  it('dedupes identical prices so one tier is not spent on repeats', () => {
+    // 8¢ (×3) and 16¢ (×2) are two tiers, not five.
+    const ramps = dealTierRamps([P(8), P(8), P(8), P(16), P(16)], 4)
+    expect(ramps.size).toBe(2)
+    expect(ramps.get(P(8))).toBeCloseTo(1, 10)
+    expect(ramps.get(P(16))).toBeCloseTo(DEAL_MIN_LIME, 10)
+  })
+
+  it('respects a custom stage count and floor', () => {
+    const ramps = dealTierRamps([P(8), P(16), P(32)], 2, 0.5)
+    expect(ramps.size).toBe(2)
+    expect(ramps.get(P(8))).toBeCloseTo(1, 10)
+    expect(ramps.get(P(16))).toBeCloseTo(0.5, 10)
+    expect(ramps.has(P(32))).toBe(false)
+  })
+
+  it('ignores non-positive prices (unloaded pixels) and empty input', () => {
+    expect(dealTierRamps([]).size).toBe(0)
+    const ramps = dealTierRamps([0n, -1n, P(8)])
+    expect(ramps.size).toBe(1)
+    expect(ramps.get(P(8))).toBeCloseTo(1, 10)
+  })
+
+  it('returns an empty map when stages <= 0', () => {
+    expect(dealTierRamps([P(8), P(16)], 0).size).toBe(0)
   })
 })

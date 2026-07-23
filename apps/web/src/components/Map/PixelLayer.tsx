@@ -4,7 +4,7 @@ import { TILE_GAP, TILE_RADIUS, ZERO_ADDRESS } from '@/constants/map'
 import { idToXY } from '@/lib/pixelMath'
 import { isLand } from '@/lib/landMask'
 import { ownerDefaultColor } from '@/lib/colorUtils'
-import { dealDepth } from '@/lib/decay'
+import { dealTierRamps } from '@/lib/decay'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
 import type { PixelView } from '@/lib/mock'
 
@@ -68,10 +68,6 @@ export function drawPixels(
    *  for their own pixels so the map matches what they see on the profile
    *  screen even before they save it on-chain. */
   userColor?: string,
-  /** The map's on-chain entry price (config().initialPrice, micro-USDT).
-   *  Required by the 'deals' view to spot pixels priced under entry;
-   *  until it loads, the deals view shows everything dimmed. */
-  initialPrice?: bigint,
 ) {
   ctx.clearRect(0, 0, width, height)
 
@@ -135,35 +131,37 @@ export function drawPixels(
       ctx.fill()
     }
   } else if (mapView === 'deals') {
-    // A deal = current price below the map's entry price (long-unsold land
-    // decaying under initialPrice). Normalize the ramp by the deepest
-    // discount on the map — same trick as the heatmap's maxSales — so the
-    // brightest lime always marks the best deal available right now.
-    const entry = initialPrice ?? 0n
-    const depths = new Float64Array(pixelData.length)
-    let maxDepth = 0
-    if (entry > 0n) {
-      for (let i = 0; i < pixelData.length; i++) {
-        if (!isLand(i, mask)) continue
-        const d = dealDepth(pixelData[i].currentPrice, entry)
-        depths[i] = d
-        if (d > maxDepth) maxDepth = d
-      }
+    // Deals view: several stages of "deal" over the CHEAPEST land on the map,
+    // anchored to the actual lowest live price — NOT the entry price. The
+    // cheapest of the DEAL_STAGES lowest price levels is the deepest deal
+    // (brightest lime); each level up is a shallower stage; everything above
+    // greys out. Because it tracks the map's real lowest price, the view always
+    // surfaces the best-value land even once every pixel is bought and bid up:
+    // if the cheapest land is 8¢, that 8¢ tier is the deal. The scale re-ranks
+    // itself for free as land decays or gets bought — nothing is pinned to a
+    // fixed threshold.
+    const landPrices: bigint[] = []
+    for (let i = 0; i < pixelData.length; i++) {
+      if (!isLand(i, mask)) continue
+      landPrices.push(pixelData[i].currentPrice)
     }
+    const ramps = dealTierRamps(landPrices)
 
     for (let i = 0; i < pixelData.length; i++) {
       if (!isLand(i, mask)) continue
+      const pixel = pixelData[i]
       const { x, y } = idToXY(i, width)
-      const depth = depths[i]
+      const ramp = ramps.get(pixel.currentPrice)
 
-      if (depth > 0 && maxDepth > 0) {
-        ctx.fillStyle = interpolateLimeGradient(depth / maxDepth)
-      } else if (pixelData[i].owner !== ZERO_ADDRESS) {
-        // Sold, and not a deal right now — solid grey (see soldColor) so it
-        // reads as "taken" instead of blending into the ocean.
+      if (ramp !== undefined) {
+        ctx.fillStyle = interpolateLimeGradient(ramp)
+      } else if (pixel.owner !== ZERO_ADDRESS) {
+        // Above the deal stages (bid up) — taken and not a bargain. Solid grey
+        // (see soldColor) so it reads as "taken" instead of blending into the
+        // ocean.
         ctx.fillStyle = soldColor
       } else {
-        // Unsold and at/above entry price — dim it, like myland dims others'.
+        // Prices haven't loaded yet — dim everything until they do.
         ctx.fillStyle = fadedColor
       }
 
