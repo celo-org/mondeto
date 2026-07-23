@@ -544,7 +544,6 @@ export default function Home() {
           loadState={loadState}
           userAddress={addrStr}
           userColor={profile.color}
-          initialPrice={priceConfig?.initialPrice}
           changedIds={changedIds}
           profilesMap={mapProfiles}
         />
