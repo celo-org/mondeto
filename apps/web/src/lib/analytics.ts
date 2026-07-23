@@ -26,14 +26,19 @@ import posthog from 'posthog-js'
  *   support_form_opened       {}
  *   buy_blocked_not_connected { pixelCount }                         selected pixels while signed out
  *   checkout_opened           { mapId, pixelCount, totalPriceUsd }   review drawer opened (buy intent)
+ *   checkout_insufficient_funds { mapId, needUsd, balanceUsd, token, pixelCount }  drawer showed "NOT ENOUGH FUNDS"
+ *   checkout_split_currency_blocked { mapId, needUsd, balanceUsd, token, pixelCount, totalUsd }  enough across coins, blocked by one-currency-per-buy rule
+ *   checkout_dismissed        { reason, mapId, pixelCount, totalPriceUsd, step }  left the drawer without buying (reason: cleared|closed)
  *   topup_clicked             { mapId, shortfallUsd, token }         insufficient-funds wall
  *   pixel_buy_started         { mapId, pixelCount, totalPriceUsd, token, ref? }
  *   pixel_buy_approve_shown   { mapId, pixelCount, totalPriceUsd, token, ref? }
  *   pixel_buy_succeeded       { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
+ *   pixel_buy_rejected        { mapId, pixelCount, totalPriceUsd, token, ref? }   user declined the wallet prompt (silent, no error shown)
  *   pixel_buy_failed          { mapId, pixelCount, totalPriceUsd, token, reason, ref? }
  *
- * `utm_*` params from the landing URL are attached to every event as
- * super-properties via registerCampaignParams() below.
+ * `utm_*` params from the landing URL, plus `isMiniPay`, are attached to
+ * every event as super-properties (via registerCampaignParams() and
+ * registerPlatform() below) so any event can be segmented MiniPay vs desktop.
  */
 
 // PostHog init happens in a parent effect, which React runs AFTER child
@@ -58,6 +63,19 @@ export function track(event: string, properties?: Record<string, unknown>): void
  *  creates a person profile — anonymous visitors never get one. */
 export function identifyWallet(address: string): void {
   withPosthog(() => posthog.identify(address.toLowerCase()))
+}
+
+// --- Platform attribution -------------------------------------------------
+
+// Register `isMiniPay` as a super-property so every event (checkout_*,
+// pixel_buy_*, etc.) can be segmented MiniPay vs desktop. MiniPay injects
+// `window.ethereum.isMiniPay` synchronously before the app loads, so this
+// is stable to read once at init. Memory-only persistence keeps it within
+// the privacy policy's no-tracking-storage promise, same as the utm_* set.
+export function registerPlatform(): void {
+  if (typeof window === 'undefined') return
+  const isMiniPay = !!(window.ethereum as { isMiniPay?: boolean } | undefined)?.isMiniPay
+  withPosthog(() => posthog.register({ isMiniPay }))
 }
 
 // --- Referral attribution -------------------------------------------------
