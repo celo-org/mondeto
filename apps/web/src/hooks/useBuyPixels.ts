@@ -14,6 +14,7 @@ import {
   SLIPPAGE_BPS,
   isOverSpendCap,
   OVER_SPEND_CAP_MESSAGE,
+  PRICE_MOVED_MESSAGE,
 } from '@/lib/buyLimits'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { getReferrer, track } from '@/lib/analytics'
@@ -177,12 +178,13 @@ export function useBuyPixels(mapId?: MapId) {
       // allowance always covers the most the contract could charge.
       const approveAmount = (priceInToken * (BPS_DENOM + SLIPPAGE_BPS)) / BPS_DENOM
       const capInToken = APPROVAL_CAP_USD * tenToTokenDec
-      // Authoritative cap check against the LIVE price (the drawer/instant guard
-      // ran on the UI hint, which can drift). Never send an approval above the
-      // $10 cap — block instead, so the tx never reaches MiniPay to be rejected.
+      // Authoritative cap check against the LIVE price. The pick was within $10
+      // when chosen (the instant guard cleared it), so if the buffered approval
+      // now tops the cap the price ticked up in between — tell the player that
+      // plainly and block, so the tx never reaches MiniPay to be rejected.
       if (approveAmount > capInToken) {
-        track('pixel_buy_over_cap', eventProps)
-        setError(OVER_SPEND_CAP_MESSAGE)
+        track('pixel_buy_over_cap', { ...eventProps, reason: 'price_moved' })
+        setError(PRICE_MOVED_MESSAGE)
         setStep('error')
         return
       }
