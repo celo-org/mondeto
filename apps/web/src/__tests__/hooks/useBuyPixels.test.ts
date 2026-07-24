@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useBuyPixels } from '@/hooks/useBuyPixels'
+import { OVER_SPEND_CAP_MESSAGE } from '@/lib/buyLimits'
+
+// Shared, stable write mock so the over-cap test can assert the wallet is
+// never opened. Hoisted above the vi.mock factory (which is itself hoisted).
+const { writeContractAsync } = vi.hoisted(() => ({ writeContractAsync: vi.fn() }))
 
 vi.mock('wagmi', () => ({
   useAccount: () => ({ chain: { id: 44787 }, address: '0x1234567890123456789012345678901234567890' }),
@@ -8,7 +13,7 @@ vi.mock('wagmi', () => ({
   // stub it so the hook mounts in tests.
   useSwitchChain: () => ({ switchChainAsync: vi.fn() }),
   useWriteContract: () => ({
-    writeContractAsync: vi.fn(),
+    writeContractAsync,
     writeContract: vi.fn(),
     data: undefined,
     isPending: false,
@@ -32,6 +37,16 @@ vi.mock('wagmi', () => ({
   useReadContracts: () => ({ data: [], isLoading: false }),
 }))
 
+// A preferred stablecoin so execute() passes the "no balance" guard and reaches
+// the spend-cap check. The idle-state tests below don't depend on this.
+vi.mock('@/hooks/useStablecoinBalance', () => ({
+  useStablecoinBalance: () => ({
+    preferred: { address: '0xUSDC', decimals: 6, symbol: 'USDC', amount: 1000 },
+    totalAmount: 1000,
+    isLoading: false,
+  }),
+}))
+
 describe('useBuyPixels', () => {
   it('starts in idle state', () => {
     const { result } = renderHook(() => useBuyPixels())
@@ -51,6 +66,19 @@ describe('useBuyPixels', () => {
     const { result } = renderHook(() => useBuyPixels())
     act(() => { result.current.checkBalance(1000000n, 500000n) })
     expect(result.current.insufficientBalance).toBe(true)
+  })
+
+  it('blocks a purchase over the $10 cap before opening the wallet', async () => {
+    writeContractAsync.mockClear()
+    const { result } = renderHook(() => useBuyPixels(0))
+    await act(async () => {
+      // $11 — over the ~$9.80 safe limit.
+      await result.current.execute([1], 11_000_000n)
+    })
+    expect(result.current.step).toBe('error')
+    expect(result.current.error).toBe(OVER_SPEND_CAP_MESSAGE)
+    // Never reached the approve/buy writes.
+    expect(writeContractAsync).not.toHaveBeenCalled()
   })
 
   it('reset clears all state', () => {
