@@ -8,30 +8,19 @@ import { getAttributionSuffix } from '@/lib/attribution'
 import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { classifyBuyError, isUserRejectedError } from '@/lib/buyErrors'
+import {
+  APPROVAL_CAP_USD,
+  BPS_DENOM,
+  SLIPPAGE_BPS,
+  isOverSpendCap,
+  OVER_SPEND_CAP_MESSAGE,
+  PRICE_MOVED_MESSAGE,
+} from '@/lib/buyLimits'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { getReferrer, track } from '@/lib/analytics'
 import type { MapId } from '@/lib/maps/types'
 
 export type TxStep = 'idle' | 'approving' | 'buying' | 'confirming' | 'success' | 'error'
-
-// Standing-approval cap, in dollars. If the contract is ever compromised,
-// user funds beyond this cap stay safe. Purchases that exceed the cap
-// approve the exact amount + the slippage buffer instead.
-const APPROVAL_CAP_DOLLARS = 10n
-
-const BPS_DENOM = 10_000n
-
-// Buyer-side slippage tolerance, in basis points. The execution-time price can
-// drift slightly above the quoted price (gradual intra-epoch decay reverses, or
-// another buyer bumps a pixel's saleCount). We accept up to this much over the
-// quote and let the contract revert (SlippageExceeded) beyond it, so a
-// front-run that doubles the price can't silently charge the buyer. The SAME
-// buffer drives the token approval, so the allowance always covers the ceiling.
-// Tunable per-environment via NEXT_PUBLIC_BUY_SLIPPAGE_BPS (default 2%).
-const SLIPPAGE_BPS = (() => {
-  const raw = Number(process.env.NEXT_PUBLIC_BUY_SLIPPAGE_BPS)
-  return Number.isFinite(raw) && raw >= 0 ? BigInt(Math.floor(raw)) : 200n
-})()
 
 // How long a signed buy stays valid, in seconds. Past this the contract
 // rejects it (DeadlineExpired) rather than executing a stale transaction at a
@@ -125,6 +114,17 @@ export function useBuyPixels(mapId?: MapId) {
       return
     }
 
+    // Enforce the $10 approval cap before opening the wallet. A purchase over
+    // the cap would request an approval MiniPay rejects, failing with an opaque
+    // error — so block it here with a clear message. Also covers the
+    // single-pixel path (onBuyThisPixel), which never renders the drawer gate.
+    if (isOverSpendCap(totalPriceHint)) {
+      setError(OVER_SPEND_CAP_MESSAGE)
+      setStep('error')
+      inFlight.current = false
+      return
+    }
+
     const tokenAddress = preferred.address
     const tokenDecimals = preferred.decimals
     const eventProps = {
@@ -177,8 +177,19 @@ export function useBuyPixels(mapId?: MapId) {
       // Approve the slippage ceiling (same buffer as maxTotalCost) so the
       // allowance always covers the most the contract could charge.
       const approveAmount = (priceInToken * (BPS_DENOM + SLIPPAGE_BPS)) / BPS_DENOM
-      const capInToken = APPROVAL_CAP_DOLLARS * tenToTokenDec
-      const safeApprove = approveAmount > capInToken ? approveAmount : capInToken
+      const capInToken = APPROVAL_CAP_USD * tenToTokenDec
+      // Authoritative cap check against the LIVE price. The pick was within $10
+      // when chosen (the instant guard cleared it), so if the buffered approval
+      // now tops the cap the price ticked up in between — tell the player that
+      // plainly and block, so the tx never reaches MiniPay to be rejected.
+      if (approveAmount > capInToken) {
+        track('pixel_buy_over_cap', { ...eventProps, reason: 'price_moved' })
+        setError(PRICE_MOVED_MESSAGE)
+        setStep('error')
+        return
+      }
+      // In range: approve the flat $10 standing allowance (fewer repeat prompts).
+      const safeApprove = capInToken
 
       // Skip approve if existing allowance already covers the purchase.
       const currentAllowance = (await publicClient.readContract({

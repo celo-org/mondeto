@@ -7,6 +7,7 @@ import { ZERO_ADDRESS } from '@/constants/map'
 import { formatUSDT } from '@/lib/colorUtils'
 import { generateUsername } from '@/lib/username'
 import { MINIPAY_DEPOSIT_URL } from '@/lib/deeplinks'
+import { isOverSpendCap } from '@/lib/buyLimits'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { track } from '@/lib/analytics'
@@ -78,6 +79,11 @@ export default function SelectionDrawer({
   // sets state in an effect and can lag the first render of the drawer —
   // computing here keeps the CTA state in sync with the numbers on screen.
   const insufficient = totalPrice > 0n && userBalance < totalPrice || insufficientBalance
+
+  // Per-buy spend cap (MiniPay's $10 approval limit). Blocked before the wallet
+  // opens so the player gets a clear "trim your pick" nudge instead of an opaque
+  // wallet rejection. Insufficient-funds takes visual precedence when both hold.
+  const overCap = isOverSpendCap(totalPrice)
 
   // Impression affordability is derived from THIS component's own balance
   // hook — the same instance the loading gate below trusts — never from the
@@ -286,6 +292,16 @@ export default function SelectionDrawer({
               </a>
             </div>
           )}
+          {overCap && !insufficient && (
+            <div style={{ marginBottom: 6, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+              <div style={{ fontSize: 7, color: 'var(--error)', textAlign: 'center', letterSpacing: 1, fontFamily: "'Press Start 2P', monospace" }}>
+                over the $10 cap
+              </div>
+              <div style={{ fontSize: 6, color: 'var(--text-muted)', textAlign: 'center', letterSpacing: 1, fontFamily: "'Press Start 2P', monospace", maxWidth: 260, lineHeight: 1.5 }}>
+                each buy is capped at $10 to keep your wallet safe — trim your pick to lock it in
+              </div>
+            </div>
+          )}
           {userAddress && groups.some(g => g.owner.toLowerCase() === userAddress.toLowerCase()) && (
             <div style={{ fontSize: 7, color: '#e6a817', marginBottom: 2, flexShrink: 0 }}>
               ⚠ you already own some of these pixels — buying again will increase their price
@@ -355,16 +371,16 @@ export default function SelectionDrawer({
           {/* Buy button */}
           <button
             onClick={onBuy}
-            disabled={insufficient || priceLoading}
+            disabled={insufficient || overCap || priceLoading}
             className="pixel-btn pixel-btn-filled font-display"
             style={{
               width: '100%',
               fontSize: 10,
               letterSpacing: 2,
               padding: 12,
-              opacity: insufficient || priceLoading ? 0.5 : 1,
-              cursor: insufficient || priceLoading ? 'default' : 'pointer',
-              pointerEvents: insufficient || priceLoading ? 'none' : 'auto',
+              opacity: insufficient || overCap || priceLoading ? 0.5 : 1,
+              cursor: insufficient || overCap || priceLoading ? 'default' : 'pointer',
+              pointerEvents: insufficient || overCap || priceLoading ? 'none' : 'auto',
               flexShrink: 0,
             }}
           >
@@ -372,7 +388,9 @@ export default function SelectionDrawer({
               ? 'CHECKING PRICES…'
               : insufficient
                 ? 'NOT ENOUGH FUNDS'
-                : `LOCK IT IN — ${formatUSDT(totalPrice)} ${payToken}`}
+                : overCap
+                  ? 'TRIM TO $10'
+                  : `LOCK IT IN — ${formatUSDT(totalPrice)} ${payToken}`}
           </button>
         </div>
       )}
