@@ -26,9 +26,11 @@ export interface AnalyticsData {
   volume7d: bigint
   volumeAllTime: bigint
 
-  // Platform revenue estimate: volume * feeRate / 10000
+  // Treasury take = primary-sale proceeds + resale fees (6-decimal USDT units)
   feeRateBps: number
   revenueAllTime: bigint
+  primaryProceedsAllTime: bigint
+  resaleVolumeAllTime: bigint
 
   // Time window covered by the analysis
   windowStartBlock: bigint
@@ -49,6 +51,8 @@ interface AnalyticsResponse {
   volumeAllTime: string
   feeRateBps: number
   revenueAllTime: string
+  primaryProceedsAllTime: string
+  resaleVolumeAllTime: string
   windowStartBlock: string
   windowEndBlock: string
   fetchedAt: number
@@ -68,6 +72,8 @@ const EMPTY: AnalyticsData = {
   volumeAllTime: 0n,
   feeRateBps: 0,
   revenueAllTime: 0n,
+  primaryProceedsAllTime: 0n,
+  resaleVolumeAllTime: 0n,
   windowStartBlock: 0n,
   windowEndBlock: 0n,
   fetchedAt: 0,
@@ -88,6 +94,8 @@ function fromResponse(r: AnalyticsResponse): AnalyticsData {
     volumeAllTime: BigInt(r.volumeAllTime ?? '0'),
     feeRateBps: r.feeRateBps,
     revenueAllTime: BigInt(r.revenueAllTime ?? '0'),
+    primaryProceedsAllTime: BigInt(r.primaryProceedsAllTime ?? '0'),
+    resaleVolumeAllTime: BigInt(r.resaleVolumeAllTime ?? '0'),
     windowStartBlock: BigInt(r.windowStartBlock ?? '0'),
     windowEndBlock: BigInt(r.windowEndBlock ?? '0'),
     fetchedAt: r.fetchedAt,

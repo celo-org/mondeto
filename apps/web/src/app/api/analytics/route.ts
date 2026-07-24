@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { fallbackReadClient } from '@/lib/chain'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
-import { scanPurchaseLogs } from '@/lib/purchaseLogs'
+import { estimateHistoryFromBlock, scanNormalizedPurchases, toMicrocents } from '@/lib/purchaseLogs'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
@@ -15,8 +15,13 @@ import type { MapId } from '@/lib/maps/types'
  * Here the scan runs on Vercel's network via the shared scanner; the client
  * fetches a small JSON. Bigint fields ship as decimal strings.
  *
- * Lightweight live-read stand-in for the Envio indexer — no history beyond the
- * lookback window, no persistence.
+ * Revenue = the contract treasury's take. A first-time (primary) sale has no
+ * previous owner, so 100% of its price stays in the contract; a resale pays the
+ * `feeRate` cut to the contract and the rest to the seller. So we replay pixel
+ * ownership to split primary vs resale volume, exactly like /api/pnl — a naive
+ * `volume × feeRate` badly undercounts the treasury because it ignores primary
+ * sales. That replay needs the *whole* history, so we scan from the first sale
+ * (via the contract clock) rather than a fixed lookback window.
  */
 
 export const dynamic = 'force-dynamic'
@@ -26,9 +31,6 @@ export const maxDuration = 60
 // by block number, matching the previous client behaviour.
 const BLOCKS_PER_DAY = 86_400n
 const BLOCKS_PER_WEEK = 604_800n
-// How far back to fetch logs for "all-time" metrics. Bump when we have a real
-// indexer. (~8 days at 1s/block.)
-const LOOKBACK_BLOCKS = 700_000n
 const CACHE_TTL_MS = 60_000
 
 interface AnalyticsResponse {
@@ -42,7 +44,10 @@ interface AnalyticsResponse {
   volume7d: string
   volumeAllTime: string
   feeRateBps: number
+  // Treasury take = primary-sale proceeds + resale fees (all in 6-decimal units).
   revenueAllTime: string
+  primaryProceedsAllTime: string
+  resaleVolumeAllTime: string
   windowStartBlock: string
   windowEndBlock: string
   fetchedAt: number
@@ -51,11 +56,18 @@ interface AnalyticsResponse {
 // Per-mapId warm-instance cache.
 const cache = new Map<string, { ts: number; value: AnalyticsResponse }>()
 
-// Normalize a token amount to 6 decimals (the unit `formatUSDT` displays).
-function toMicrocents(cost: bigint, decimals: number): bigint {
-  if (decimals === 6) return cost
-  if (decimals > 6) return cost / 10n ** BigInt(decimals - 6)
-  return cost * 10n ** BigInt(6 - decimals)
+async function readFeeRateBps(contractAddress: `0x${string}`, mapId: MapId): Promise<number> {
+  try {
+    const rate = (await fallbackReadClient.readContract({
+      address: contractAddress,
+      abi: MONDETO_ABI,
+      functionName: 'feeRate',
+    })) as bigint
+    return Number(rate)
+  } catch (e) {
+    logger.warn('failed to read feeRate', { err: String(e), mapId })
+    return 0
+  }
 }
 
 async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
@@ -63,9 +75,34 @@ async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
   const client = fallbackReadClient
 
   const currentBlock = await client.getBlockNumber()
-  const fromBlock = currentBlock > LOOKBACK_BLOCKS ? currentBlock - LOOKBACK_BLOCKS : 0n
+  const [fromBlock, feeRateBps] = await Promise.all([
+    estimateHistoryFromBlock(contractAddress, currentBlock),
+    readFeeRateBps(contractAddress, mapId),
+  ])
 
-  const { logs, failedChunks, totalChunks } = await scanPurchaseLogs(
+  // No purchases yet — nothing to scan.
+  if (fromBlock === null) {
+    return {
+      dailyActiveUsers: 0,
+      weeklyActiveUsers: 0,
+      allTimePlayers: 0,
+      txCount24h: 0,
+      txCount7d: 0,
+      txCountAllTime: 0,
+      volume24h: '0',
+      volume7d: '0',
+      volumeAllTime: '0',
+      feeRateBps,
+      revenueAllTime: '0',
+      primaryProceedsAllTime: '0',
+      resaleVolumeAllTime: '0',
+      windowStartBlock: currentBlock.toString(),
+      windowEndBlock: currentBlock.toString(),
+      fetchedAt: Date.now(),
+    }
+  }
+
+  const { logs, tokenDecimals, failedChunks, totalChunks } = await scanNormalizedPurchases(
     contractAddress,
     fromBlock,
     currentBlock,
@@ -74,41 +111,8 @@ async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
     logger.warn('analytics scan had failed chunks', { failedChunks, totalChunks, mapId })
   }
 
-  // Fee rate in basis points (e.g. 300 = 3%).
-  let feeRateBps = 0
-  try {
-    const rate = (await client.readContract({
-      address: contractAddress,
-      abi: MONDETO_ABI,
-      functionName: 'feeRate',
-    })) as bigint
-    feeRateBps = Number(rate)
-  } catch (e) {
-    logger.warn('failed to read feeRate', { err: String(e), mapId })
-  }
-
   const dayCutoff = currentBlock > BLOCKS_PER_DAY ? currentBlock - BLOCKS_PER_DAY : 0n
   const weekCutoff = currentBlock > BLOCKS_PER_WEEK ? currentBlock - BLOCKS_PER_WEEK : 0n
-
-  // Normalize mixed-token totals to a single 6-decimal unit before summing.
-  const tokenDecimals = new Map<string, number>()
-  const uniqueTokens = new Set<string>()
-  for (const log of logs) uniqueTokens.add((log.args.token as string).toLowerCase())
-  await Promise.all(
-    [...uniqueTokens].map(async (token) => {
-      try {
-        const [, dec] = (await client.readContract({
-          address: contractAddress,
-          abi: MONDETO_ABI,
-          functionName: 'tokenConfig',
-          args: [token as `0x${string}`],
-        })) as readonly [boolean, number]
-        tokenDecimals.set(token, Number(dec))
-      } catch {
-        tokenDecimals.set(token, 6)
-      }
-    }),
-  )
 
   const allBuyers = new Set<string>()
   const dailyBuyers = new Set<string>()
@@ -119,9 +123,16 @@ async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
   let volume7d = 0n
   let volumeAllTime = 0n
 
+  // Ownership replay: split each per-pixel cost into primary (no prior owner →
+  // 100% treasury) vs resale (prior owner → feeRate to treasury, rest to seller).
+  const ownerOf = new Map<string, string>()
+  let primaryProceeds = 0n
+  let resaleVolume = 0n
+
   for (const log of logs) {
     const buyer = (log.args.buyer as string).toLowerCase()
     const tokenAddr = (log.args.token as string).toLowerCase()
+    const ids = log.args.ids as bigint[]
     const totalCost = log.args.totalCost as bigint
     const normalized = toMicrocents(totalCost, tokenDecimals.get(tokenAddr) ?? 6)
     const block = log.blockNumber ?? 0n
@@ -139,9 +150,19 @@ async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
       txCount24h++
       volume24h += normalized
     }
+
+    const perPixelCost = ids.length > 0 ? normalized / BigInt(ids.length) : 0n
+    for (const id of ids) {
+      const idStr = id.toString()
+      if (ownerOf.has(idStr)) resaleVolume += perPixelCost
+      else primaryProceeds += perPixelCost
+      ownerOf.set(idStr, buyer)
+    }
   }
 
-  const revenueAllTime = feeRateBps > 0 ? (volumeAllTime * BigInt(feeRateBps)) / 10_000n : 0n
+  // Treasury take: all of primary proceeds + the fee cut on resales.
+  const resaleFee = feeRateBps > 0 ? (resaleVolume * BigInt(feeRateBps)) / 10_000n : 0n
+  const revenueAllTime = primaryProceeds + resaleFee
 
   return {
     dailyActiveUsers: dailyBuyers.size,
@@ -155,6 +176,8 @@ async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
     volumeAllTime: volumeAllTime.toString(),
     feeRateBps,
     revenueAllTime: revenueAllTime.toString(),
+    primaryProceedsAllTime: primaryProceeds.toString(),
+    resaleVolumeAllTime: resaleVolume.toString(),
     windowStartBlock: fromBlock.toString(),
     windowEndBlock: currentBlock.toString(),
     fetchedAt: Date.now(),
