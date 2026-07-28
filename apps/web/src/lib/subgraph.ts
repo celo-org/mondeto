@@ -79,6 +79,31 @@ export async function fetchOwnerMapPnl(
   }
 }
 
+// Global Owner (across all maps) — the wallet's lifetime spend/earn.
+const OWNER_PNL_QUERY = `
+  query OwnerPnl($id: ID!) {
+    owner(id: $id) {
+      totalSpent
+      totalEarned
+    }
+  }
+`
+
+/**
+ * Lifetime earn/spend for a wallet across EVERY map (the global Owner entity).
+ * This is the "all lifetime since launch" figure the profile shows.
+ */
+export async function fetchOwnerPnl(address: string): Promise<OwnerPnl> {
+  const data = await querySubgraph<{
+    owner: { totalSpent: string; totalEarned: string } | null
+  }>(OWNER_PNL_QUERY, { id: address.toLowerCase() })
+  const row = data.owner
+  return {
+    spent: row?.totalSpent ?? '0',
+    earned: row?.totalEarned ?? '0',
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * AREA leaderboard (pixel count, tie-broken by who reached it first)
  * ------------------------------------------------------------------ */

@@ -289,10 +289,21 @@ export async function GET(request: Request) {
         })
       }
     }
+    // Reuse the AREA rows' reached-first timestamps as the tie-break for EMPIRE
+    // and TYCOONS too, so a value tie on any board is broken by who got there
+    // first rather than by wallet address. Values still come from the snapshot.
+    const tieByAddr = new Map<string, number>()
+    for (const e of areaBoard) {
+      if (e.tiebreak != null) tieByAddr.set(e.address.toLowerCase(), e.tiebreak)
+    }
+    const applyTie = (entries: LeaderEntry[]): LeaderEntry[] =>
+      entries
+        .map((e) => ({ ...e, tiebreak: tieByAddr.get(e.address.toLowerCase()) }))
+        .sort(compareLeaderEntries)
     const full: FullBoards = {
       area: areaBoard,
-      empire: biggestConnectedArea,
-      tycoons: mostExpensivePixel,
+      empire: applyTie(biggestConnectedArea),
+      tycoons: applyTie(mostExpensivePixel),
     }
 
     const rulers: Record<MapId, string | null> = {}

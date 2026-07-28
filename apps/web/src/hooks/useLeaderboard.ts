@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { PixelView } from '@/lib/mock'
 import {
   allLeaderboards,
+  compareLeaderEntries,
   leaderboardMostPixels,
   rankGap,
   type RankGap,
@@ -208,10 +209,28 @@ export function useLeaderboard(
     // Subgraph AREA if we have it; otherwise the snapshot board as a fallback.
     const areaEntries =
       localArea ?? leaderboardMostPixels(localSnapshot, Number.MAX_SAFE_INTEGER)
+
+    // Reuse the AREA rows' lastGainAt as the "reached it first" tie-break for
+    // EMPIRE and TYCOONS too, so a value tie on ANY board is broken by who got
+    // there first (earlier lastGainAt) rather than by wallet address. EMPIRE and
+    // TYCOONS values still come from the pixel snapshot (grid geometry / live
+    // prices); we just attach the timestamp and re-sort. No extra query — the
+    // timestamps already came back with the AREA board.
+    const tieByAddr = new Map<string, number>()
+    for (const e of areaEntries) {
+      if (e.tiebreak != null) tieByAddr.set(e.address.toLowerCase(), e.tiebreak)
+    }
+    const withTiebreak = (entries: LeaderEntry[]): LeaderEntry[] =>
+      entries
+        .map((e) => ({ ...e, tiebreak: tieByAddr.get(e.address.toLowerCase()) }))
+        .sort(compareLeaderEntries)
+    const empireEntries = withTiebreak(biggestConnectedArea)
+    const tycoonEntries = withTiebreak(mostExpensivePixel)
+
     const area = decorate(areaEntries, 'px', (v) => String(v), profilesMap)
-    const empire = decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap)
+    const empire = decorate(empireEntries, 'px', (v) => String(v), profilesMap)
     const tycoons = decorate(
-      mostExpensivePixel,
+      tycoonEntries,
       'USDT',
       formatUSDTFromNumber,
       profilesMap,
@@ -221,8 +240,8 @@ export function useLeaderboard(
     const you: BoardYou = viewer
       ? {
           area: toYou(rankGap(areaEntries, viewer), area, 'px', String, viewer, profilesMap),
-          empire: toYou(rankGap(biggestConnectedArea, viewer), empire, 'px', String, viewer, profilesMap),
-          tycoons: toYou(rankGap(mostExpensivePixel, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
+          empire: toYou(rankGap(empireEntries, viewer), empire, 'px', String, viewer, profilesMap),
+          tycoons: toYou(rankGap(tycoonEntries, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
         }
       : NO_YOU
     return { area, empire, tycoons, loading: localAreaLoading, you }

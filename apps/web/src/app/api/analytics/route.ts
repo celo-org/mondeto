@@ -106,10 +106,15 @@ async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
  */
 async function computeAnalyticsFromSubgraph(mapId: MapId): Promise<AnalyticsResponse> {
   const nowSec = Math.floor(Date.now() / 1000)
-  const stats = await fetchMapStats(mapId)
-  if (!stats) return emptyAnalytics(0, String(nowSec))
-
-  const feeRateBps = stats.feeRateBps
+  // The fee rate is read live from the contract, NOT from the subgraph: the
+  // contract sets the initial fee in initialize() without emitting
+  // FeeRateUpdated (only setFeeRate() emits), so MapStat.feeRateBps stays 0 and
+  // would wrongly show "resale fees @ 0.00%". feeRate() is current-state anyway.
+  const [stats, feeRateBps] = await Promise.all([
+    fetchMapStats(mapId),
+    readFeeRateBps(getContractByMapId(mapId), mapId),
+  ])
+  if (!stats) return emptyAnalytics(feeRateBps, String(nowSec))
   const primaryProceeds = BigInt(stats.primaryProceeds)
   const resaleVolume = BigInt(stats.resaleVolume)
   const resaleFee = feeRateBps > 0 ? (resaleVolume * BigInt(feeRateBps)) / 10_000n : 0n

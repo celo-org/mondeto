@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { fallbackReadClient } from '@/lib/chain'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { estimateHistoryFromBlock, scanNormalizedPurchases, toMicrocents } from '@/lib/purchaseLogs'
-import { fetchOwnerMapPnl, subgraphConfigured } from '@/lib/subgraph'
+import { fetchOwnerPnl, subgraphConfigured } from '@/lib/subgraph'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
@@ -35,9 +35,12 @@ const ZERO: Pnl = { spent: '0', earned: '0' }
 const cache = new Map<string, { ts: number; value: Pnl }>()
 
 async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
-  // Preferred path: one indexed query against the subgraph.
+  // Preferred path: one indexed query for the wallet's LIFETIME spend/earn
+  // across every map (the global Owner entity). `mapId` is ignored here — the
+  // profile shows an all-maps lifetime figure. The legacy fallback below is
+  // still per-map (it can only scan one contract's logs).
   if (subgraphConfigured()) {
-    const { spent, earned } = await fetchOwnerMapPnl(mapId, addr)
+    const { spent, earned } = await fetchOwnerPnl(addr)
     return { spent, earned }
   }
   return computePnlFromLogs(mapId, addr)
