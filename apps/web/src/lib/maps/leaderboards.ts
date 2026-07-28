@@ -18,14 +18,28 @@ function ownedLandPixels(map: MapSnapshot): PixelState[] {
   return map.pixels.filter((p) => p.isLand && p.owner !== null);
 }
 
+/**
+ * Board comparator. Value descending; on a tie, the entry that reached that
+ * value FIRST (smaller `tiebreak` / lastGainAt) ranks higher; finally address
+ * ascending as a deterministic fallback (and for boards with no time signal).
+ */
+export function compareLeaderEntries(a: LeaderEntry, b: LeaderEntry): number {
+  if (b.value !== a.value) return b.value - a.value;
+  const at = a.tiebreak;
+  const bt = b.tiebreak;
+  if (at != null && bt != null && at !== bt) return at - bt;
+  if (at != null && bt == null) return -1;
+  if (at == null && bt != null) return 1;
+  return a.address < b.address ? -1 : 1;
+}
+
 function rank(
   values: Map<Address, number>,
   limit: number
 ): LeaderEntry[] {
   return [...values.entries()]
     .map(([address, value]) => ({ address, value }))
-    // value desc, then address asc for a stable, deterministic tiebreak
-    .sort((a, b) => b.value - a.value || (a.address < b.address ? -1 : 1))
+    .sort(compareLeaderEntries)
     .slice(0, limit);
 }
 

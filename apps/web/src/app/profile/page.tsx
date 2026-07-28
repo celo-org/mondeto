@@ -14,6 +14,8 @@ import { useMaps } from '@/hooks/useMaps'
 import { useMapRulers } from '@/hooks/useMapRulers'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
+import { rankGap } from '@/lib/maps/leaderboards'
+import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
@@ -115,6 +117,29 @@ export default function ProfilePage() {
 
         // Compute rank + the gap to the rank above ("N PX FROM #K") so the
         // RANK card doubles as a nudge toward the next spot on the board.
+        //
+        // Prefer the subgraph AREA board so this matches the leaderboard exactly
+        // — same pixel-count ranking with the "reached the count first"
+        // tie-break. Falls back to the local pixel-batch decode (address /
+        // insertion tie-break) when the subgraph isn't configured or errors.
+        if (subgraphConfigured()) {
+          try {
+            const board = await fetchAreaLeaderboard(currentMapId)
+            const rg = rankGap(board, addrStr!)
+            if (rg) {
+              setRank(rg.rank)
+              setRankGapLabel(
+                rg.rank === 1 ? 'RULER' : `${rg.gap ?? 0} PX FROM #${rg.rank - 1}`,
+              )
+            } else {
+              setRank(0)
+              setRankGapLabel(undefined)
+            }
+            return
+          } catch (e) {
+            console.warn('rank from subgraph failed, using local decode:', e)
+          }
+        }
         const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
         const rankIdx = sorted.findIndex(([owner]) => owner === addrStr!.toLowerCase())
         setRank(rankIdx >= 0 ? rankIdx + 1 : 0)

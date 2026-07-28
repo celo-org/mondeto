@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PixelView } from '@/lib/mock'
-import { allLeaderboards, rankGap, type RankGap } from '@/lib/maps/leaderboards'
+import {
+  allLeaderboards,
+  leaderboardMostPixels,
+  rankGap,
+  type RankGap,
+} from '@/lib/maps/leaderboards'
+import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
@@ -160,10 +166,49 @@ export function useLeaderboard(
     return pixelViewToMapSnapshot(pixelData, homeMapId, true, home.width, mask)
   }, [pixelData, homeMapId])
 
+  // AREA (pixel count) for the local map comes from the subgraph so it carries
+  // the "reached the count first" tie-break (lastGainAt). EMPIRE/TYCOONS need
+  // grid geometry / live prices the subgraph doesn't index, so they stay
+  // snapshot-computed. When the subgraph isn't configured (or the query fails)
+  // we fall back to the snapshot AREA board (address tie-break) so /ranks still
+  // works — behaviour is then identical to before this change.
+  const [localArea, setLocalArea] = useState<LeaderEntry[] | null>(null)
+  const [localAreaLoading, setLocalAreaLoading] = useState(false)
+
+  useEffect(() => {
+    if (scope !== 'local') return
+    if (!subgraphConfigured()) {
+      setLocalArea(null)
+      return
+    }
+    let cancelled = false
+    setLocalAreaLoading(true)
+    fetchAreaLeaderboard(homeMapId)
+      .then((entries) => {
+        if (cancelled) return
+        setLocalArea(entries)
+        setLocalAreaLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.warn('local AREA subgraph read failed, using snapshot', err)
+        setLocalArea(null)
+        setLocalAreaLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [scope, homeMapId])
+
   const localBoards = useMemo<BoardSet>(() => {
-    const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
-      allLeaderboards(localSnapshot, Number.MAX_SAFE_INTEGER)
-    const area = decorate(mostPixels, 'px', (v) => String(v), profilesMap)
+    const { biggestConnectedArea, mostExpensivePixel } = allLeaderboards(
+      localSnapshot,
+      Number.MAX_SAFE_INTEGER,
+    )
+    // Subgraph AREA if we have it; otherwise the snapshot board as a fallback.
+    const areaEntries =
+      localArea ?? leaderboardMostPixels(localSnapshot, Number.MAX_SAFE_INTEGER)
+    const area = decorate(areaEntries, 'px', (v) => String(v), profilesMap)
     const empire = decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap)
     const tycoons = decorate(
       mostExpensivePixel,
@@ -175,13 +220,13 @@ export function useLeaderboard(
     // rank straight from the ranked entries.
     const you: BoardYou = viewer
       ? {
-          area: toYou(rankGap(mostPixels, viewer), area, 'px', String, viewer, profilesMap),
+          area: toYou(rankGap(areaEntries, viewer), area, 'px', String, viewer, profilesMap),
           empire: toYou(rankGap(biggestConnectedArea, viewer), empire, 'px', String, viewer, profilesMap),
           tycoons: toYou(rankGap(mostExpensivePixel, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
         }
       : NO_YOU
-    return { area, empire, tycoons, loading: false, you }
-  }, [localSnapshot, profilesMap, viewer])
+    return { area, empire, tycoons, loading: localAreaLoading, you }
+  }, [localSnapshot, profilesMap, viewer, localArea, localAreaLoading])
 
   // --- Global path -------------------------------------------------------
   // The cross-map board is computed server-side (/api/global-board) — reading

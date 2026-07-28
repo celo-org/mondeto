@@ -4,6 +4,7 @@ import {
   leaderboardMostExpensivePixel,
   leaderboardBiggestConnectedArea,
   allLeaderboards,
+  compareLeaderEntries,
 } from "@/lib/maps/leaderboards";
 import type { MapSnapshot, PixelState } from "@/lib/maps/types";
 
@@ -318,5 +319,51 @@ describe("rankGap", () => {
 
   it("measures against the immediate rank above, not the leader", () => {
     expect(rankGap(board, "0xBBB")).toEqual({ rank: 2, value: 30, gap: 20 });
+  });
+});
+
+describe("compareLeaderEntries (AREA time tie-break)", () => {
+  const sort = (entries: LeaderEntry[]) => [...entries].sort(compareLeaderEntries);
+
+  it("ranks by value descending first", () => {
+    const out = sort([
+      { address: "0xA", value: 5, tiebreak: 100 },
+      { address: "0xB", value: 9, tiebreak: 999 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xB", "0xA"]);
+  });
+
+  it("on a value tie, whoever reached the count FIRST (smaller lastGainAt) wins", () => {
+    const out = sort([
+      { address: "0xLate", value: 7, tiebreak: 200 },
+      { address: "0xEarly", value: 7, tiebreak: 100 },
+    ]);
+    // Earlier lastGainAt ranks higher — NOT the alphabetical address order.
+    expect(out.map((e) => e.address)).toEqual(["0xEarly", "0xLate"]);
+  });
+
+  it("address ordering does NOT decide a tie when timestamps differ", () => {
+    // 0xA would win alphabetically, but it reached the count later, so it loses.
+    const out = sort([
+      { address: "0xA", value: 3, tiebreak: 500 },
+      { address: "0xZ", value: 3, tiebreak: 400 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xZ", "0xA"]);
+  });
+
+  it("falls back to address ascending when no tiebreak is present (EMPIRE/TYCOONS, snapshot AREA)", () => {
+    const out = sort([
+      { address: "0xB", value: 4 },
+      { address: "0xA", value: 4 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xA", "0xB"]);
+  });
+
+  it("falls back to address ascending when timestamps are equal", () => {
+    const out = sort([
+      { address: "0xB", value: 4, tiebreak: 100 },
+      { address: "0xA", value: 4, tiebreak: 100 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xA", "0xB"]);
   });
 });

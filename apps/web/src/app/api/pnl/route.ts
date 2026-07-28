@@ -2,26 +2,19 @@ import { NextResponse } from 'next/server'
 import { fallbackReadClient } from '@/lib/chain'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { estimateHistoryFromBlock, scanNormalizedPurchases, toMicrocents } from '@/lib/purchaseLogs'
+import { fetchOwnerMapPnl, subgraphConfigured } from '@/lib/subgraph'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
 /**
- * Server-side profit-and-loss for one wallet on one map.
+ * Server-side profit-and-loss for one wallet on one map: SPENT is the sum of the
+ * wallet's own buys; EARNED is what later buyers paid for pixels the wallet used
+ * to own. Values are 6-decimal "microcents" (the unit `formatUSDT` renders).
  *
- * P&L is reconstructed from the full `PixelsPurchased` event history: SPENT is
- * the sum of the wallet's own buys; EARNED is what later buyers paid for pixels
- * the wallet used to own. That needs a wide `getLogs` scan across the whole
- * contract history — dozens of 50k-block chunks on Celo.
- *
- * Doing that on the phone meant the scan routinely failed on MiniPay's
- * constrained network and the profile showed $0 earned / $0 spent. Here the
- * reads run on Vercel's network — fast, reliable — and the phone fetches a
- * small `{ spent, earned }` JSON (values in 6-decimal "microcents", the unit
- * `formatUSDT` renders). Cached briefly in the warm instance so navigating
- * back to the profile doesn't re-scan.
- *
- * This mirrors /api/global-board: a lightweight live-read stand-in for a full
- * indexer, no persistence or historical queries.
+ * When the Goldsky subgraph is configured (NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL),
+ * both numbers are a single indexed query (OwnerMapStats.totalSpent/totalEarned).
+ * Otherwise we fall back to the legacy full-history `PixelsPurchased` log scan —
+ * so this route behaves identically until the subgraph URL is set.
  */
 
 export const dynamic = 'force-dynamic'
@@ -42,6 +35,15 @@ const ZERO: Pnl = { spent: '0', earned: '0' }
 const cache = new Map<string, { ts: number; value: Pnl }>()
 
 async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
+  // Preferred path: one indexed query against the subgraph.
+  if (subgraphConfigured()) {
+    const { spent, earned } = await fetchOwnerMapPnl(mapId, addr)
+    return { spent, earned }
+  }
+  return computePnlFromLogs(mapId, addr)
+}
+
+async function computePnlFromLogs(mapId: MapId, addr: string): Promise<Pnl> {
   const contract = getMapContractById(mapId)
   const mondetoAddress = contract.address
   const client = fallbackReadClient

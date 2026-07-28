@@ -3,10 +3,12 @@ import { fallbackReadClient } from '@/lib/chain'
 import { fetchGlobalSnapshots } from '@/lib/maps/snapshots'
 import {
   allGlobalLeaderboards,
+  compareLeaderEntries,
   leaderboardMostPixels,
   rankGap,
   type RankGap,
 } from '@/lib/maps/leaderboards'
+import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain } from '@/lib/maps/contracts'
 import { readRevealedMapIdsServer } from '@/lib/maps/reveals'
@@ -15,7 +17,7 @@ import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { celo } from 'viem/chains'
 import type { MapContract } from '@/lib/maps/contracts'
-import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
+import type { Address, LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { logger } from '@/lib/logger'
 
 /**
@@ -91,6 +93,29 @@ let cache: {
   full: FullBoards
   maps: MapContract[]
 } | null = null
+
+/**
+ * Cross-map AREA board from the subgraph: sum each wallet's per-map pixelCount
+ * across the revealed maps, tie-broken by when they reached that total (the most
+ * recent count-increasing buy across their maps — earlier reached, higher rank).
+ * The subgraph's global `Owner` entity spans ALL maps incl. unrevealed ones, so
+ * we merge the revealed maps' `OwnerMapStats` here to honour reveal gating.
+ */
+async function subgraphGlobalArea(mapIds: MapId[]): Promise<LeaderEntry[]> {
+  const boards = await Promise.all(mapIds.map((id) => fetchAreaLeaderboard(id)))
+  const value = new Map<Address, number>()
+  const reachedAt = new Map<Address, number>()
+  for (const board of boards) {
+    for (const e of board) {
+      value.set(e.address, (value.get(e.address) ?? 0) + e.value)
+      const t = e.tiebreak ?? 0
+      reachedAt.set(e.address, Math.max(reachedAt.get(e.address) ?? 0, t))
+    }
+  }
+  return [...value.entries()]
+    .map(([address, v]) => ({ address, value: v, tiebreak: reachedAt.get(address) }))
+    .sort(compareLeaderEntries)
+}
 
 function locateViewer(full: FullBoards, address: string): YouPayload {
   return {
@@ -250,8 +275,22 @@ export async function GET(request: Request) {
     // the response payload trims to TOP_N.
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
       allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
+    // AREA (pixel count) comes from the subgraph so it carries the "reached the
+    // count first" tie-break; EMPIRE/TYCOONS need grid geometry / live prices the
+    // subgraph doesn't index, so they stay snapshot-computed. Falls back to the
+    // snapshot AREA when the subgraph isn't configured or the query fails.
+    let areaBoard = mostPixels
+    if (subgraphConfigured()) {
+      try {
+        areaBoard = await subgraphGlobalArea(maps.map((m) => m.id))
+      } catch (err) {
+        logger.warn('global-board AREA subgraph read failed, using snapshot', {
+          err: String(err),
+        })
+      }
+    }
     const full: FullBoards = {
-      area: mostPixels,
+      area: areaBoard,
       empire: biggestConnectedArea,
       tycoons: mostExpensivePixel,
     }

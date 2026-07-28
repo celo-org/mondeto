@@ -3,25 +3,24 @@ import { fallbackReadClient } from '@/lib/chain'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { estimateHistoryFromBlock, scanNormalizedPurchases, toMicrocents } from '@/lib/purchaseLogs'
+import { fetchBatchesSince, fetchMapStats, subgraphConfigured } from '@/lib/subgraph'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
 /**
  * Server-side game analytics for one map (players, tx counts, volume, revenue).
  *
- * Like /api/pnl, these are reconstructed from the full `PixelsPurchased` log.
- * Run on the phone it silently returned zero because public Celo RPCs reject
- * eth_getLogs windows over ~5k blocks and the old hook used 50k-block chunks.
- * Here the scan runs on Vercel's network via the shared scanner; the client
- * fetches a small JSON. Bigint fields ship as decimal strings.
+ * When the Goldsky subgraph is configured (NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL),
+ * all-time figures come from the indexed `MapStats` running totals and the
+ * rolling 24h/7d windows from a bounded `PurchaseBatch` query. Otherwise we fall
+ * back to the legacy full-history `PixelsPurchased` log scan — identical output
+ * until the subgraph URL is set.
  *
  * Revenue = the contract treasury's take. A first-time (primary) sale has no
  * previous owner, so 100% of its price stays in the contract; a resale pays the
- * `feeRate` cut to the contract and the rest to the seller. So we replay pixel
- * ownership to split primary vs resale volume, exactly like /api/pnl — a naive
- * `volume × feeRate` badly undercounts the treasury because it ignores primary
- * sales. That replay needs the *whole* history, so we scan from the first sale
- * (via the contract clock) rather than a fixed lookback window.
+ * `feeRate` cut to the contract and the rest to the seller. Both paths split
+ * primary vs resale proceeds so a naive `volume × feeRate` doesn't undercount
+ * the treasury by ignoring primary sales.
  */
 
 export const dynamic = 'force-dynamic'
@@ -70,7 +69,94 @@ async function readFeeRateBps(contractAddress: `0x${string}`, mapId: MapId): Pro
   }
 }
 
+const DAY_SECONDS = 86_400
+const WEEK_SECONDS = 604_800
+
+function emptyAnalytics(feeRateBps: number, windowMark: string): AnalyticsResponse {
+  return {
+    dailyActiveUsers: 0,
+    weeklyActiveUsers: 0,
+    allTimePlayers: 0,
+    txCount24h: 0,
+    txCount7d: 0,
+    txCountAllTime: 0,
+    volume24h: '0',
+    volume7d: '0',
+    volumeAllTime: '0',
+    feeRateBps,
+    revenueAllTime: '0',
+    primaryProceedsAllTime: '0',
+    resaleVolumeAllTime: '0',
+    windowStartBlock: windowMark,
+    windowEndBlock: windowMark,
+    fetchedAt: Date.now(),
+  }
+}
+
 async function computeAnalytics(mapId: MapId): Promise<AnalyticsResponse> {
+  if (subgraphConfigured()) return computeAnalyticsFromSubgraph(mapId)
+  return computeAnalyticsFromLogs(mapId)
+}
+
+/**
+ * All-time totals from the indexed MapStats; rolling 24h/7d windows from a
+ * bounded PurchaseBatch query (timestamp >= cutoff). Windows are by wall-clock
+ * time rather than block number, which is more accurate than the log-scan path's
+ * block-count approximation.
+ */
+async function computeAnalyticsFromSubgraph(mapId: MapId): Promise<AnalyticsResponse> {
+  const nowSec = Math.floor(Date.now() / 1000)
+  const stats = await fetchMapStats(mapId)
+  if (!stats) return emptyAnalytics(0, String(nowSec))
+
+  const feeRateBps = stats.feeRateBps
+  const primaryProceeds = BigInt(stats.primaryProceeds)
+  const resaleVolume = BigInt(stats.resaleVolume)
+  const resaleFee = feeRateBps > 0 ? (resaleVolume * BigInt(feeRateBps)) / 10_000n : 0n
+  const revenueAllTime = primaryProceeds + resaleFee
+
+  const dayCut = nowSec - DAY_SECONDS
+  const weekBatches = await fetchBatchesSince(mapId, nowSec - WEEK_SECONDS)
+  const weeklyBuyers = new Set<string>()
+  const dailyBuyers = new Set<string>()
+  let txCount24h = 0
+  let txCount7d = 0
+  let volume24h = 0n
+  let volume7d = 0n
+  for (const b of weekBatches) {
+    const buyer = b.buyer.toLowerCase()
+    const cost = BigInt(b.totalCost)
+    weeklyBuyers.add(buyer)
+    txCount7d++
+    volume7d += cost
+    if (Number(b.timestamp) >= dayCut) {
+      dailyBuyers.add(buyer)
+      txCount24h++
+      volume24h += cost
+    }
+  }
+
+  return {
+    dailyActiveUsers: dailyBuyers.size,
+    weeklyActiveUsers: weeklyBuyers.size,
+    allTimePlayers: stats.uniqueBuyers,
+    txCount24h,
+    txCount7d,
+    txCountAllTime: stats.txCountAllTime,
+    volume24h: volume24h.toString(),
+    volume7d: volume7d.toString(),
+    volumeAllTime: BigInt(stats.volumeAllTime).toString(),
+    feeRateBps,
+    revenueAllTime: revenueAllTime.toString(),
+    primaryProceedsAllTime: primaryProceeds.toString(),
+    resaleVolumeAllTime: resaleVolume.toString(),
+    windowStartBlock: String(nowSec - WEEK_SECONDS),
+    windowEndBlock: String(nowSec),
+    fetchedAt: Date.now(),
+  }
+}
+
+async function computeAnalyticsFromLogs(mapId: MapId): Promise<AnalyticsResponse> {
   const contractAddress = getContractByMapId(mapId)
   const client = fallbackReadClient
 

@@ -46,6 +46,14 @@ export interface AssignmentStore {
 export interface LeaderEntry {
   address: Address;
   value: number;
+  /**
+   * Optional tie-break key: for the AREA board this is `lastGainAt` (the unix
+   * timestamp of the wallet's most recent count-increasing buy). On a `value`
+   * tie the SMALLER tiebreak ranks higher — whoever reached the count first.
+   * Boards without a time signal (EMPIRE/TYCOONS) omit it and fall back to the
+   * deterministic address ordering.
+   */
+  tiebreak?: number;
 }
 
 export interface OpenNextDecision {
