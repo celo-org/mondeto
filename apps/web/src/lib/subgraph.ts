@@ -250,15 +250,29 @@ export async function fetchBatchesSince(
   mapId: MapId,
   sinceTs: number,
 ): Promise<WindowBatch[]> {
-  const out: WindowBatch[] = []
-  for (let skip = 0; skip <= MAX_SKIP; skip += PAGE) {
-    const data = await querySubgraph<{ purchaseBatches: WindowBatch[] }>(
-      WINDOW_BATCHES_QUERY,
-      { mapId, since: String(sinceTs), first: PAGE, skip },
-    )
-    const page = data.purchaseBatches ?? []
-    out.push(...page)
-    if (page.length < PAGE) break
-  }
+  // Fetch the first page to learn whether we even need to paginate; if it's
+  // full, fire the remaining pages in parallel (skip is capped at MAX_SKIP) so
+  // a busy 7-day window (thousands of batches) is a few concurrent requests
+  // rather than a slow sequential walk.
+  const first = await querySubgraph<{ purchaseBatches: WindowBatch[] }>(
+    WINDOW_BATCHES_QUERY,
+    { mapId, since: String(sinceTs), first: PAGE, skip: 0 },
+  )
+  const out = [...(first.purchaseBatches ?? [])]
+  if (out.length < PAGE) return out
+
+  const skips: number[] = []
+  for (let skip = PAGE; skip <= MAX_SKIP; skip += PAGE) skips.push(skip)
+  const pages = await Promise.all(
+    skips.map((skip) =>
+      querySubgraph<{ purchaseBatches: WindowBatch[] }>(WINDOW_BATCHES_QUERY, {
+        mapId,
+        since: String(sinceTs),
+        first: PAGE,
+        skip,
+      }).then((d) => d.purchaseBatches ?? []),
+    ),
+  )
+  for (const page of pages) out.push(...page)
   return out
 }
