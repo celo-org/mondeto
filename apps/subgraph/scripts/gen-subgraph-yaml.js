@@ -24,8 +24,8 @@ const maps = [
 // WORLD proxy deploy block; all eight proxies were deployed in 71123574-71123597.
 const START = 71123574
 const ENTITIES = [
-  'Pixel', 'Owner', 'OwnerMapStats', 'PurchaseBatch', 'Purchase',
-  'OwnerProfile', 'Token', 'MapStats', 'ActiveBuyer',
+  'Pixel', 'Owner', 'OwnerMapStat', 'PurchaseBatch', 'Purchase',
+  'OwnerProfile', 'Token', 'MapStat', 'ActiveBuyer',
 ]
 const HANDLERS = [
   ['PixelsPurchased(indexed address,indexed address,uint256[],uint256)', 'handlePixelsPurchased'],

@@ -7,7 +7,7 @@
     "gen-manifest": "node scripts/gen-subgraph-yaml.js",
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "goldsky subgraph deploy mondeto/1.0.0 --path .",
+    "deploy": "goldsky subgraph deploy mondeto/1.0.2 --path .",
     "type-check": "if [ -d generated ]; then graph build; else echo '[subgraph] type-check skipped: run pnpm --filter subgraph codegen first'; fi"
   },
   "devDependencies": {

@@ -10,7 +10,7 @@
  *     /api/pnl is one query;
  *   - `lastGainAt` (+ block/logIndex) set on every count-INCREASING buy — the
  *     leaderboard tie-break;
- *   - per-map `MapStats` running totals (volume, tx, unique buyers, primary vs
+ *   - per-map `MapStat` running totals (volume, tx, unique buyers, primary vs
  *     resale split) for /api/analytics.
  *
  * The frontend mapId is injected per contract via dataSource.context so all
@@ -27,12 +27,12 @@ import {
 import {
   Pixel,
   Owner,
-  OwnerMapStats,
+  OwnerMapStat,
   PurchaseBatch,
   Purchase,
   OwnerProfile,
   Token,
-  MapStats,
+  MapStat,
   ActiveBuyer,
 } from '../generated/schema'
 
@@ -62,11 +62,11 @@ function tokenDecimals(token: Address): i32 {
   return t == null ? MICRO : t.decimals
 }
 
-function loadOrCreateMapStats(mapId: i32): MapStats {
+function loadOrCreateMapStat(mapId: i32): MapStat {
   const id = mapId.toString()
-  let s = MapStats.load(id)
+  let s = MapStat.load(id)
   if (s == null) {
-    s = new MapStats(id)
+    s = new MapStat(id)
     s.mapId = mapId
     s.volumeAllTime = BigInt.zero()
     s.txCountAllTime = 0
@@ -75,7 +75,7 @@ function loadOrCreateMapStats(mapId: i32): MapStats {
     s.resaleVolume = BigInt.zero()
     s.feeRateBps = 0
   }
-  return s as MapStats
+  return s as MapStat
 }
 
 export function handlePixelsPurchased(event: PixelsPurchased): void {
@@ -206,9 +206,9 @@ export function handlePixelsPurchased(event: PixelsPurchased): void {
   owner.save()
 
   const statsId = mapId.toString() + '-' + buyerId
-  let mapStats = OwnerMapStats.load(statsId)
+  let mapStats = OwnerMapStat.load(statsId)
   if (mapStats == null) {
-    mapStats = new OwnerMapStats(statsId)
+    mapStats = new OwnerMapStat(statsId)
     mapStats.mapId = mapId
     mapStats.address = buyer
     mapStats.pixelCount = 0
@@ -244,7 +244,7 @@ export function handlePixelsPurchased(event: PixelsPurchased): void {
       loserOwner.save()
     }
     const loserStatsId = mapId.toString() + '-' + loserId
-    const loserStats = OwnerMapStats.load(loserStatsId)
+    const loserStats = OwnerMapStat.load(loserStatsId)
     if (loserStats != null) {
       let pc2 = loserStats.pixelCount - lostCount
       if (pc2 < 0) pc2 = 0
@@ -255,7 +255,7 @@ export function handlePixelsPurchased(event: PixelsPurchased): void {
   }
 
   // --- Per-map analytics running totals.
-  const analytics = loadOrCreateMapStats(mapId)
+  const analytics = loadOrCreateMapStat(mapId)
   analytics.volumeAllTime = analytics.volumeAllTime.plus(normalized)
   analytics.txCountAllTime = analytics.txCountAllTime + 1
   analytics.primaryProceeds = analytics.primaryProceeds.plus(primaryAdd)
@@ -303,7 +303,7 @@ export function handleAcceptedTokenRemoved(event: AcceptedTokenRemoved): void {
 }
 
 export function handleFeeRateUpdated(event: FeeRateUpdated): void {
-  const s = loadOrCreateMapStats(currentMapId())
+  const s = loadOrCreateMapStat(currentMapId())
   s.feeRateBps = event.params.feeRate.toI32()
   s.save()
 }

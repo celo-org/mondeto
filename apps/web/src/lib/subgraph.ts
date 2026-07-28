@@ -53,9 +53,10 @@ export interface OwnerPnl {
   earned: string
 }
 
+// `ownerMapStat` (singular, by id) — the plural query is `ownerMapStats`.
 const PNL_QUERY = `
   query Pnl($id: ID!) {
-    ownerMapStats(id: $id) {
+    ownerMapStat(id: $id) {
       totalSpent
       totalEarned
     }
@@ -69,9 +70,9 @@ export async function fetchOwnerMapPnl(
 ): Promise<OwnerPnl> {
   const id = `${mapId}-${address.toLowerCase()}`
   const data = await querySubgraph<{
-    ownerMapStats: { totalSpent: string; totalEarned: string } | null
+    ownerMapStat: { totalSpent: string; totalEarned: string } | null
   }>(PNL_QUERY, { id })
-  const row = data.ownerMapStats
+  const row = data.ownerMapStat
   return {
     spent: row?.totalSpent ?? '0',
     earned: row?.totalEarned ?? '0',
@@ -171,9 +172,10 @@ export interface MapStatsRow {
   feeRateBps: number
 }
 
+// `mapStat` (singular, by id) — the plural query is `mapStats`.
 const MAP_STATS_QUERY = `
-  query MapStats($id: ID!) {
-    mapStats(id: $id) {
+  query MapStatById($id: ID!) {
+    mapStat(id: $id) {
       volumeAllTime
       txCountAllTime
       uniqueBuyers
@@ -186,10 +188,10 @@ const MAP_STATS_QUERY = `
 
 /** Per-map all-time analytics totals. Null when the map has no purchases yet. */
 export async function fetchMapStats(mapId: MapId): Promise<MapStatsRow | null> {
-  const data = await querySubgraph<{ mapStats: MapStatsRow | null }>(MAP_STATS_QUERY, {
+  const data = await querySubgraph<{ mapStat: MapStatsRow | null }>(MAP_STATS_QUERY, {
     id: `${mapId}`,
   })
-  return data.mapStats
+  return data.mapStat
 }
 
 export interface WindowBatch {

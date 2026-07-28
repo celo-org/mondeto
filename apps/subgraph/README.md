@@ -38,25 +38,49 @@ pnpm --filter subgraph build     # graph build (compiles AS → wasm, type-check
 Deploying needs a Goldsky account + API key. The key lives in the Goldsky CLI
 config (`~/.goldsky`), **never** in this repo.
 
+> **Account ownership — read before production.** The query URL embeds the
+> Goldsky project id (`.../project_<ID>/...`), so it is tied to the account/team
+> that deployed it. A personal account is fine for local testing, but **before
+> pointing production at the subgraph, deploy it under a company-owned Goldsky
+> Team** (Team = shared billing + access; see
+> https://docs.goldsky.com/teams-and-projects). Goldsky has no personal→personal
+> "transfer"; moving = redeploy `mondeto/<next-version>` under the company Team, then swap
+> `NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL` to the new URL and redeploy the frontend
+> (no code change; re-indexing from the start block is automatic and
+> deterministic, so no data is lost).
+
 ```bash
 npm install -g @goldskycom/cli      # or: curl https://goldsky.com | sh
 goldsky login                        # paste the API key from Goldsky project settings
 pnpm --filter subgraph codegen && pnpm --filter subgraph build
-cd apps/subgraph && goldsky subgraph deploy mondeto/1.0.0 --path .
+cd apps/subgraph && goldsky subgraph deploy mondeto/1.0.2 --path .
 ```
 
 Deploy prints the **public GraphQL query URL**, of the form:
 
 ```
-https://api.goldsky.com/api/public/project_<PROJECT_ID>/subgraphs/mondeto/1.0.0/gn
+https://api.goldsky.com/api/public/project_<PROJECT_ID>/subgraphs/mondeto/1.0.2/gn
 ```
+
+> **Versions can't be overwritten.** `goldsky subgraph deploy mondeto/<v>` fails
+> with "a deployment with this name & version already exists" if `<v>` was used
+> before — **bump the version** each redeploy (the `deploy` script tracks the
+> next one). Each version has its own URL, so the frontend
+> `NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL` must be updated on a version bump.
+>
+> **For a stable URL that survives redeploys, use a tag** so production doesn't
+> chase version numbers:
+> ```bash
+> goldsky subgraph tag create mondeto/1.0.2 --tag prod
+> # stable endpoint: .../subgraphs/mondeto/prod/gn — repoint the tag on each deploy
+> ```
 
 ## Wire the frontend
 
 Put that URL in `apps/web/.env.local` (git-ignored) as:
 
 ```
-NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL=https://api.goldsky.com/api/public/project_<ID>/subgraphs/mondeto/1.0.0/gn
+NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL=https://api.goldsky.com/api/public/project_<ID>/subgraphs/mondeto/1.0.2/gn
 ```
 
 `NEXT_PUBLIC_*` is inlined at build time, so on Vercel a change needs a redeploy.

@@ -5,7 +5,7 @@
 #   - Money is normalized to 6-decimal "microcents" (the unit `formatUSDT`
 #     renders and the API routes return), NOT raw token base units. The payment
 #     token's decimals come from the Token entity (fed by AcceptedTokenAdded).
-#   - `totalEarned` on Owner / OwnerMapStats — what later buyers paid for pixels a
+#   - `totalEarned` on Owner / OwnerMapStat — what later buyers paid for pixels a
 #     wallet used to own (even split per batch), so /api/pnl is a single query.
 #   - `lastGainAt` (+ block/logIndex) — the timestamp of a wallet's most recent
 #     count-INCREASING buy. This is the leaderboard tie-break: when two wallets
@@ -13,10 +13,10 @@
 #
 # Conventions:
 #   - Addresses are lowercase Bytes everywhere.
-#   - Money fields (totalSpent, totalEarned, totalCost, pricePaid, MapStats sums)
+#   - Money fields (totalSpent, totalEarned, totalCost, pricePaid, MapStat sums)
 #     are BigInt in 6-decimal microcents.
 #   - Composite ids use "-" separators: Pixel "<mapId>-<pixelId>",
-#     OwnerMapStats / OwnerProfile "<mapId>-<address>",
+#     OwnerMapStat / OwnerProfile "<mapId>-<address>",
 #     PurchaseBatch "<txHash>-<logIndex>", Purchase "<txHash>-<logIndex>-<arrayIndex>",
 #     ActiveBuyer "<mapId>-<address>".
 
@@ -61,7 +61,7 @@ type Owner @entity(immutable: false) {
 }
 
 "Per-(map, wallet) aggregate — the per-map AREA leaderboard row."
-type OwnerMapStats @entity(immutable: false) {
+type OwnerMapStat @entity(immutable: false) {
   "<mapId>-<address>"
   id: ID!
   mapId: Int!
@@ -150,7 +150,7 @@ Windowed (24h/7d) figures are derived in the route from PurchaseBatch instead.
 Revenue is computed in the route as primaryProceeds + resaleVolume*feeRateBps/1e4
 (matching the current treasury logic, which applies the CURRENT fee rate).
 """
-type MapStats @entity(immutable: false) {
+type MapStat @entity(immutable: false) {
   "<mapId>"
   id: ID!
   mapId: Int!
@@ -167,7 +167,7 @@ type MapStats @entity(immutable: false) {
   feeRateBps: Int!
 }
 
-"Existence marker so MapStats.uniqueBuyers counts each (map, buyer) once."
+"Existence marker so MapStat.uniqueBuyers counts each (map, buyer) once."
 type ActiveBuyer @entity(immutable: true) {
   "<mapId>-<address>"
   id: ID!

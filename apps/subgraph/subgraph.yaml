@@ -31,12 +31,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto
@@ -71,12 +71,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto
@@ -111,12 +111,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto
@@ -151,12 +151,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto
@@ -191,12 +191,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto
@@ -231,12 +231,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto
@@ -271,12 +271,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto
@@ -311,12 +311,12 @@ dataSources:
       entities:
         - Pixel
         - Owner
-        - OwnerMapStats
+        - OwnerMapStat
         - PurchaseBatch
         - Purchase
         - OwnerProfile
         - Token
-        - MapStats
+        - MapStat
         - ActiveBuyer
       abis:
         - name: Mondeto

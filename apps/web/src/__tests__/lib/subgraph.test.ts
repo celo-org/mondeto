@@ -76,13 +76,13 @@ describe('fetchAreaLeaderboard', () => {
 describe('fetchOwnerMapPnl', () => {
   it('returns zeros when the wallet has no row', async () => {
     const m = await load(URL)
-    mockFetch([{ ownerMapStats: null }])
+    mockFetch([{ ownerMapStat: null }])
     expect(await m.fetchOwnerMapPnl(0, '0xABC')).toEqual({ spent: '0', earned: '0' })
   })
 
   it('returns the wallet row values (6-dec microcents)', async () => {
     const m = await load(URL)
-    mockFetch([{ ownerMapStats: { totalSpent: '1500000', totalEarned: '250000' } }])
+    mockFetch([{ ownerMapStat: { totalSpent: '1500000', totalEarned: '250000' } }])
     expect(await m.fetchOwnerMapPnl(0, '0xABC')).toEqual({
       spent: '1500000',
       earned: '250000',
