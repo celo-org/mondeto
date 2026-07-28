@@ -185,6 +185,51 @@ export async function fetchAreaLeaderboard(
 }
 
 /* ------------------------------------------------------------------ *
+ * Per-pixel acquisition times (exact "reached it first" tie-break)
+ * ------------------------------------------------------------------ */
+
+const PIXEL_TS_QUERY = `
+  query PixelTimestamps($mapId: Int!, $first: Int!, $skip: Int!) {
+    pixels(where: { mapId: $mapId }, first: $first, skip: $skip) {
+      pixelId
+      lastSoldAt
+    }
+  }
+`
+
+/**
+ * Map of pixelId → owner-acquisition time (unix seconds) for one map, so the
+ * leaderboard can break EMPIRE/TYCOONS/AREA ties by who reached their standing
+ * first. Keyed by the contract pixel id (y*width + x), which matches
+ * `PixelState.id`. Paged (parallel) — bounded by the map's pixel count.
+ */
+export async function fetchPixelTimestamps(
+  mapId: MapId,
+): Promise<Map<number, number>> {
+  const rows: Array<{ pixelId: string; lastSoldAt: string }> = []
+  const first = await querySubgraph<{
+    pixels: Array<{ pixelId: string; lastSoldAt: string }>
+  }>(PIXEL_TS_QUERY, { mapId, first: PAGE, skip: 0 })
+  rows.push(...(first.pixels ?? []))
+  if ((first.pixels?.length ?? 0) === PAGE) {
+    const skips: number[] = []
+    for (let skip = PAGE; skip <= MAX_SKIP; skip += PAGE) skips.push(skip)
+    const pages = await Promise.all(
+      skips.map((skip) =>
+        querySubgraph<{ pixels: Array<{ pixelId: string; lastSoldAt: string }> }>(
+          PIXEL_TS_QUERY,
+          { mapId, first: PAGE, skip },
+        ).then((d) => d.pixels ?? []),
+      ),
+    )
+    for (const page of pages) rows.push(...page)
+  }
+  const out = new Map<number, number>()
+  for (const r of rows) out.set(Number(r.pixelId), Number(r.lastSoldAt))
+  return out
+}
+
+/* ------------------------------------------------------------------ *
  * Analytics
  * ------------------------------------------------------------------ */
 

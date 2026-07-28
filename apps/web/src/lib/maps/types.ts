@@ -26,6 +26,13 @@ export interface PixelState {
   currentPrice: number;
   /** Ocean/water pixels are not sellable and are excluded from all metrics. */
   isLand: boolean;
+  /**
+   * Unix seconds when the current owner acquired this pixel (subgraph
+   * `Pixel.lastSoldAt`). Optional — present only when a board is enriched with
+   * subgraph timestamps for the exact "reached it first" tie-break. Absent for
+   * snapshot-only reads, in which case boards fall back to the address tie-break.
+   */
+  acquiredAt?: number;
 }
 
 export interface MapSnapshot {

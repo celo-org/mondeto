@@ -367,3 +367,42 @@ describe("compareLeaderEntries (AREA time tie-break)", () => {
     expect(out.map((e) => e.address)).toEqual(["0xA", "0xB"]);
   });
 });
+
+describe("exact acquisition-time tie-break (acquiredAt)", () => {
+  // Addresses chosen so alphabetical order DISAGREES with time order: 0xAAA is
+  // alphabetically first but reached its standing LATER, so time must win.
+  const late = "0xAAA";
+  const early = "0xZZZ";
+
+  it("AREA: on a pixel-count tie, the wallet whose newest pixel is older wins", () => {
+    const m = map([
+      { ...px(0, 0, late), acquiredAt: 200 },
+      { ...px(1, 0, early), acquiredAt: 100 },
+    ]);
+    expect(leaderboardMostPixels(m).map((e) => e.address)).toEqual([early, late]);
+  });
+
+  it("TYCOONS: on a price tie, whoever acquired that priciest pixel first wins", () => {
+    const m = map([
+      { ...px(0, 0, late, 5), acquiredAt: 200 },
+      { ...px(1, 0, early, 5), acquiredAt: 100 },
+    ]);
+    expect(leaderboardMostExpensivePixel(m).map((e) => e.address)).toEqual([
+      early,
+      late,
+    ]);
+  });
+
+  it("EMPIRE: on a block-size tie, whoever COMPLETED their block first wins", () => {
+    // Both own a horizontal 2-block; completion = the newest member pixel.
+    const m = map([
+      { ...px(0, 0, late), acquiredAt: 100 },
+      { ...px(1, 0, late), acquiredAt: 200 }, // late's block completed at t=200
+      { ...px(0, 5, early), acquiredAt: 100 },
+      { ...px(1, 5, early), acquiredAt: 150 }, // early's block completed at t=150
+    ]);
+    const r = leaderboardBiggestConnectedArea(m);
+    expect(r.map((e) => e.value)).toEqual([2, 2]);
+    expect(r.map((e) => e.address)).toEqual([early, late]);
+  });
+});

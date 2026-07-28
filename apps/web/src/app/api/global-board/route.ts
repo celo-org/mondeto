@@ -3,12 +3,11 @@ import { fallbackReadClient } from '@/lib/chain'
 import { fetchGlobalSnapshots } from '@/lib/maps/snapshots'
 import {
   allGlobalLeaderboards,
-  compareLeaderEntries,
   leaderboardMostPixels,
   rankGap,
   type RankGap,
 } from '@/lib/maps/leaderboards'
-import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
+import { fetchPixelTimestamps, subgraphConfigured } from '@/lib/subgraph'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain } from '@/lib/maps/contracts'
 import { readRevealedMapIdsServer } from '@/lib/maps/reveals'
@@ -17,7 +16,7 @@ import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { celo } from 'viem/chains'
 import type { MapContract } from '@/lib/maps/contracts'
-import type { Address, LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
+import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { logger } from '@/lib/logger'
 
 /**
@@ -95,26 +94,24 @@ let cache: {
 } | null = null
 
 /**
- * Cross-map AREA board from the subgraph: sum each wallet's per-map pixelCount
- * across the revealed maps, tie-broken by when they reached that total (the most
- * recent count-increasing buy across their maps — earlier reached, higher rank).
- * The subgraph's global `Owner` entity spans ALL maps incl. unrevealed ones, so
- * we merge the revealed maps' `OwnerMapStats` here to honour reveal gating.
+ * Enrich each map's snapshot pixels with their owner-acquisition time (subgraph
+ * `Pixel.lastSoldAt`, keyed by pixel id) so every board breaks value ties by who
+ * reached their standing first. Mutates in place — the snapshots are freshly
+ * built per request. No-op on any map whose timestamp read fails.
  */
-async function subgraphGlobalArea(mapIds: MapId[]): Promise<LeaderEntry[]> {
-  const boards = await Promise.all(mapIds.map((id) => fetchAreaLeaderboard(id)))
-  const value = new Map<Address, number>()
-  const reachedAt = new Map<Address, number>()
-  for (const board of boards) {
-    for (const e of board) {
-      value.set(e.address, (value.get(e.address) ?? 0) + e.value)
-      const t = e.tiebreak ?? 0
-      reachedAt.set(e.address, Math.max(reachedAt.get(e.address) ?? 0, t))
+async function enrichSnapshotsWithTimestamps(
+  snapshots: MapSnapshot[],
+): Promise<void> {
+  const tsMaps = await Promise.all(
+    snapshots.map((s) => fetchPixelTimestamps(s.meta.id)),
+  )
+  snapshots.forEach((snap, i) => {
+    const ts = tsMaps[i]
+    for (const p of snap.pixels) {
+      const t = ts.get(p.id)
+      if (t != null) p.acquiredAt = t
     }
-  }
-  return [...value.entries()]
-    .map(([address, v]) => ({ address, value: v, tiebreak: reachedAt.get(address) }))
-    .sort(compareLeaderEntries)
+  })
 }
 
 function locateViewer(full: FullBoards, address: string): YouPayload {
@@ -271,39 +268,27 @@ export async function GET(request: Request) {
     const maps = getMapsForChain(celo.id, revealedIds)
     const snapshots = await fetchGlobalSnapshots(read, maps)
 
-    // Rank every owner (no limit) so viewer lookups below the top-N work;
-    // the response payload trims to TOP_N.
-    const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
-      allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
-    // AREA (pixel count) comes from the subgraph so it carries the "reached the
-    // count first" tie-break; EMPIRE/TYCOONS need grid geometry / live prices the
-    // subgraph doesn't index, so they stay snapshot-computed. Falls back to the
-    // snapshot AREA when the subgraph isn't configured or the query fails.
-    let areaBoard = mostPixels
+    // Enrich with per-pixel acquisition times so all three boards break ties by
+    // who reached their standing first. Best-effort: on failure (or when the
+    // subgraph isn't configured) boards fall back to the address tie-break.
     if (subgraphConfigured()) {
       try {
-        areaBoard = await subgraphGlobalArea(maps.map((m) => m.id))
+        await enrichSnapshotsWithTimestamps(snapshots)
       } catch (err) {
-        logger.warn('global-board AREA subgraph read failed, using snapshot', {
+        logger.warn('global-board timestamp enrich failed, using address tie-break', {
           err: String(err),
         })
       }
     }
-    // Reuse the AREA rows' reached-first timestamps as the tie-break for EMPIRE
-    // and TYCOONS too, so a value tie on any board is broken by who got there
-    // first rather than by wallet address. Values still come from the snapshot.
-    const tieByAddr = new Map<string, number>()
-    for (const e of areaBoard) {
-      if (e.tiebreak != null) tieByAddr.set(e.address.toLowerCase(), e.tiebreak)
-    }
-    const applyTie = (entries: LeaderEntry[]): LeaderEntry[] =>
-      entries
-        .map((e) => ({ ...e, tiebreak: tieByAddr.get(e.address.toLowerCase()) }))
-        .sort(compareLeaderEntries)
+
+    // Rank every owner (no limit) so viewer lookups below the top-N work;
+    // the response payload trims to TOP_N.
+    const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
+      allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
     const full: FullBoards = {
-      area: areaBoard,
-      empire: applyTie(biggestConnectedArea),
-      tycoons: applyTie(mostExpensivePixel),
+      area: mostPixels,
+      empire: biggestConnectedArea,
+      tycoons: mostExpensivePixel,
     }
 
     const rulers: Record<MapId, string | null> = {}

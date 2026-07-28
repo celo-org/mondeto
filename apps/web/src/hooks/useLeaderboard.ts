@@ -2,14 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PixelView } from '@/lib/mock'
-import {
-  allLeaderboards,
-  compareLeaderEntries,
-  leaderboardMostPixels,
-  rankGap,
-  type RankGap,
-} from '@/lib/maps/leaderboards'
-import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
+import { allLeaderboards, rankGap, type RankGap } from '@/lib/maps/leaderboards'
+import { fetchPixelTimestamps, subgraphConfigured } from '@/lib/subgraph'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
@@ -167,70 +161,60 @@ export function useLeaderboard(
     return pixelViewToMapSnapshot(pixelData, homeMapId, true, home.width, mask)
   }, [pixelData, homeMapId])
 
-  // AREA (pixel count) for the local map comes from the subgraph so it carries
-  // the "reached the count first" tie-break (lastGainAt). EMPIRE/TYCOONS need
-  // grid geometry / live prices the subgraph doesn't index, so they stay
-  // snapshot-computed. When the subgraph isn't configured (or the query fails)
-  // we fall back to the snapshot AREA board (address tie-break) so /ranks still
-  // works — behaviour is then identical to before this change.
-  const [localArea, setLocalArea] = useState<LeaderEntry[] | null>(null)
-  const [localAreaLoading, setLocalAreaLoading] = useState(false)
+  // Per-pixel acquisition times (subgraph) enrich the snapshot so ALL three
+  // boards break value ties by who reached their standing FIRST — AREA by the
+  // newest of your owned pixels, EMPIRE by the newest pixel in your biggest
+  // block, TYCOONS by when you got your priciest pixel. Values still come from
+  // the live snapshot (counts, grid geometry, prices). Without the subgraph
+  // configured (or on error) tsMap stays null and boards fall back to the
+  // deterministic address tie-break — identical to before this feature.
+  const [tsMap, setTsMap] = useState<Map<number, number> | null>(null)
+  const [tsLoading, setTsLoading] = useState(false)
 
   useEffect(() => {
     if (scope !== 'local') return
     if (!subgraphConfigured()) {
-      setLocalArea(null)
+      setTsMap(null)
       return
     }
     let cancelled = false
-    setLocalAreaLoading(true)
-    fetchAreaLeaderboard(homeMapId)
-      .then((entries) => {
+    setTsLoading(true)
+    fetchPixelTimestamps(homeMapId)
+      .then((m) => {
         if (cancelled) return
-        setLocalArea(entries)
-        setLocalAreaLoading(false)
+        setTsMap(m)
+        setTsLoading(false)
       })
       .catch((err) => {
         if (cancelled) return
-        console.warn('local AREA subgraph read failed, using snapshot', err)
-        setLocalArea(null)
-        setLocalAreaLoading(false)
+        console.warn('leaderboard pixel timestamps failed, using address tie-break', err)
+        setTsMap(null)
+        setTsLoading(false)
       })
     return () => {
       cancelled = true
     }
   }, [scope, homeMapId])
 
+  const enrichedSnapshot = useMemo(() => {
+    if (!tsMap) return localSnapshot
+    return {
+      ...localSnapshot,
+      pixels: localSnapshot.pixels.map((p) =>
+        tsMap.has(p.id) ? { ...p, acquiredAt: tsMap.get(p.id) } : p,
+      ),
+    }
+  }, [localSnapshot, tsMap])
+
   const localBoards = useMemo<BoardSet>(() => {
-    const { biggestConnectedArea, mostExpensivePixel } = allLeaderboards(
-      localSnapshot,
+    const { mostPixels, biggestConnectedArea, mostExpensivePixel } = allLeaderboards(
+      enrichedSnapshot,
       Number.MAX_SAFE_INTEGER,
     )
-    // Subgraph AREA if we have it; otherwise the snapshot board as a fallback.
-    const areaEntries =
-      localArea ?? leaderboardMostPixels(localSnapshot, Number.MAX_SAFE_INTEGER)
-
-    // Reuse the AREA rows' lastGainAt as the "reached it first" tie-break for
-    // EMPIRE and TYCOONS too, so a value tie on ANY board is broken by who got
-    // there first (earlier lastGainAt) rather than by wallet address. EMPIRE and
-    // TYCOONS values still come from the pixel snapshot (grid geometry / live
-    // prices); we just attach the timestamp and re-sort. No extra query — the
-    // timestamps already came back with the AREA board.
-    const tieByAddr = new Map<string, number>()
-    for (const e of areaEntries) {
-      if (e.tiebreak != null) tieByAddr.set(e.address.toLowerCase(), e.tiebreak)
-    }
-    const withTiebreak = (entries: LeaderEntry[]): LeaderEntry[] =>
-      entries
-        .map((e) => ({ ...e, tiebreak: tieByAddr.get(e.address.toLowerCase()) }))
-        .sort(compareLeaderEntries)
-    const empireEntries = withTiebreak(biggestConnectedArea)
-    const tycoonEntries = withTiebreak(mostExpensivePixel)
-
-    const area = decorate(areaEntries, 'px', (v) => String(v), profilesMap)
-    const empire = decorate(empireEntries, 'px', (v) => String(v), profilesMap)
+    const area = decorate(mostPixels, 'px', (v) => String(v), profilesMap)
+    const empire = decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap)
     const tycoons = decorate(
-      tycoonEntries,
+      mostExpensivePixel,
       'USDT',
       formatUSDTFromNumber,
       profilesMap,
@@ -239,13 +223,13 @@ export function useLeaderboard(
     // rank straight from the ranked entries.
     const you: BoardYou = viewer
       ? {
-          area: toYou(rankGap(areaEntries, viewer), area, 'px', String, viewer, profilesMap),
-          empire: toYou(rankGap(empireEntries, viewer), empire, 'px', String, viewer, profilesMap),
-          tycoons: toYou(rankGap(tycoonEntries, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
+          area: toYou(rankGap(mostPixels, viewer), area, 'px', String, viewer, profilesMap),
+          empire: toYou(rankGap(biggestConnectedArea, viewer), empire, 'px', String, viewer, profilesMap),
+          tycoons: toYou(rankGap(mostExpensivePixel, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
         }
       : NO_YOU
-    return { area, empire, tycoons, loading: localAreaLoading, you }
-  }, [localSnapshot, profilesMap, viewer, localArea, localAreaLoading])
+    return { area, empire, tycoons, loading: tsLoading, you }
+  }, [enrichedSnapshot, profilesMap, viewer, tsLoading])
 
   // --- Global path -------------------------------------------------------
   // The cross-map board is computed server-side (/api/global-board) — reading
