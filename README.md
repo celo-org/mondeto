@@ -11,7 +11,7 @@ Mondeto (Esperanto for "small world") is a pixel world map where anyone can buy,
 1. **Zoom in** to the dot-matrix world map and enter paint mode (4x zoom)
 2. **Select pixels** on any continent — water is not selectable (enforced on-chain)
 3. **Review your selection** — see total cost, balance, and breakdown by current owner
-4. **Buy land** — pay in supported dollar stablecoins on Celo. Price doubles with each sale, halves every 182 days without resale.
+4. **Buy land** — pay in supported dollar stablecoins on Celo. Price doubles with each sale, halves every 30 days without resale.
 5. **Customize** — set your name, website URL, and color on your profile (stored on-chain)
 6. **Climb the leaderboard** — ranked by total area, largest empire (contiguous territory), or most expensive pixel
 
@@ -33,7 +33,7 @@ Mondeto (Esperanto for "small world") is a pixel world map where anyone can buy,
 The Mondeto contract is a UUPS upgradeable proxy on Celo:
 
 - **Grid:** 170x100 (17,000 pixels, ~5,622 land)
-- **Pricing:** `initialPrice << (saleCount - epoch)` with 182-day halving
+- **Pricing:** `initialPrice << (saleCount - epoch)` with 30-day halving (`config().halvingTime` = 2592000s)
 - **Payment:** Multiple accepted dollar stablecoins (1:1), unowned pixels pay treasury, owned pixels pay previous owner
 - **Profile:** `{ color: uint24, label: bytes64, url: bytes64 }` per address
 - **Land mask:** Bit-packed `uint256[]`, immutable after deploy

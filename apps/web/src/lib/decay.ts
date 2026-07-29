@@ -17,8 +17,8 @@ const DAY_SECONDS = 86_400
  * Percent a pixel's price falls per day while unsold:
  * (1 − 2^(−86400 / halvingTimeSeconds)) × 100
  *
- * e.g. 14-day halving → ~4.83%/day. Returns 0 for non-positive or
- * non-finite inputs.
+ * e.g. a 14-day halving → ~4.83%/day (illustrative; callers pass the live
+ * `config().halvingTime`). Returns 0 for non-positive or non-finite inputs.
  */
 export function dailyFallPct(halvingTimeSeconds: number): number {
   if (!Number.isFinite(halvingTimeSeconds) || halvingTimeSeconds <= 0) return 0

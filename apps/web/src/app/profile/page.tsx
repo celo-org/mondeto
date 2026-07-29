@@ -512,6 +512,21 @@ export default function ProfilePage() {
             >
               SUPPORT
             </a>
+            {/* Rewards are on-chain, so a wallet address is the only thing
+                support can look a payment up by. Saying so here is cheaper than
+                a round-trip asking for it after someone sends a phone number. */}
+            <div
+              style={{
+                fontSize: 6,
+                fontFamily: "'Press Start 2P', monospace",
+                color: 'var(--text-muted)',
+                letterSpacing: 1,
+                lineHeight: 1.6,
+                textAlign: 'center',
+              }}
+            >
+              HAVE YOUR 0x WALLET ADDRESS READY
+            </div>
             <div
               style={{
                 display: 'flex',
