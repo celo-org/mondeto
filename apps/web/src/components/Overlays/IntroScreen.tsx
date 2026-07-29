@@ -150,7 +150,10 @@ const SLIDES: Slide[] = [
   {
     key: 'rewards',
     kicker: 'TOP THE LEADERBOARD',
-    body: 'Biggest empire, most pixels, priciest plot. Pick your flex. Claim daily rewards.',
+    // "When a campaign runs" and "get paid" are load-bearing: the old line said
+    // "Claim daily rewards", and rewards are neither daily nor claimed. That
+    // one sentence drove most of the "I wasn't paid" support volume.
+    body: 'Biggest empire, most pixels, priciest plot. Pick your flex. When a campaign runs, top players get paid in USDT.',
     visual: <SlideRewards />,
   },
   {

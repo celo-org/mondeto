@@ -27,6 +27,15 @@ Ownership of every deployed proxy is held by a **multi-sig** (see "DECIDED — m
 - **Halving half-life:** 14 days.
 - **Dimensions / land mask:** 170 × 100, existing Equal Earth mask (unchanged from current contract).
 
+> **As-deployed values differ from the two proposed above.** Read from mainnet
+> `config()` on every deployed map: `initialPrice` = `30000` (**$0.03**, not
+> $0.003) and `halvingTime` = `2592000s` (**30 days**, not 14). `feeRate` = 500
+> bps, matching the decision below. These are frozen at construction and cannot
+> be changed without a redeploy, so the deployed values are authoritative — the
+> figures above are kept as the record of what was originally proposed. Verify
+> with `cast call <proxy> "config()(uint256,uint256,uint256,uint256,uint256,uint256,uint256)"`
+> before quoting either number anywhere player-facing.
+
 ---
 
 ## DECIDED change — admin-settable `feeRate`

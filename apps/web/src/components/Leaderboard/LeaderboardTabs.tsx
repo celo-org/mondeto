@@ -1,6 +1,7 @@
 'use client'
 
 import type { LeaderboardScope, LeaderboardTab } from '@/hooks/useLeaderboard'
+import { BOARD_LABELS } from '@/lib/maps/leaderboards'
 
 interface LeaderboardTabsProps {
   activeTab: LeaderboardTab
@@ -11,6 +12,8 @@ interface LeaderboardTabsProps {
 const PIXEL_FONT = "'Press Start 2P', monospace"
 const BRAND_LIME = '#A7FF05'
 
+// Labels come from BOARD_LABELS so the tabs, the FAQ and the drift test can
+// never disagree on what a board is called.
 const tabConfig: {
   key: LeaderboardTab
   label: string
@@ -19,19 +22,19 @@ const tabConfig: {
 }[] = [
   {
     key: 'AREA',
-    label: 'LAND',
+    label: BOARD_LABELS.AREA,
     description: 'Who owns the most pixels on the map.',
     globalDescription: 'Most land owned across all maps (share of each board).',
   },
   {
     key: 'EMPIRE',
-    label: 'EMPIRE',
+    label: BOARD_LABELS.EMPIRE,
     description: 'Biggest connected empire.',
     globalDescription: 'Biggest connected empire on any single map.',
   },
   {
     key: 'TYCOONS',
-    label: 'TYCOONS',
+    label: BOARD_LABELS.TYCOONS,
     description: 'Who holds the single most valuable pixel.',
     globalDescription: 'Single most valuable pixel held anywhere.',
   },

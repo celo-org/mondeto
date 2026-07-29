@@ -14,6 +14,24 @@
 
 import type { Address, LeaderEntry, MapSnapshot, PixelState } from "./types";
 
+/** Internal board keys. Re-exported from `hooks/useLeaderboard` for callers. */
+export type LeaderboardTab = "AREA" | "EMPIRE" | "TYCOONS";
+
+/**
+ * The board names players actually see. Lives here, in a pure lib, so server
+ * components (the FAQ) and tests can reach it without importing a
+ * `'use client'` module.
+ *
+ * Note AREA renders as "LAND" — the key is internal and must never appear in
+ * player-facing copy. The FAQ said "AREA" for months because this mapping was
+ * trapped inside a client component; `__tests__/app/faq.test.ts` now guards it.
+ */
+export const BOARD_LABELS: Record<LeaderboardTab, string> = {
+  AREA: "LAND",
+  EMPIRE: "EMPIRE",
+  TYCOONS: "TYCOONS",
+};
+
 function ownedLandPixels(map: MapSnapshot): PixelState[] {
   return map.pixels.filter((p) => p.isLand && p.owner !== null);
 }

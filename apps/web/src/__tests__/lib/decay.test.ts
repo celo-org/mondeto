@@ -4,7 +4,7 @@ import { dailyFallPct, dealDepth, dealTierRamps, DEAL_MIN_LIME, halvingPeriodDay
 const DAY = 86_400
 
 describe('dailyFallPct', () => {
-  it('is ~4.83%/day for the live 14-day halving time', () => {
+  it('is ~4.83%/day for a 14-day halving time', () => {
     expect(dailyFallPct(14 * DAY)).toBeCloseTo(4.83, 2)
   })
 

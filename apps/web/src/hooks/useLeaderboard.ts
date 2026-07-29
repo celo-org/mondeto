@@ -9,7 +9,9 @@ import { getMaskData } from '@/lib/maps/masks'
 import type { LeaderEntry, MapId } from '@/lib/maps/types'
 import { generateUsername } from '@/lib/username'
 
-export type LeaderboardTab = 'AREA' | 'EMPIRE' | 'TYCOONS'
+// Canonical definition lives in lib/maps/leaderboards (a pure lib), so server
+// components and tests can reach it without pulling in this client module.
+export type { LeaderboardTab } from '@/lib/maps/leaderboards'
 export type LeaderboardScope = 'local' | 'global'
 
 export interface LeaderboardEntry {
