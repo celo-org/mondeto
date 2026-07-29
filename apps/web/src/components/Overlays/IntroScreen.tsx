@@ -126,7 +126,10 @@ function SlidePaint() {
   )
 }
 
-const SLIDES: Slide[] = [
+// Exported for __tests__/components/Overlays/IntroScreen.test.ts, which guards
+// the reward slide's wording. This carousel is the first thing a new player
+// reads, so a wrong promise here is more expensive than one in the FAQ.
+export const SLIDES: Slide[] = [
   {
     key: 'tycoon',
     kicker: 'BUY LAND. BECOME A TYCOON.',
