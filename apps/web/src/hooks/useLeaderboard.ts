@@ -2,8 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PixelView } from '@/lib/mock'
-import { allLeaderboards, rankGap, type RankGap } from '@/lib/maps/leaderboards'
-import { fetchPixelTimestamps, subgraphConfigured } from '@/lib/subgraph'
+import {
+  allLeaderboards,
+  leaderboardMostPixels,
+  rankGap,
+  type RankGap,
+} from '@/lib/maps/leaderboards'
+import {
+  fetchAreaLeaderboard,
+  fetchPixelTimestamps,
+  subgraphConfigured,
+} from '@/lib/subgraph'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
@@ -163,35 +172,39 @@ export function useLeaderboard(
     return pixelViewToMapSnapshot(pixelData, homeMapId, true, home.width, mask)
   }, [pixelData, homeMapId])
 
-  // Per-pixel acquisition times (subgraph) enrich the snapshot so ALL three
-  // boards break value ties by who reached their standing FIRST — AREA by the
-  // newest of your owned pixels, EMPIRE by the newest pixel in your biggest
-  // block, TYCOONS by when you got your priciest pixel. Values still come from
-  // the live snapshot (counts, grid geometry, prices). Without the subgraph
-  // configured (or on error) tsMap stays null and boards fall back to the
-  // deterministic address tie-break — identical to before this feature.
+  // AREA comes from the subgraph's OwnerMapStat (pixelCount + lastGainAt) so the
+  // board matches the payout snapshot EXACTLY — same value, same "reached it
+  // first" tie-break field (see celo-org/mondeto-admin#48). EMPIRE and TYCOONS
+  // still enrich the live snapshot with per-pixel acquisition times (exact), as
+  // the subgraph has no aggregate for "biggest block" / "priciest pixel".
+  // Without the subgraph configured (or on error) both are null and boards fall
+  // back to the snapshot with the deterministic address tie-break.
+  const [localArea, setLocalArea] = useState<LeaderEntry[] | null>(null)
   const [tsMap, setTsMap] = useState<Map<number, number> | null>(null)
-  const [tsLoading, setTsLoading] = useState(false)
+  const [boardsLoading, setBoardsLoading] = useState(false)
 
   useEffect(() => {
     if (scope !== 'local') return
     if (!subgraphConfigured()) {
+      setLocalArea(null)
       setTsMap(null)
       return
     }
     let cancelled = false
-    setTsLoading(true)
-    fetchPixelTimestamps(homeMapId)
-      .then((m) => {
+    setBoardsLoading(true)
+    Promise.all([fetchAreaLeaderboard(homeMapId), fetchPixelTimestamps(homeMapId)])
+      .then(([area, ts]) => {
         if (cancelled) return
-        setTsMap(m)
-        setTsLoading(false)
+        setLocalArea(area)
+        setTsMap(ts)
+        setBoardsLoading(false)
       })
       .catch((err) => {
         if (cancelled) return
-        console.warn('leaderboard pixel timestamps failed, using address tie-break', err)
+        console.warn('leaderboard subgraph read failed, using snapshot/address tie-break', err)
+        setLocalArea(null)
         setTsMap(null)
-        setTsLoading(false)
+        setBoardsLoading(false)
       })
     return () => {
       cancelled = true
@@ -209,11 +222,14 @@ export function useLeaderboard(
   }, [localSnapshot, tsMap])
 
   const localBoards = useMemo<BoardSet>(() => {
-    const { mostPixels, biggestConnectedArea, mostExpensivePixel } = allLeaderboards(
+    const { biggestConnectedArea, mostExpensivePixel } = allLeaderboards(
       enrichedSnapshot,
       Number.MAX_SAFE_INTEGER,
     )
-    const area = decorate(mostPixels, 'px', (v) => String(v), profilesMap)
+    // AREA from the subgraph (payout-consistent); snapshot AREA as a fallback.
+    const areaEntries =
+      localArea ?? leaderboardMostPixels(enrichedSnapshot, Number.MAX_SAFE_INTEGER)
+    const area = decorate(areaEntries, 'px', (v) => String(v), profilesMap)
     const empire = decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap)
     const tycoons = decorate(
       mostExpensivePixel,
@@ -225,13 +241,13 @@ export function useLeaderboard(
     // rank straight from the ranked entries.
     const you: BoardYou = viewer
       ? {
-          area: toYou(rankGap(mostPixels, viewer), area, 'px', String, viewer, profilesMap),
+          area: toYou(rankGap(areaEntries, viewer), area, 'px', String, viewer, profilesMap),
           empire: toYou(rankGap(biggestConnectedArea, viewer), empire, 'px', String, viewer, profilesMap),
           tycoons: toYou(rankGap(mostExpensivePixel, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
         }
       : NO_YOU
-    return { area, empire, tycoons, loading: tsLoading, you }
-  }, [enrichedSnapshot, profilesMap, viewer, tsLoading])
+    return { area, empire, tycoons, loading: boardsLoading, you }
+  }, [enrichedSnapshot, localArea, profilesMap, viewer, boardsLoading])
 
   // --- Global path -------------------------------------------------------
   // The cross-map board is computed server-side (/api/global-board) — reading
