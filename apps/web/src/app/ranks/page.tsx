@@ -31,6 +31,38 @@ import { decodeBytes } from '@/lib/decodeBytes'
 const PIXEL_FONT = "'Press Start 2P', monospace"
 const BRAND_LIME = '#A7FF05'
 
+// Owner profiles (custom label/color) are cosmetic decoration, so cache the
+// resolved set per map for 30s — matching the global board's snapshot TTL — so
+// flipping tabs or maps doesn't re-hit the chain. Best-effort: any read/write
+// failure just falls through to a fresh multicall.
+const PROFILES_CACHE_TTL_MS = 30_000
+const profilesCacheKey = (addr: string) => `mondeto:profiles:v1:${addr.toLowerCase()}`
+
+function readProfilesCache(addr: string): Map<string, OwnerProfileData> | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(profilesCacheKey(addr))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { ts: number; profiles: Record<string, OwnerProfileData> }
+    if (Date.now() - parsed.ts > PROFILES_CACHE_TTL_MS) return null
+    return new Map(Object.entries(parsed.profiles))
+  } catch {
+    return null
+  }
+}
+
+function writeProfilesCache(addr: string, profiles: Map<string, OwnerProfileData>) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(
+      profilesCacheKey(addr),
+      JSON.stringify({ ts: Date.now(), profiles: Object.fromEntries(profiles) }),
+    )
+  } catch {
+    // sessionStorage full/unavailable — cache is best-effort.
+  }
+}
+
 /**
  * Rank-proximity copy for the player's own row. The delta is phrased per
  * board: AREA/EMPIRE in pixels, TYCOONS as a price gap. Rank 1 gets the
@@ -85,9 +117,17 @@ export default function RanksPage() {
   const showSelector = boardMaps.length > 1
   const selectorOptions = boardMaps.map((m) => ({ key: String(m.id), label: m.displayName }))
 
+  // Load the map's pixel grid and paint the board as soon as it resolves.
+  // Ranking is pure pixel math and rows fall back to generated usernames, so
+  // the board is fully usable before any profile loads — profiles (below) only
+  // swap in custom labels/colors. Keeping them off this path is what makes the
+  // board appear in ~1–2s instead of waiting on the owner fan-out.
   useEffect(() => {
-    async function load() {
+    let cancelled = false
+    async function loadPixels() {
       setLoading(true)
+      // Drop the previous map's names so they don't briefly decorate this one.
+      setProfilesMap(new Map())
       let data: PixelView[] = []
       try {
         if (publicClient) {
@@ -103,53 +143,77 @@ export default function RanksPage() {
       } catch (e) {
         console.warn('Failed to fetch from contract:', e)
       }
-      // Fetch profiles for unique owners before setting data
-      if (publicClient) {
-        const uniqueOwners = new Set<string>()
-        for (const px of data) {
-          if (px.owner !== ZERO_ADDRESS && px.owner !== '0x0000000000000000000000000000000000000000') {
-            uniqueOwners.add(px.owner.toLowerCase())
-          }
-        }
-
-        const profiles = new Map<string, OwnerProfileData>()
-        const ownerArray = [...uniqueOwners]
-
-        // Fetch profiles in parallel (batches of 10)
-        for (let i = 0; i < ownerArray.length; i += 10) {
-          const batch = ownerArray.slice(i, i + 10)
-          const results = await Promise.allSettled(
-            batch.map(addr =>
-              publicClient.readContract({
-                address: mondetoAddress,
-                abi: MONDETO_ABI,
-                functionName: 'profiles',
-                args: [addr as `0x${string}`],
-              })
-            )
-          )
-          for (let j = 0; j < results.length; j++) {
-            const result = results[j]
-            if (result.status === 'fulfilled' && result.value) {
-              const [color, labelBytes, urlBytes] = result.value as [number, unknown, unknown]
-              const label = decodeBytes(labelBytes)
-              const url = decodeBytes(urlBytes)
-              profiles.set(batch[j], {
-                label,
-                url,
-                color: color ? uint24ToHex(color) : '',
-              })
-            }
-          }
-        }
-        setProfilesMap(profiles)
-      }
-      // Set pixel data after profiles are ready so leaderboard renders with names
+      if (cancelled) return
       setPixelData(data)
       setLoading(false)
     }
-    load()
+    loadPixels()
+    return () => {
+      cancelled = true
+    }
   }, [publicClient, mondetoAddress, mondetoContract.slug, mondetoContract.width, mondetoContract.height])
+
+  // Resolve owner profiles OFF the critical path. A single viem multicall
+  // aggregates every owner into Multicall3 `aggregate3` calls (one round-trip of
+  // latency) instead of the previous ~27 serialized `profiles()` batches that
+  // stalled the board on MiniPay's fallback RPCs. When they land, `decorate()`
+  // re-runs and upgrades rows in place. Cached per map for 30s.
+  useEffect(() => {
+    const client = publicClient
+    if (!client || pixelData.length === 0) return
+    let cancelled = false
+
+    const uniqueOwners = new Set<string>()
+    for (const px of pixelData) {
+      if (px.owner !== ZERO_ADDRESS && px.owner !== '0x0000000000000000000000000000000000000000') {
+        uniqueOwners.add(px.owner.toLowerCase())
+      }
+    }
+    if (uniqueOwners.size === 0) return
+    const ownerArray = [...uniqueOwners]
+
+    const cached = readProfilesCache(mondetoAddress)
+    if (cached) {
+      setProfilesMap(cached)
+      return
+    }
+
+    async function resolveProfiles() {
+      const profiles = new Map<string, OwnerProfileData>()
+      try {
+        const results = await client.multicall({
+          allowFailure: true,
+          contracts: ownerArray.map((addr) => ({
+            address: mondetoAddress,
+            abi: MONDETO_ABI,
+            functionName: 'profiles',
+            args: [addr as `0x${string}`],
+          })),
+        })
+        for (let i = 0; i < results.length; i++) {
+          const r = results[i]
+          if (r.status === 'success' && r.result) {
+            const [color, labelBytes, urlBytes] = r.result as [number, unknown, unknown]
+            profiles.set(ownerArray[i], {
+              label: decodeBytes(labelBytes),
+              url: decodeBytes(urlBytes),
+              color: color ? uint24ToHex(color) : '',
+            })
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve owner profiles:', e)
+        return
+      }
+      if (cancelled) return
+      setProfilesMap(profiles)
+      writeProfilesCache(mondetoAddress, profiles)
+    }
+    resolveProfiles()
+    return () => {
+      cancelled = true
+    }
+  }, [publicClient, pixelData, mondetoAddress])
 
   // The selected map's board, built from the pixelData loaded above.
   // `homeMapId` is the id that pixelData belongs to so the snapshot uses the
@@ -364,7 +428,7 @@ export default function RanksPage() {
                     textAlign: 'center',
                   }}
                 >
-                  {"YOU'RE UNRANKED — CLAIM YOUR FIRST PIXEL"}
+                  {"YOU'RE UNRANKED — CLAIM A PIXEL"}
                 </div>
               </div>
             )}

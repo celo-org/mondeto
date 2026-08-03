@@ -1,28 +1,20 @@
 import { NextResponse } from 'next/server'
 import { fallbackReadClient } from '@/lib/chain'
-import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
-import { scanPurchaseLogs } from '@/lib/purchaseLogs'
+import { estimateHistoryFromBlock, scanNormalizedPurchases, toMicrocents } from '@/lib/purchaseLogs'
+import { fetchOwnerPnl, subgraphConfigured } from '@/lib/subgraph'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
 /**
- * Server-side profit-and-loss for one wallet on one map.
+ * Server-side profit-and-loss for one wallet on one map: SPENT is the sum of the
+ * wallet's own buys; EARNED is what later buyers paid for pixels the wallet used
+ * to own. Values are 6-decimal "microcents" (the unit `formatUSDT` renders).
  *
- * P&L is reconstructed from the full `PixelsPurchased` event history: SPENT is
- * the sum of the wallet's own buys; EARNED is what later buyers paid for pixels
- * the wallet used to own. That needs a wide `getLogs` scan across the whole
- * contract history — dozens of 50k-block chunks on Celo.
- *
- * Doing that on the phone meant the scan routinely failed on MiniPay's
- * constrained network and the profile showed $0 earned / $0 spent. Here the
- * reads run on Vercel's network — fast, reliable — and the phone fetches a
- * small `{ spent, earned }` JSON (values in 6-decimal "microcents", the unit
- * `formatUSDT` renders). Cached briefly in the warm instance so navigating
- * back to the profile doesn't re-scan.
- *
- * This mirrors /api/global-board: a lightweight live-read stand-in for a full
- * indexer, no persistence or historical queries.
+ * When the Goldsky subgraph is configured (NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL),
+ * both numbers are a single indexed query (OwnerMapStats.totalSpent/totalEarned).
+ * Otherwise we fall back to the legacy full-history `PixelsPurchased` log scan —
+ * so this route behaves identically until the subgraph URL is set.
  */
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +23,6 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const CACHE_TTL_MS = 60_000
-const SAFETY_BUFFER_BLOCKS = 100_000n
 
 interface Pnl {
   spent: string
@@ -43,15 +34,19 @@ const ZERO: Pnl = { spent: '0', earned: '0' }
 // Per (mapId, address) warm-instance cache.
 const cache = new Map<string, { ts: number; value: Pnl }>()
 
-// Normalize a token amount to 6 decimals (the unit `formatUSDT` displays), so
-// mixed-token totals (e18 USDm vs e6 USDC) sum in one magnitude.
-function toMicrocents(cost: bigint, decimals: number): bigint {
-  if (decimals === 6) return cost
-  if (decimals > 6) return cost / 10n ** BigInt(decimals - 6)
-  return cost * 10n ** BigInt(6 - decimals)
+async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
+  // Preferred path: one indexed query for the wallet's LIFETIME spend/earn
+  // across every map (the global Owner entity). `mapId` is ignored here — the
+  // profile shows an all-maps lifetime figure. The legacy fallback below is
+  // still per-map (it can only scan one contract's logs).
+  if (subgraphConfigured()) {
+    const { spent, earned } = await fetchOwnerPnl(addr)
+    return { spent, earned }
+  }
+  return computePnlFromLogs(mapId, addr)
 }
 
-async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
+async function computePnlFromLogs(mapId: MapId, addr: string): Promise<Pnl> {
   const contract = getMapContractById(mapId)
   const mondetoAddress = contract.address
   const client = fallbackReadClient
@@ -59,23 +54,11 @@ async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
   const currentBlock = await client.getBlockNumber()
 
   // Estimate the first-sale block from the contract's own clock so we don't
-  // scan from genesis. 1s/block on Celo L2 — overestimating is safe.
-  let fromBlock = 0n
-  const [halvingStartTs, head] = await Promise.all([
-    client.readContract({
-      address: mondetoAddress,
-      abi: MONDETO_ABI,
-      functionName: 'halvingStartTimestamp',
-    }) as Promise<bigint>,
-    client.getBlock({ blockNumber: currentBlock }),
-  ])
-  // 0 means no purchases yet — nothing to scan.
-  if (halvingStartTs === 0n) return ZERO
-  const secondsSinceStart = head.timestamp - halvingStartTs
-  const estimatedBlocks = secondsSinceStart + SAFETY_BUFFER_BLOCKS
-  fromBlock = currentBlock > estimatedBlocks ? currentBlock - estimatedBlocks : 0n
+  // scan from genesis. `null` means no purchases yet — nothing to scan.
+  const fromBlock = await estimateHistoryFromBlock(mondetoAddress, currentBlock)
+  if (fromBlock === null) return ZERO
 
-  const { logs, failedChunks, totalChunks } = await scanPurchaseLogs(
+  const { logs, tokenDecimals, failedChunks, totalChunks } = await scanNormalizedPurchases(
     mondetoAddress,
     fromBlock,
     currentBlock,
@@ -86,34 +69,6 @@ async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
   if (failedChunks > 0) {
     logger.warn('P&L scan had failed chunks', { failedChunks, totalChunks, mapId, address: addr })
   }
-
-  // Chronological order so the running owner-of map reflects real purchase order.
-  logs.sort((a, b) => {
-    const ab = a.blockNumber ?? 0n
-    const bb = b.blockNumber ?? 0n
-    if (ab !== bb) return ab < bb ? -1 : 1
-    return (a.logIndex ?? 0) - (b.logIndex ?? 0)
-  })
-
-  // Look up each payment token's decimals for normalization.
-  const tokenDecimals = new Map<string, number>()
-  const uniqueTokens = new Set<string>()
-  for (const log of logs) uniqueTokens.add((log.args.token as string).toLowerCase())
-  await Promise.all(
-    [...uniqueTokens].map(async (token) => {
-      try {
-        const [, dec] = (await client.readContract({
-          address: mondetoAddress,
-          abi: MONDETO_ABI,
-          functionName: 'tokenConfig',
-          args: [token as `0x${string}`],
-        })) as readonly [boolean, number]
-        tokenDecimals.set(token, Number(dec))
-      } catch {
-        tokenDecimals.set(token, 6)
-      }
-    }),
-  )
 
   let totalSpent = 0n
   let totalEarned = 0n

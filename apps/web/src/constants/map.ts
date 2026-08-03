@@ -3,10 +3,12 @@
 // exports were removed when continent maps (with non-170x100 grids) were
 // wired in.
 
-// Contract pricing (USDT 6 decimals)
-export const INITIAL_PRICE = 100000n // 0.10 USDT
-export const MIN_PRICE = 1n          // 0.000001 USDT
-export const HALVING_TIME = 182n * 24n * 60n * 60n // 182 days in seconds
+// Seed price for mock/dev data only (6 decimals). Real prices always come from
+// the contract via `config()` and `lib/priceCalc.ts` — never from a constant
+// here. MIN_PRICE and HALVING_TIME used to live alongside this with stale
+// values (182-day halving, vs the 30 days actually deployed); they had no
+// consumers and were deleted, because they were the number anyone would copy.
+export const INITIAL_PRICE = 30000n // 0.03, matching the deployed initialPrice
 
 // Rendering
 export const TILE_GAP = 0.08

@@ -1,0 +1,334 @@
+# Goldsky subgraph manifest for the Mondeto pixel maps on Celo mainnet.
+#
+# All eight maps are separate UUPS proxies of the same Mondeto implementation,
+# so every dataSource shares one ABI + one mapping file. The frontend mapId is
+# injected per contract via dataSource.context (read in the mapping with
+# dataSource.context().getI32("mapId")).
+#
+# KEEP ADDRESSES IN SYNC with apps/web/src/lib/maps/contracts.ts (source of truth).
+# Regenerate with: node scripts/gen-subgraph-yaml.js (see README).
+specVersion: 1.0.0
+description: Ownership, purchase history, earn/spend and analytics for Mondeto on Celo
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: Mondeto0
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 0
+    source:
+      address: "0xA8cFC1B4365518f56954382B6Fab25a5382f5C49" # 0 world
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated
+  - kind: ethereum
+    name: Mondeto1
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 1
+    source:
+      address: "0x8e70ada33714C3F8f35182b781C63449c5e079b7" # 1 africa
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated
+  - kind: ethereum
+    name: Mondeto2
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 2
+    source:
+      address: "0x9b8DC1e200A21A97963948A758D9fc4300310661" # 2 asia
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated
+  - kind: ethereum
+    name: Mondeto3
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 3
+    source:
+      address: "0xDfB39B4d8896F196c13DBc4aC2dBDc3175Fcd767" # 3 europe
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated
+  - kind: ethereum
+    name: Mondeto4
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 4
+    source:
+      address: "0x5bf55b88220DF9500A33962777B9d48945443106" # 4 north-america
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated
+  - kind: ethereum
+    name: Mondeto5
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 5
+    source:
+      address: "0x822e332ac5f0c760257C7204154BA5eaF7A06586" # 5 south-america
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated
+  - kind: ethereum
+    name: Mondeto6
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 6
+    source:
+      address: "0x693CE5fBC50c0aCbd8B3333ad7DcaAb1802A4773" # 6 oceania
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated
+  - kind: ethereum
+    name: Mondeto7
+    network: celo
+    context:
+      mapId:
+        type: Int
+        data: 7
+    source:
+      address: "0x66C6eF911B3e33B35558956a0E636F33E16063c4" # 7 antarctica
+      abi: Mondeto
+      startBlock: 71123574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Pixel
+        - Owner
+        - OwnerMapStat
+        - PurchaseBatch
+        - Purchase
+        - OwnerProfile
+        - Token
+        - MapStat
+        - ActiveBuyer
+      abis:
+        - name: Mondeto
+          file: ./abis/Mondeto.json
+      eventHandlers:
+        - event: PixelsPurchased(indexed address,indexed address,uint256[],uint256)
+          handler: handlePixelsPurchased
+        - event: ProfileUpdated(indexed address,uint24,bytes,bytes)
+          handler: handleProfileUpdated
+        - event: AcceptedTokenAdded(indexed address,uint8)
+          handler: handleAcceptedTokenAdded
+        - event: AcceptedTokenRemoved(indexed address)
+          handler: handleAcceptedTokenRemoved
+        - event: FeeRateUpdated(uint256)
+          handler: handleFeeRateUpdated

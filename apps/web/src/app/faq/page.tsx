@@ -1,59 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import IntroScreen from '@/components/Overlays/IntroScreen'
+import { FAQ_GROUPS } from './content'
 
 export const metadata: Metadata = {
   title: 'FAQ — Mondeto',
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
-
-const QA: Array<{ q: string; a: string }> = [
-  {
-    q: 'What is Mondeto?',
-    a: 'A pixel-buying game on Celo. The world map is 170 × 100 pixels. You buy pixels with USDT and paint the world your color.',
-  },
-  {
-    q: 'How do prices work?',
-    a: 'Each pixel has a base price. Every time someone buys it, the price doubles. So the more times a pixel changes hands, the more expensive it gets.',
-  },
-  {
-    q: 'What if a pixel sits unsold?',
-    a: 'Prices don\'t climb forever. After a quiet window, the price halves. So abandoned land becomes cheap again — good for hunters.',
-  },
-  {
-    q: 'Who pays whom when I buy a pixel?',
-    a: 'If you buy a pixel from another player, they receive most of what you pay. A small platform fee (currently 3%) goes to Mondeto. If the pixel was unowned, the full amount is the contract\'s.',
-  },
-  {
-    q: 'Can someone buy my pixel away from me?',
-    a: 'Yes. Ownership is permissionless — anyone can buy any pixel at the current price. That\'s the whole game. But they pay you double what you paid, so getting sniped is profitable.',
-  },
-  {
-    q: 'What network fees do I pay?',
-    a: 'Almost nothing. Celo network fees are paid automatically in USDT inside MiniPay — typically a fraction of a cent.',
-  },
-  {
-    q: 'Why USDT and not USDC or USDm?',
-    a: 'v1 of Mondeto accepts USDT only. If you hold USDC or USDm, swap inside MiniPay first. Multi-stablecoin support is on the v2 roadmap.',
-  },
-  {
-    q: 'How do leaderboards work?',
-    a: 'Three boards: AREA (most pixels owned), EMPIRE (largest single connected run of land), TYCOON (single most valuable pixel). Top players win prizes when campaigns are active.',
-  },
-  {
-    q: 'I see weird names like "mango-curie". What are those?',
-    a: 'When you haven\'t set a player name yet, Mondeto picks one for you — a fruit plus a famous (and non-controversial) figure. Set your own name on the profile page if you want.',
-  },
-  {
-    q: 'Who runs Mondeto?',
-    a: 'Mondeto is operated by Celo Core Co. It is not operated by, affiliated with, or endorsed by Opera or MiniPay — MiniPay is just the wallet that makes Mondeto accessible inside their app.',
-  },
-  {
-    q: 'Where does support go?',
-    a: 'Use the SUPPORT button on your profile page — it opens a short form. A human reads every submission.',
-  },
-]
 
 export default function FaqPage() {
   return (
@@ -91,44 +45,94 @@ export default function FaqPage() {
           fontSize: 18,
           fontFamily: PIXEL_FONT,
           letterSpacing: 3,
-          marginBottom: 24,
+          marginBottom: 16,
           color: 'var(--text)',
         }}
       >
         FAQ
       </h1>
 
+      {/* Jump links sit above the carousel on purpose: a player worried about a
+          missing payout shouldn't have to swipe five onboarding slides to reach
+          the answer. */}
+      <nav
+        aria-label="FAQ sections"
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 24 }}
+      >
+        {FAQ_GROUPS.map(({ id, title }) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            style={{
+              fontSize: 7,
+              fontFamily: PIXEL_FONT,
+              letterSpacing: 1,
+              color: 'var(--brand-lime)',
+              textDecoration: 'none',
+              padding: '6px 8px',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              lineHeight: 1.4,
+            }}
+          >
+            {title}
+          </a>
+        ))}
+      </nav>
+
       {/* Replayable onboarding carousel — the same walkthrough new players see
           once, embedded here so "HOW TO WIN" can send them back to it anytime. */}
       <IntroScreen inline />
 
-      <h2
-        style={{
-          fontSize: 11,
-          fontFamily: PIXEL_FONT,
-          letterSpacing: 2,
-          color: 'var(--text)',
-          margin: '28px 0 16px',
-        }}
-      >
-        READ MORE DETAILS
-      </h2>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {QA.map(({ q, a }, i) => (
-          <section key={i}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 32, marginTop: 28 }}>
+        {FAQ_GROUPS.map(({ id, title, items }) => (
+          <section key={id} id={id} style={{ scrollMarginTop: 16 }}>
             <h2
               style={{
                 fontSize: 11,
                 fontFamily: PIXEL_FONT,
-                letterSpacing: 1,
-                color: 'var(--text)',
-                marginBottom: 8,
+                letterSpacing: 2,
+                color: 'var(--brand-lime)',
+                marginBottom: 16,
               }}
             >
-              {q}
+              {title}
             </h2>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{a}</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {items.map((item) => (
+                <section key={item.id} id={item.id} style={{ scrollMarginTop: 16 }}>
+                  <h3
+                    style={{
+                      fontSize: 11,
+                      fontFamily: PIXEL_FONT,
+                      letterSpacing: 1,
+                      color: 'var(--text)',
+                      marginBottom: 8,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {item.q}
+                  </h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    {item.a}
+                    {item.link && (
+                      <>
+                        {' '}
+                        <a
+                          href={item.link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--accent)' }}
+                        >
+                          {item.link.label}
+                        </a>
+                      </>
+                    )}
+                  </p>
+                </section>
+              ))}
+            </div>
           </section>
         ))}
       </div>

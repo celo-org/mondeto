@@ -66,8 +66,8 @@ export default function DealsLegend({ visible, halvingTimeSeconds }: DealsLegend
         }}
       >
         {fallPct !== null && halvingDays !== null
-          ? `BRIGHTER = BIGGER DISCOUNT. PRICE HALVES EVERY ~${halvingDays} DAYS, SO IT DROPS ~${fallPct.toFixed(1)}%/DAY UNTIL SOMEONE BUYS.`
-          : 'BRIGHTER = BIGGER DISCOUNT. THE LONGER LAND SITS UNSOLD, THE CHEAPER IT GETS.'}
+          ? `BRIGHTER = CHEAPER RIGHT NOW. PRICE HALVES EVERY ~${halvingDays} DAYS, SO IT DROPS ~${fallPct.toFixed(1)}%/DAY UNTIL SOMEONE BUYS.`
+          : 'BRIGHTER = CHEAPER RIGHT NOW. THE LONGER LAND SITS UNSOLD, THE CHEAPER IT GETS.'}
       </div>
     </div>
   )

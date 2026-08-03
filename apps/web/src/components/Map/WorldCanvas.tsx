@@ -47,8 +47,6 @@ interface WorldCanvasProps {
   userAddress?: string
   /** Connected wallet's current profile color, for their own pixels. */
   userColor?: string
-  /** Map entry price (config().initialPrice) — powers the 'deals' view. */
-  initialPrice?: bigint
   changedIds?: number[]
   profilesMap?: Map<string, { label: string; url?: string; color?: string }>
 }
@@ -70,7 +68,6 @@ function InnerCanvas({
   version,
   userAddress,
   userColor,
-  initialPrice,
   changedIds,
   profilesMap,
   onTapWhileZoomedOut,
@@ -100,8 +97,8 @@ function InnerCanvas({
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    drawPixels(ctx, pixelData, mapView, width, height, mask, userAddress, userColor, initialPrice)
-  }, [pixelData, mapView, pixelCanvasRef, version, userAddress, userColor, initialPrice, width, height, mask])
+    drawPixels(ctx, pixelData, mapView, width, height, mask, userAddress, userColor)
+  }, [pixelData, mapView, pixelCanvasRef, version, userAddress, userColor, width, height, mask])
 
   return (
     <div style={{ position: 'relative', width, height }}>

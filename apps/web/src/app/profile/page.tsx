@@ -14,6 +14,8 @@ import { useMaps } from '@/hooks/useMaps'
 import { useMapRulers } from '@/hooks/useMapRulers'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
+import { rankGap } from '@/lib/maps/leaderboards'
+import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
@@ -71,17 +73,15 @@ export default function ProfilePage() {
   const [nameError, setNameError] = useState<string | null>(null)
 
   const [pixelCount, setPixelCount] = useState(0)
+  // Total current market value of the wallet's held land across ALL active
+  // (revealed) maps — a portfolio figure, not just the map on screen. Summed
+  // from each owned pixel's current on-chain price (6-dec USDT). null until the
+  // multi-map scan resolves (renders a placeholder); 0n when nothing is owned.
+  const [landValue, setLandValue] = useState<bigint | null>(null)
   const [rank, setRank] = useState(0)
   const [rankGapLabel, setRankGapLabel] = useState<string | undefined>(undefined)
   const [spent, setSpent] = useState(0n)
   const [earned, setEarned] = useState(0n)
-  // Total current market value of the wallet's owned pixels across ALL active
-  // (revealed) maps — a portfolio figure, not just the map on screen. Summed
-  // from each owned pixel's current on-chain price (6-dec USDT).
-  // landValueReady gates a placeholder so an owner never briefly reads "0.00"
-  // while the multi-map scan is in flight.
-  const [landValue, setLandValue] = useState(0n)
-  const [landValueReady, setLandValueReady] = useState(false)
   // Whether the P&L fetch has produced a value yet (cache or network). Until it
   // has, the SPENT/EARNED cards show a placeholder instead of a misleading
   // "0.00" — the full-history scan behind /api/pnl takes a few seconds cold.
@@ -106,22 +106,45 @@ export default function ProfilePage() {
         )
 
         const me = addrStr!.toLowerCase()
-        // Count pixels owned by current user and track all owners for rank.
+        // Count pixels owned by the wallet and tally all owners for the local
+        // rank fallback below. (Land value is computed across all maps in its
+        // own effect — this scan is just this map's count + rank.)
         const ownerCounts = new Map<string, number>()
         let myCount = 0
-
         for (const px of pixels) {
           const owner = px.owner
           if (!owner || owner === ZERO_ADDRESS) continue
-          const lc = owner.toLowerCase()
-          ownerCounts.set(lc, (ownerCounts.get(lc) ?? 0) + 1)
-          if (lc === me) myCount++
+          const lo = owner.toLowerCase()
+          ownerCounts.set(lo, (ownerCounts.get(lo) ?? 0) + 1)
+          if (lo === me) myCount++
         }
-
         setPixelCount(myCount)
 
         // Compute rank + the gap to the rank above ("N PX FROM #K") so the
         // RANK card doubles as a nudge toward the next spot on the board.
+        //
+        // Prefer the subgraph AREA board so this matches the leaderboard exactly
+        // — same pixel-count ranking with the "reached the count first"
+        // tie-break. Falls back to the local pixel-batch decode (address /
+        // insertion tie-break) when the subgraph isn't configured or errors.
+        if (subgraphConfigured()) {
+          try {
+            const board = await fetchAreaLeaderboard(currentMapId)
+            const rg = rankGap(board, addrStr!)
+            if (rg) {
+              setRank(rg.rank)
+              setRankGapLabel(
+                rg.rank === 1 ? 'RULER' : `${rg.gap ?? 0} PX FROM #${rg.rank - 1}`,
+              )
+            } else {
+              setRank(0)
+              setRankGapLabel(undefined)
+            }
+            return
+          } catch (e) {
+            console.warn('rank from subgraph failed, using local decode:', e)
+          }
+        }
         const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
         const rankIdx = sorted.findIndex(([owner]) => owner === me)
         setRank(rankIdx >= 0 ? rankIdx + 1 : 0)
@@ -216,13 +239,13 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!addrStr || revealedMaps.length === 0) {
       setLandValue(0n)
-      setLandValueReady(true)
       return
     }
     if (!publicClient) return
 
     let cancelled = false
-    setLandValueReady(false)
+    // Reset to the loading placeholder while the multi-map scan runs.
+    setLandValue(null)
 
     async function fetchLandValue() {
       const me = addrStr!.toLowerCase()
@@ -251,7 +274,6 @@ export default function ProfilePage() {
 
       if (cancelled) return
       setLandValue(subtotals.reduce((a, b) => a + b, 0n))
-      setLandValueReady(true)
     }
 
     fetchLandValue()
@@ -384,7 +406,13 @@ export default function ProfilePage() {
           rankGapLabel={rankGapLabel}
           spent={addrStr && !pnlReady ? '…' : formatUSDT(spent)}
           earned={addrStr && !pnlReady ? '…' : formatUSDT(earned)}
-          landValue={addrStr && !landValueReady ? '…' : formatUSDT(landValue)}
+          landValue={
+            addrStr
+              ? landValue === null
+                ? '…'
+                : formatUSDT(landValue)
+              : undefined
+          }
         />
 
         {/* "FLEX MY EARNINGS" share is intentionally hidden for now. The
@@ -574,6 +602,21 @@ export default function ProfilePage() {
             >
               SUPPORT
             </a>
+            {/* Rewards are on-chain, so a wallet address is the only thing
+                support can look a payment up by. Saying so here is cheaper than
+                a round-trip asking for it after someone sends a phone number. */}
+            <div
+              style={{
+                fontSize: 6,
+                fontFamily: "'Press Start 2P', monospace",
+                color: 'var(--text-muted)',
+                letterSpacing: 1,
+                lineHeight: 1.6,
+                textAlign: 'center',
+              }}
+            >
+              HAVE YOUR 0x WALLET ADDRESS READY
+            </div>
             <div
               style={{
                 display: 'flex',

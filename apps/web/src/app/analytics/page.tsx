@@ -286,6 +286,10 @@ export default function AnalyticsPage() {
   const a = useAnalytics()
 
   const feePct = a.feeRateBps / 100
+  // Treasury take splits into two buckets: 100% of first-time (primary) sales,
+  // plus the feeRate cut on resales. `revenueAllTime` is their sum.
+  const resaleFee =
+    a.feeRateBps > 0 ? (a.resaleVolumeAllTime * BigInt(a.feeRateBps)) / 10_000n : 0n
 
   return (
     <div
@@ -388,7 +392,7 @@ export default function AnalyticsPage() {
           <Stat label="ALL-TIME VOLUME" value={formatUSDT(a.volumeAllTime)} unit="USDT" loading={a.loading} />
         </div>
 
-        <SectionHeader>PLATFORM REVENUE</SectionHeader>
+        <SectionHeader>TREASURY REVENUE</SectionHeader>
         <div
           style={{
             display: 'grid',
@@ -397,8 +401,20 @@ export default function AnalyticsPage() {
           }}
         >
           <Stat
-            label={`FEES @ ${feePct.toFixed(2)}%`}
+            label="TREASURY TAKE"
             value={formatUSDT(a.revenueAllTime)}
+            unit="USDT"
+            loading={a.loading}
+          />
+          <Stat
+            label="PRIMARY SALES"
+            value={formatUSDT(a.primaryProceedsAllTime)}
+            unit="USDT"
+            loading={a.loading}
+          />
+          <Stat
+            label={`RESALE FEES @ ${feePct.toFixed(2)}%`}
+            value={formatUSDT(resaleFee)}
             unit="USDT"
             loading={a.loading}
           />
@@ -415,8 +431,9 @@ export default function AnalyticsPage() {
           }}
         >
           window: blocks {a.windowStartBlock.toString()}–{a.windowEndBlock.toString()} ·
-          fee rate read live from contract · revenue is an estimate
-          (volume × fee%); actual withdrawable balance lives on-chain
+          fee rate read live from contract · treasury take = 100% of first-time
+          (primary) sales + {feePct.toFixed(2)}% fee on resales; actual
+          withdrawable balance lives on-chain
         </div>
 
         <AdvisoryPanel />

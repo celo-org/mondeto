@@ -14,46 +14,93 @@
 
 import type { Address, LeaderEntry, MapSnapshot, PixelState } from "./types";
 
+/** Internal board keys. Re-exported from `hooks/useLeaderboard` for callers. */
+export type LeaderboardTab = "AREA" | "EMPIRE" | "TYCOONS";
+
+/**
+ * The board names players actually see. Lives here, in a pure lib, so server
+ * components (the FAQ) and tests can reach it without importing a
+ * `'use client'` module.
+ *
+ * Note AREA renders as "LAND" — the key is internal and must never appear in
+ * player-facing copy. The FAQ said "AREA" for months because this mapping was
+ * trapped inside a client component; `__tests__/app/faq.test.ts` now guards it.
+ */
+export const BOARD_LABELS: Record<LeaderboardTab, string> = {
+  AREA: "LAND",
+  EMPIRE: "EMPIRE",
+  TYCOONS: "TYCOONS",
+};
+
 function ownedLandPixels(map: MapSnapshot): PixelState[] {
   return map.pixels.filter((p) => p.isLand && p.owner !== null);
 }
 
+/**
+ * Board comparator. Value descending; on a tie, the entry that reached that
+ * value FIRST (smaller `tiebreak` / lastGainAt) ranks higher; finally address
+ * ascending as a deterministic fallback (and for boards with no time signal).
+ */
+export function compareLeaderEntries(a: LeaderEntry, b: LeaderEntry): number {
+  if (b.value !== a.value) return b.value - a.value;
+  const at = a.tiebreak;
+  const bt = b.tiebreak;
+  if (at != null && bt != null && at !== bt) return at - bt;
+  if (at != null && bt == null) return -1;
+  if (at == null && bt != null) return 1;
+  return a.address < b.address ? -1 : 1;
+}
+
 function rank(
   values: Map<Address, number>,
-  limit: number
+  limit: number,
+  tiebreaks?: Map<Address, number | undefined>
 ): LeaderEntry[] {
   return [...values.entries()]
-    .map(([address, value]) => ({ address, value }))
-    // value desc, then address asc for a stable, deterministic tiebreak
-    .sort((a, b) => b.value - a.value || (a.address < b.address ? -1 : 1))
+    .map(([address, value]) => ({ address, value, tiebreak: tiebreaks?.get(address) }))
+    .sort(compareLeaderEntries)
     .slice(0, limit);
 }
 
-/** Board 1 — who owns the most pixels on this map. */
+/**
+ * Board 1 — who owns the most pixels on this map. Tie-break (when pixels carry
+ * `acquiredAt`): the wallet whose most-recent still-owned acquisition is earliest
+ * — i.e. who reached their current count first.
+ */
 export function leaderboardMostPixels(
   map: MapSnapshot,
   limit = 10
 ): LeaderEntry[] {
   const counts = new Map<Address, number>();
+  const ts = new Map<Address, number | undefined>();
   for (const p of ownedLandPixels(map)) {
-    counts.set(p.owner as Address, (counts.get(p.owner as Address) ?? 0) + 1);
+    const owner = p.owner as Address;
+    counts.set(owner, (counts.get(owner) ?? 0) + 1);
+    if (p.acquiredAt != null) {
+      ts.set(owner, Math.max(ts.get(owner) ?? 0, p.acquiredAt));
+    }
   }
-  return rank(counts, limit);
+  return rank(counts, limit, ts);
 }
 
-/** Board 3 — whose single most expensive pixel is the priciest. */
+/**
+ * Board 3 — whose single most expensive pixel is the priciest. Tie-break (when
+ * pixels carry `acquiredAt`): who acquired that priciest pixel first.
+ */
 export function leaderboardMostExpensivePixel(
   map: MapSnapshot,
   limit = 10
 ): LeaderEntry[] {
   const best = new Map<Address, number>();
+  const bestTs = new Map<Address, number | undefined>();
   for (const p of ownedLandPixels(map)) {
     const owner = p.owner as Address;
     if (p.currentPrice > (best.get(owner) ?? -Infinity)) {
       best.set(owner, p.currentPrice);
+      bestTs.set(owner, p.acquiredAt);
     }
   }
-  return rank(best, limit);
+  return rank(best, limit, bestTs);
 }
 
 /**
@@ -70,27 +117,41 @@ export function leaderboardBiggestConnectedArea(
 ): LeaderEntry[] {
   const owned = ownedLandPixels(map);
 
-  // (x,y) -> owner, for O(1) neighbour lookup.
+  // (x,y) -> owner, for O(1) neighbour lookup; plus (x,y) -> acquiredAt.
   const grid = new Map<string, Address>();
+  const tsGrid = new Map<string, number>();
   const key = (x: number, y: number) => `${x}:${y}`;
-  for (const p of owned) grid.set(key(p.x, p.y), p.owner as Address);
+  for (const p of owned) {
+    grid.set(key(p.x, p.y), p.owner as Address);
+    if (p.acquiredAt != null) tsGrid.set(key(p.x, p.y), p.acquiredAt);
+  }
 
   const visited = new Set<string>();
   const bestComponent = new Map<Address, number>();
+  // Tie-break: when a wallet's biggest block reached its CURRENT size — i.e. the
+  // most recent acquisition among the pixels that make it up (earlier wins).
+  const bestTs = new Map<Address, number | undefined>();
 
   for (const p of owned) {
     const startKey = key(p.x, p.y);
     if (visited.has(startKey)) continue;
 
     const owner = p.owner as Address;
-    // BFS over same-owner orthogonal neighbours.
+    // BFS over same-owner orthogonal neighbours, tracking the newest member.
     let size = 0;
+    let compTs = 0;
+    let compHasTs = false;
     const queue: Array<[number, number]> = [[p.x, p.y]];
     visited.add(startKey);
 
     while (queue.length > 0) {
       const [cx, cy] = queue.shift() as [number, number];
       size += 1;
+      const ct = tsGrid.get(key(cx, cy));
+      if (ct != null) {
+        compTs = Math.max(compTs, ct);
+        compHasTs = true;
+      }
       const neighbours: Array<[number, number]> = [
         [cx + 1, cy],
         [cx - 1, cy],
@@ -109,10 +170,11 @@ export function leaderboardBiggestConnectedArea(
 
     if (size > (bestComponent.get(owner) ?? 0)) {
       bestComponent.set(owner, size);
+      bestTs.set(owner, compHasTs ? compTs : undefined);
     }
   }
 
-  return rank(bestComponent, limit);
+  return rank(bestComponent, limit, bestTs);
 }
 
 /* ------------------------------------------------------------------ *
@@ -174,22 +236,28 @@ export function allLeaderboards(map: MapSnapshot, limit = 10) {
 
 function mergeMax(boards: LeaderEntry[][], limit: number): LeaderEntry[] {
   const best = new Map<Address, number>();
+  const bestTs = new Map<Address, number | undefined>();
   for (const board of boards) {
     for (const e of board) {
-      if (e.value > (best.get(e.address) ?? -Infinity)) best.set(e.address, e.value);
+      if (e.value > (best.get(e.address) ?? -Infinity)) {
+        best.set(e.address, e.value);
+        bestTs.set(e.address, e.tiebreak); // carry the winning board's tie-break
+      }
     }
   }
-  return rank(best, limit);
+  return rank(best, limit, bestTs);
 }
 
 function mergeSum(boards: LeaderEntry[][], limit: number): LeaderEntry[] {
   const total = new Map<Address, number>();
+  const ts = new Map<Address, number | undefined>();
   for (const board of boards) {
     for (const e of board) {
       total.set(e.address, (total.get(e.address) ?? 0) + e.value);
+      if (e.tiebreak != null) ts.set(e.address, Math.max(ts.get(e.address) ?? 0, e.tiebreak));
     }
   }
-  return rank(total, limit);
+  return rank(total, limit, ts);
 }
 
 /**

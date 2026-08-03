@@ -3,10 +3,16 @@ import { fallbackReadClient } from '@/lib/chain'
 import { fetchGlobalSnapshots } from '@/lib/maps/snapshots'
 import {
   allGlobalLeaderboards,
+  compareLeaderEntries,
   leaderboardMostPixels,
   rankGap,
   type RankGap,
 } from '@/lib/maps/leaderboards'
+import {
+  fetchAreaLeaderboard,
+  fetchPixelTimestamps,
+  subgraphConfigured,
+} from '@/lib/subgraph'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain } from '@/lib/maps/contracts'
 import { readRevealedMapIdsServer } from '@/lib/maps/reveals'
@@ -15,7 +21,7 @@ import { decodeBytes } from '@/lib/decodeBytes'
 import { uint24ToHex } from '@/lib/colorUtils'
 import { celo } from 'viem/chains'
 import type { MapContract } from '@/lib/maps/contracts'
-import type { LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
+import type { Address, LeaderEntry, MapId, MapSnapshot } from '@/lib/maps/types'
 import { logger } from '@/lib/logger'
 
 /**
@@ -91,6 +97,49 @@ let cache: {
   full: FullBoards
   maps: MapContract[]
 } | null = null
+
+/**
+ * Enrich each map's snapshot pixels with their owner-acquisition time (subgraph
+ * `Pixel.lastSoldAt`, keyed by pixel id) so every board breaks value ties by who
+ * reached their standing first. Mutates in place — the snapshots are freshly
+ * built per request. No-op on any map whose timestamp read fails.
+ */
+async function enrichSnapshotsWithTimestamps(
+  snapshots: MapSnapshot[],
+): Promise<void> {
+  const tsMaps = await Promise.all(
+    snapshots.map((s) => fetchPixelTimestamps(s.meta.id)),
+  )
+  snapshots.forEach((snap, i) => {
+    const ts = tsMaps[i]
+    for (const p of snap.pixels) {
+      const t = ts.get(p.id)
+      if (t != null) p.acquiredAt = t
+    }
+  })
+}
+
+/**
+ * Cross-map AREA board from the subgraph's `OwnerMapStat`: sum each wallet's
+ * per-map pixelCount across the revealed maps, tie-broken by `lastGainAt` (the
+ * latest across their maps — reached-first). Sourced from the subgraph (not the
+ * snapshot) so AREA matches the payout snapshot exactly (celo-org/mondeto-admin#48).
+ */
+async function subgraphGlobalArea(mapIds: MapId[]): Promise<LeaderEntry[]> {
+  const boards = await Promise.all(mapIds.map((id) => fetchAreaLeaderboard(id)))
+  const value = new Map<Address, number>()
+  const reachedAt = new Map<Address, number>()
+  for (const board of boards) {
+    for (const e of board) {
+      value.set(e.address, (value.get(e.address) ?? 0) + e.value)
+      const t = e.tiebreak ?? 0
+      reachedAt.set(e.address, Math.max(reachedAt.get(e.address) ?? 0, t))
+    }
+  }
+  return [...value.entries()]
+    .map(([address, v]) => ({ address, value: v, tiebreak: reachedAt.get(address) }))
+    .sort(compareLeaderEntries)
+}
 
 function locateViewer(full: FullBoards, address: string): YouPayload {
   return {
@@ -246,12 +295,37 @@ export async function GET(request: Request) {
     const maps = getMapsForChain(celo.id, revealedIds)
     const snapshots = await fetchGlobalSnapshots(read, maps)
 
+    // EMPIRE/TYCOONS break ties by per-pixel acquisition time (exact), so enrich
+    // the snapshots first. AREA instead comes from the subgraph's OwnerMapStat
+    // (pixelCount + lastGainAt) so it matches the payout snapshot. Both are
+    // best-effort: on failure (or subgraph unset) they fall back to the snapshot
+    // with the address tie-break.
+    if (subgraphConfigured()) {
+      try {
+        await enrichSnapshotsWithTimestamps(snapshots)
+      } catch (err) {
+        logger.warn('global-board timestamp enrich failed, using address tie-break', {
+          err: String(err),
+        })
+      }
+    }
+
     // Rank every owner (no limit) so viewer lookups below the top-N work;
     // the response payload trims to TOP_N.
     const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
       allGlobalLeaderboards(snapshots, Number.MAX_SAFE_INTEGER)
+    let areaBoard = mostPixels
+    if (subgraphConfigured()) {
+      try {
+        areaBoard = await subgraphGlobalArea(maps.map((m) => m.id))
+      } catch (err) {
+        logger.warn('global-board AREA subgraph read failed, using snapshot', {
+          err: String(err),
+        })
+      }
+    }
     const full: FullBoards = {
-      area: mostPixels,
+      area: areaBoard,
       empire: biggestConnectedArea,
       tycoons: mostExpensivePixel,
     }

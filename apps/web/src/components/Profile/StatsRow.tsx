@@ -13,8 +13,8 @@ interface StatsRowProps {
   rankGapLabel?: string
   spent?: string
   earned?: string
-  /** Current market value of the wallet's owned pixels on the active map,
-   *  pre-formatted (6-dec USDT). Rendered alongside SPENT / EARNED. */
+  /** Total current market value of the wallet's held land across all active
+   *  maps (formatted, 6-dec USDT). Omitted → card hidden. */
   landValue?: string
 }
 
@@ -31,14 +31,14 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGap
   ]
 
   // Money row — LAND VALUE (what your held pixels are worth now) sits with the
-  // SPENT / EARNED figures so all three USD numbers read as one group. Each card
-  // is only shown when its value was passed, so the row stays empty (and hidden)
-  // in contexts that don't supply money figures.
+  // SPENT / EARNED figures so all three USD numbers read as one group. LAND
+  // VALUE is only added when a value was passed; the whole row is hidden when
+  // no money figures are supplied.
   const pnlCards = [
-    landValue !== undefined ? { value: landValue, label: 'LAND VALUE' } : null,
-    spent !== undefined ? { value: spent, label: 'SPENT' } : null,
-    earned !== undefined ? { value: earned, label: 'EARNED' } : null,
-  ].filter((c): c is { value: string; label: string } => c !== null)
+    { value: spent || '0.00', label: 'SPENT' },
+    { value: earned || '0.00', label: 'EARNED' },
+    ...(landValue !== undefined ? [{ value: landValue || '0.00', label: 'LAND VALUE' }] : []),
+  ]
 
   return (
     <>
@@ -71,7 +71,7 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGap
         </div>
       ))}
     </div>
-      {pnlCards.length > 0 && (
+      {(spent || earned || landValue !== undefined) && (
         <div style={{ display: 'flex', gap: 8, margin: '0 auto 12px', maxWidth: 460, padding: '0 16px', width: '100%' }}>
           {pnlCards.map((card) => (
             <div

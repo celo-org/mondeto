@@ -4,6 +4,7 @@ import {
   leaderboardMostExpensivePixel,
   leaderboardBiggestConnectedArea,
   allLeaderboards,
+  compareLeaderEntries,
 } from "@/lib/maps/leaderboards";
 import type { MapSnapshot, PixelState } from "@/lib/maps/types";
 
@@ -318,5 +319,90 @@ describe("rankGap", () => {
 
   it("measures against the immediate rank above, not the leader", () => {
     expect(rankGap(board, "0xBBB")).toEqual({ rank: 2, value: 30, gap: 20 });
+  });
+});
+
+describe("compareLeaderEntries (AREA time tie-break)", () => {
+  const sort = (entries: LeaderEntry[]) => [...entries].sort(compareLeaderEntries);
+
+  it("ranks by value descending first", () => {
+    const out = sort([
+      { address: "0xA", value: 5, tiebreak: 100 },
+      { address: "0xB", value: 9, tiebreak: 999 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xB", "0xA"]);
+  });
+
+  it("on a value tie, whoever reached the count FIRST (smaller lastGainAt) wins", () => {
+    const out = sort([
+      { address: "0xLate", value: 7, tiebreak: 200 },
+      { address: "0xEarly", value: 7, tiebreak: 100 },
+    ]);
+    // Earlier lastGainAt ranks higher — NOT the alphabetical address order.
+    expect(out.map((e) => e.address)).toEqual(["0xEarly", "0xLate"]);
+  });
+
+  it("address ordering does NOT decide a tie when timestamps differ", () => {
+    // 0xA would win alphabetically, but it reached the count later, so it loses.
+    const out = sort([
+      { address: "0xA", value: 3, tiebreak: 500 },
+      { address: "0xZ", value: 3, tiebreak: 400 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xZ", "0xA"]);
+  });
+
+  it("falls back to address ascending when no tiebreak is present (EMPIRE/TYCOONS, snapshot AREA)", () => {
+    const out = sort([
+      { address: "0xB", value: 4 },
+      { address: "0xA", value: 4 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xA", "0xB"]);
+  });
+
+  it("falls back to address ascending when timestamps are equal", () => {
+    const out = sort([
+      { address: "0xB", value: 4, tiebreak: 100 },
+      { address: "0xA", value: 4, tiebreak: 100 },
+    ]);
+    expect(out.map((e) => e.address)).toEqual(["0xA", "0xB"]);
+  });
+});
+
+describe("exact acquisition-time tie-break (acquiredAt)", () => {
+  // Addresses chosen so alphabetical order DISAGREES with time order: 0xAAA is
+  // alphabetically first but reached its standing LATER, so time must win.
+  const late = "0xAAA";
+  const early = "0xZZZ";
+
+  it("AREA: on a pixel-count tie, the wallet whose newest pixel is older wins", () => {
+    const m = map([
+      { ...px(0, 0, late), acquiredAt: 200 },
+      { ...px(1, 0, early), acquiredAt: 100 },
+    ]);
+    expect(leaderboardMostPixels(m).map((e) => e.address)).toEqual([early, late]);
+  });
+
+  it("TYCOONS: on a price tie, whoever acquired that priciest pixel first wins", () => {
+    const m = map([
+      { ...px(0, 0, late, 5), acquiredAt: 200 },
+      { ...px(1, 0, early, 5), acquiredAt: 100 },
+    ]);
+    expect(leaderboardMostExpensivePixel(m).map((e) => e.address)).toEqual([
+      early,
+      late,
+    ]);
+  });
+
+  it("EMPIRE: on a block-size tie, whoever COMPLETED their block first wins", () => {
+    // Both own a horizontal 2-block; completion = the newest member pixel.
+    const m = map([
+      { ...px(0, 0, late), acquiredAt: 100 },
+      { ...px(1, 0, late), acquiredAt: 200 }, // late's block completed at t=200
+      { ...px(0, 5, early), acquiredAt: 100 },
+      { ...px(1, 5, early), acquiredAt: 150 }, // early's block completed at t=150
+    ]);
+    const r = leaderboardBiggestConnectedArea(m);
+    expect(r.map((e) => e.value)).toEqual([2, 2]);
+    expect(r.map((e) => e.address)).toEqual([early, late]);
   });
 });
