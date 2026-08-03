@@ -16,6 +16,8 @@ import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
+import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
+import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
@@ -57,6 +59,9 @@ export default function ProfilePage() {
     const me = addrStr.toLowerCase()
     return revealedMaps.filter((m) => rulers[m.id] === me)
   }, [addrStr, revealedMaps, rulers])
+  // Active map's grid dims + land mask + address — the source of truth for the
+  // decode below (per-continent deployments are sized differently).
+  const mapMeta = useCurrentMapMeta()
   const { name, setName, color, setColor, saveState, error: saveError, save } = useProfile(addrStr, currentMapId)
   const walletBalance = useStablecoinBalance()
   // Guaranteed-defined read client. Pixel-count + P&L still resolve when
@@ -70,6 +75,12 @@ export default function ProfilePage() {
   const [rankGapLabel, setRankGapLabel] = useState<string | undefined>(undefined)
   const [spent, setSpent] = useState(0n)
   const [earned, setEarned] = useState(0n)
+  // Current market value of the wallet's owned pixels on the active map —
+  // the contract's authoritative selectionPrice() over the owned ids (6-dec
+  // USDT). landValueReady gates a placeholder so an owner never briefly reads
+  // "0.00" while the batch + price read are in flight.
+  const [landValue, setLandValue] = useState(0n)
+  const [landValueReady, setLandValueReady] = useState(false)
   // Whether the P&L fetch has produced a value yet (cache or network). Until it
   // has, the SPENT/EARNED cards show a placeholder instead of a misleading
   // "0.00" — the full-history scan behind /api/pnl takes a few seconds cold.
@@ -81,42 +92,39 @@ export default function ProfilePage() {
 
     async function fetchStats() {
       try {
-        // Fetch pixel batch for the full map
-        const batchData = await publicClient!.readContract({
-          address: mondetoAddress,
-          abi: MONDETO_ABI,
-          functionName: 'getPixelBatch',
-          args: [0, 0, mondetoContract.width, mondetoContract.height],
-        }) as `0x${string}`
+        // Decode the active map's full pixel state via the shared, mask-aware
+        // helper (same path usePixelMap/useOwnedMaps use). Returns a PixelView[]
+        // indexed by pixelId, so `id` here IS the pixel's on-chain id — which we
+        // collect for the owned set (and thus land value) below.
+        const pixels = await fetchAllPixelsFromContract(
+          publicClient!.readContract.bind(publicClient) as Parameters<typeof fetchAllPixelsFromContract>[0],
+          mapMeta.address,
+          mapMeta.width,
+          mapMeta.height,
+          mapMeta.mask,
+        )
 
-        // Decode packed bytes: 24 bytes per land pixel
-        const hex = batchData.slice(2) // remove 0x
-        const byteCount = hex.length / 2
-        const recordCount = Math.floor(byteCount / 24)
-
-        // Count pixels owned by current user and track all owners for rank
+        const me = addrStr!.toLowerCase()
+        // Count pixels owned by current user, track all owners for rank, and
+        // gather the owned pixel ids for the land-value price read.
         const ownerCounts = new Map<string, number>()
-        let myCount = 0
+        const ownedIds: number[] = []
 
-        for (let i = 0; i < recordCount; i++) {
-          const offset = i * 48 // 24 bytes = 48 hex chars
-          const ownerHex = '0x' + hex.slice(offset, offset + 40)
-          if (ownerHex === '0x0000000000000000000000000000000000000000') continue
-
-          const count = (ownerCounts.get(ownerHex.toLowerCase()) ?? 0) + 1
-          ownerCounts.set(ownerHex.toLowerCase(), count)
-
-          if (ownerHex.toLowerCase() === addrStr!.toLowerCase()) {
-            myCount++
-          }
+        for (let id = 0; id < pixels.length; id++) {
+          const owner = pixels[id].owner
+          if (!owner || owner === ZERO_ADDRESS) continue
+          const lc = owner.toLowerCase()
+          ownerCounts.set(lc, (ownerCounts.get(lc) ?? 0) + 1)
+          if (lc === me) ownedIds.push(id)
         }
 
+        const myCount = ownedIds.length
         setPixelCount(myCount)
 
         // Compute rank + the gap to the rank above ("N PX FROM #K") so the
         // RANK card doubles as a nudge toward the next spot on the board.
         const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
-        const rankIdx = sorted.findIndex(([owner]) => owner === addrStr!.toLowerCase())
+        const rankIdx = sorted.findIndex(([owner]) => owner === me)
         setRank(rankIdx >= 0 ? rankIdx + 1 : 0)
         if (rankIdx === 0) {
           setRankGapLabel('RULER')
@@ -126,11 +134,38 @@ export default function ProfilePage() {
         } else {
           setRankGapLabel(undefined)
         }
+
+        // LAND VALUE — what it would cost a buyer to take all your pixels right
+        // now = the contract's selectionPrice() over the owned ids (6-dec USDT).
+        // Chunked so a whale's holdings don't blow up a single eth_call; prices
+        // are additive so the chunk sums are exact.
+        if (ownedIds.length === 0) {
+          setLandValue(0n)
+        } else {
+          const CHUNK = 500
+          let total = 0n
+          for (let i = 0; i < ownedIds.length; i += CHUNK) {
+            const chunk = ownedIds.slice(i, i + CHUNK)
+            const price = (await publicClient!.readContract({
+              address: mapMeta.address,
+              abi: MONDETO_ABI,
+              functionName: 'selectionPrice',
+              args: [chunk.map((id) => BigInt(id))],
+            })) as bigint
+            total += price
+          }
+          setLandValue(total)
+        }
       } catch (e) {
         console.warn('Failed to fetch pixel stats from contract:', e)
+      } finally {
+        // Resolve the placeholder either way — a failed read falls back to the
+        // last-known (or 0.00) rather than spinning forever.
+        setLandValueReady(true)
       }
     }
 
+    setLandValueReady(false)
     fetchStats()
 
     // P&L (spent / earned) comes from a wide PixelsPurchased log scan across
@@ -197,7 +232,7 @@ export default function ProfilePage() {
 
     setPnlReady(false)
     fetchPnL()
-  }, [publicClient, addrStr, mondetoAddress, currentMapId, mondetoContract.width, mondetoContract.height])
+  }, [publicClient, addrStr, mapMeta, mondetoAddress, currentMapId])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :
@@ -323,6 +358,7 @@ export default function ProfilePage() {
           rankGapLabel={rankGapLabel}
           spent={addrStr && !pnlReady ? '…' : formatUSDT(spent)}
           earned={addrStr && !pnlReady ? '…' : formatUSDT(earned)}
+          landValue={addrStr && !landValueReady ? '…' : formatUSDT(landValue)}
         />
 
         {/* "FLEX MY EARNINGS" share is intentionally hidden for now. The

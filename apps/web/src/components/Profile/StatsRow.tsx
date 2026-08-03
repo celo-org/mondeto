@@ -13,9 +13,12 @@ interface StatsRowProps {
   rankGapLabel?: string
   spent?: string
   earned?: string
+  /** Current market value of the wallet's owned pixels on the active map,
+   *  pre-formatted (6-dec USDT). Rendered alongside SPENT / EARNED. */
+  landValue?: string
 }
 
-export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGapLabel, spent, earned }: StatsRowProps) {
+export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGapLabel, spent, earned, landValue }: StatsRowProps) {
   const balanceLabel = balanceSymbol ? `BALANCE · ${balanceSymbol.toUpperCase()}` : 'BALANCE'
   const cards = [
     { value: String(pixels), label: 'PIXELS' },
@@ -27,10 +30,15 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGap
     },
   ]
 
+  // Money row — LAND VALUE (what your held pixels are worth now) sits with the
+  // SPENT / EARNED figures so all three USD numbers read as one group. Each card
+  // is only shown when its value was passed, so the row stays empty (and hidden)
+  // in contexts that don't supply money figures.
   const pnlCards = [
-    { value: spent || '0.00', label: 'SPENT' },
-    { value: earned || '0.00', label: 'EARNED' },
-  ]
+    landValue !== undefined ? { value: landValue, label: 'LAND VALUE' } : null,
+    spent !== undefined ? { value: spent, label: 'SPENT' } : null,
+    earned !== undefined ? { value: earned, label: 'EARNED' } : null,
+  ].filter((c): c is { value: string; label: string } => c !== null)
 
   return (
     <>
@@ -63,7 +71,7 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGap
         </div>
       ))}
     </div>
-      {(spent || earned) && (
+      {pnlCards.length > 0 && (
         <div style={{ display: 'flex', gap: 8, margin: '0 auto 12px', maxWidth: 460, padding: '0 16px', width: '100%' }}>
           {pnlCards.map((card) => (
             <div
