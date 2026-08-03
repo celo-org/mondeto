@@ -13,9 +13,11 @@ interface StatsRowProps {
   rankGapLabel?: string
   spent?: string
   earned?: string
+  /** Current market value of held land (formatted). Omitted → card hidden. */
+  landValue?: string
 }
 
-export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGapLabel, spent, earned }: StatsRowProps) {
+export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGapLabel, spent, earned, landValue }: StatsRowProps) {
   const balanceLabel = balanceSymbol ? `BALANCE · ${balanceSymbol.toUpperCase()}` : 'BALANCE'
   const cards = [
     { value: String(pixels), label: 'PIXELS' },
@@ -30,6 +32,7 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGap
   const pnlCards = [
     { value: spent || '0.00', label: 'SPENT' },
     { value: earned || '0.00', label: 'EARNED' },
+    ...(landValue !== undefined ? [{ value: landValue || '0.00', label: 'LAND VALUE' }] : []),
   ]
 
   return (
@@ -63,7 +66,7 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGap
         </div>
       ))}
     </div>
-      {(spent || earned) && (
+      {(spent || earned || landValue !== undefined) && (
         <div style={{ display: 'flex', gap: 8, margin: '0 auto 12px', maxWidth: 460, padding: '0 16px', width: '100%' }}>
           {pnlCards.map((card) => (
             <div

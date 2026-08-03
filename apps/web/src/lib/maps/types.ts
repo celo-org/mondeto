@@ -26,6 +26,13 @@ export interface PixelState {
   currentPrice: number;
   /** Ocean/water pixels are not sellable and are excluded from all metrics. */
   isLand: boolean;
+  /**
+   * Unix seconds when the current owner acquired this pixel (subgraph
+   * `Pixel.lastSoldAt`). Optional — present only when a board is enriched with
+   * subgraph timestamps for the exact "reached it first" tie-break. Absent for
+   * snapshot-only reads, in which case boards fall back to the address tie-break.
+   */
+  acquiredAt?: number;
 }
 
 export interface MapSnapshot {
@@ -46,6 +53,14 @@ export interface AssignmentStore {
 export interface LeaderEntry {
   address: Address;
   value: number;
+  /**
+   * Optional tie-break key: for the AREA board this is `lastGainAt` (the unix
+   * timestamp of the wallet's most recent count-increasing buy). On a `value`
+   * tie the SMALLER tiebreak ranks higher — whoever reached the count first.
+   * Boards without a time signal (EMPIRE/TYCOONS) omit it and fall back to the
+   * deterministic address ordering.
+   */
+  tiebreak?: number;
 }
 
 export interface OpenNextDecision {

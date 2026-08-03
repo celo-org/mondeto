@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PixelView } from '@/lib/mock'
 import { allLeaderboards, rankGap, type RankGap } from '@/lib/maps/leaderboards'
+import { fetchPixelTimestamps, subgraphConfigured } from '@/lib/subgraph'
 import { pixelViewToMapSnapshot } from '@/lib/maps/adapter'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
@@ -162,9 +163,56 @@ export function useLeaderboard(
     return pixelViewToMapSnapshot(pixelData, homeMapId, true, home.width, mask)
   }, [pixelData, homeMapId])
 
+  // Per-pixel acquisition times (subgraph) enrich the snapshot so ALL three
+  // boards break value ties by who reached their standing FIRST — AREA by the
+  // newest of your owned pixels, EMPIRE by the newest pixel in your biggest
+  // block, TYCOONS by when you got your priciest pixel. Values still come from
+  // the live snapshot (counts, grid geometry, prices). Without the subgraph
+  // configured (or on error) tsMap stays null and boards fall back to the
+  // deterministic address tie-break — identical to before this feature.
+  const [tsMap, setTsMap] = useState<Map<number, number> | null>(null)
+  const [tsLoading, setTsLoading] = useState(false)
+
+  useEffect(() => {
+    if (scope !== 'local') return
+    if (!subgraphConfigured()) {
+      setTsMap(null)
+      return
+    }
+    let cancelled = false
+    setTsLoading(true)
+    fetchPixelTimestamps(homeMapId)
+      .then((m) => {
+        if (cancelled) return
+        setTsMap(m)
+        setTsLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.warn('leaderboard pixel timestamps failed, using address tie-break', err)
+        setTsMap(null)
+        setTsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [scope, homeMapId])
+
+  const enrichedSnapshot = useMemo(() => {
+    if (!tsMap) return localSnapshot
+    return {
+      ...localSnapshot,
+      pixels: localSnapshot.pixels.map((p) =>
+        tsMap.has(p.id) ? { ...p, acquiredAt: tsMap.get(p.id) } : p,
+      ),
+    }
+  }, [localSnapshot, tsMap])
+
   const localBoards = useMemo<BoardSet>(() => {
-    const { mostPixels, biggestConnectedArea, mostExpensivePixel } =
-      allLeaderboards(localSnapshot, Number.MAX_SAFE_INTEGER)
+    const { mostPixels, biggestConnectedArea, mostExpensivePixel } = allLeaderboards(
+      enrichedSnapshot,
+      Number.MAX_SAFE_INTEGER,
+    )
     const area = decorate(mostPixels, 'px', (v) => String(v), profilesMap)
     const empire = decorate(biggestConnectedArea, 'px', (v) => String(v), profilesMap)
     const tycoons = decorate(
@@ -182,8 +230,8 @@ export function useLeaderboard(
           tycoons: toYou(rankGap(mostExpensivePixel, viewer), tycoons, 'USDT', formatUSDTFromNumber, viewer, profilesMap),
         }
       : NO_YOU
-    return { area, empire, tycoons, loading: false, you }
-  }, [localSnapshot, profilesMap, viewer])
+    return { area, empire, tycoons, loading: tsLoading, you }
+  }, [enrichedSnapshot, profilesMap, viewer, tsLoading])
 
   // --- Global path -------------------------------------------------------
   // The cross-map board is computed server-side (/api/global-board) — reading

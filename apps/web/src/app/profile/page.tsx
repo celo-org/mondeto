@@ -14,6 +14,10 @@ import { useMaps } from '@/hooks/useMaps'
 import { useMapRulers } from '@/hooks/useMapRulers'
 import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
+import { decodePixelBatch } from '@/lib/contractReads'
+import { rankGap } from '@/lib/maps/leaderboards'
+import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
@@ -66,6 +70,10 @@ export default function ProfilePage() {
   const [nameError, setNameError] = useState<string | null>(null)
 
   const [pixelCount, setPixelCount] = useState(0)
+  // Current market value of the land the wallet holds right now = the price to
+  // buy those pixels at today's epoch price (selectionPrice, 6-dec USDT units).
+  // null until read; 0n when the wallet owns nothing.
+  const [landValue, setLandValue] = useState<bigint | null>(null)
   const [rank, setRank] = useState(0)
   const [rankGapLabel, setRankGapLabel] = useState<string | undefined>(undefined)
   const [spent, setSpent] = useState(0n)
@@ -89,32 +97,75 @@ export default function ProfilePage() {
           args: [0, 0, mondetoContract.width, mondetoContract.height],
         }) as `0x${string}`
 
-        // Decode packed bytes: 24 bytes per land pixel
-        const hex = batchData.slice(2) // remove 0x
-        const byteCount = hex.length / 2
-        const recordCount = Math.floor(byteCount / 24)
-
-        // Count pixels owned by current user and track all owners for rank
+        // Decode into a pixelId-indexed array (decodePixelBatch maps each packed
+        // record back to its row-major pixel id via the land mask) so we can
+        // collect the exact ids the wallet holds — needed for selectionPrice.
+        const { mask } = getMaskData(mondetoContract.slug)
+        const pixels = decodePixelBatch(
+          batchData,
+          0, 0,
+          mondetoContract.width,
+          mondetoContract.height,
+          mondetoContract.width,
+          mondetoContract.height,
+          mask,
+        )
+        const me = addrStr!.toLowerCase()
         const ownerCounts = new Map<string, number>()
-        let myCount = 0
+        const ownedIds: number[] = []
+        for (let id = 0; id < pixels.length; id++) {
+          const owner = pixels[id].owner
+          if (!owner || owner === ZERO_ADDRESS) continue
+          const lo = owner.toLowerCase()
+          ownerCounts.set(lo, (ownerCounts.get(lo) ?? 0) + 1)
+          if (lo === me) ownedIds.push(id)
+        }
+        const myCount = ownedIds.length
+        setPixelCount(myCount)
 
-        for (let i = 0; i < recordCount; i++) {
-          const offset = i * 48 // 24 bytes = 48 hex chars
-          const ownerHex = '0x' + hex.slice(offset, offset + 40)
-          if (ownerHex === '0x0000000000000000000000000000000000000000') continue
-
-          const count = (ownerCounts.get(ownerHex.toLowerCase()) ?? 0) + 1
-          ownerCounts.set(ownerHex.toLowerCase(), count)
-
-          if (ownerHex.toLowerCase() === addrStr!.toLowerCase()) {
-            myCount++
+        // Current market value of held land = selectionPrice of those ids (what
+        // they'd cost to buy now). Non-blocking relative to rank below.
+        if (ownedIds.length === 0) {
+          setLandValue(0n)
+        } else {
+          try {
+            const value = (await publicClient!.readContract({
+              address: mondetoAddress,
+              abi: MONDETO_ABI,
+              functionName: 'selectionPrice',
+              args: [ownedIds.map((n) => BigInt(n))],
+            })) as bigint
+            setLandValue(value)
+          } catch (e) {
+            console.warn('Failed to read land value (selectionPrice):', e)
           }
         }
 
-        setPixelCount(myCount)
-
         // Compute rank + the gap to the rank above ("N PX FROM #K") so the
         // RANK card doubles as a nudge toward the next spot on the board.
+        //
+        // Prefer the subgraph AREA board so this matches the leaderboard exactly
+        // — same pixel-count ranking with the "reached the count first"
+        // tie-break. Falls back to the local pixel-batch decode (address /
+        // insertion tie-break) when the subgraph isn't configured or errors.
+        if (subgraphConfigured()) {
+          try {
+            const board = await fetchAreaLeaderboard(currentMapId)
+            const rg = rankGap(board, addrStr!)
+            if (rg) {
+              setRank(rg.rank)
+              setRankGapLabel(
+                rg.rank === 1 ? 'RULER' : `${rg.gap ?? 0} PX FROM #${rg.rank - 1}`,
+              )
+            } else {
+              setRank(0)
+              setRankGapLabel(undefined)
+            }
+            return
+          } catch (e) {
+            console.warn('rank from subgraph failed, using local decode:', e)
+          }
+        }
         const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
         const rankIdx = sorted.findIndex(([owner]) => owner === addrStr!.toLowerCase())
         setRank(rankIdx >= 0 ? rankIdx + 1 : 0)
@@ -323,6 +374,13 @@ export default function ProfilePage() {
           rankGapLabel={rankGapLabel}
           spent={addrStr && !pnlReady ? '…' : formatUSDT(spent)}
           earned={addrStr && !pnlReady ? '…' : formatUSDT(earned)}
+          landValue={
+            addrStr
+              ? landValue === null
+                ? '…'
+                : formatUSDT(landValue)
+              : undefined
+          }
         />
 
         {/* "FLEX MY EARNINGS" share is intentionally hidden for now. The

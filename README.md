@@ -75,6 +75,10 @@ apps/
       data/               landMask.ts (static fallback, auto-fetched from contract at runtime)
       __tests__/          Vitest tests
   contracts/              Mondeto.sol (reference copy)
+  subgraph/               Goldsky subgraph — earn/spend, AREA leaderboard (time
+                          tie-break) and analytics. See apps/subgraph/README.md.
+                          Set NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL to point the app at
+                          it; unset falls back to the legacy live log-scan.
 scripts/
   convert-land-mask.py    Convert contract uint256 words to frontend format
 ```

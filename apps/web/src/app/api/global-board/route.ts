@@ -7,6 +7,7 @@ import {
   rankGap,
   type RankGap,
 } from '@/lib/maps/leaderboards'
+import { fetchPixelTimestamps, subgraphConfigured } from '@/lib/subgraph'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { getMapsForChain } from '@/lib/maps/contracts'
 import { readRevealedMapIdsServer } from '@/lib/maps/reveals'
@@ -91,6 +92,27 @@ let cache: {
   full: FullBoards
   maps: MapContract[]
 } | null = null
+
+/**
+ * Enrich each map's snapshot pixels with their owner-acquisition time (subgraph
+ * `Pixel.lastSoldAt`, keyed by pixel id) so every board breaks value ties by who
+ * reached their standing first. Mutates in place — the snapshots are freshly
+ * built per request. No-op on any map whose timestamp read fails.
+ */
+async function enrichSnapshotsWithTimestamps(
+  snapshots: MapSnapshot[],
+): Promise<void> {
+  const tsMaps = await Promise.all(
+    snapshots.map((s) => fetchPixelTimestamps(s.meta.id)),
+  )
+  snapshots.forEach((snap, i) => {
+    const ts = tsMaps[i]
+    for (const p of snap.pixels) {
+      const t = ts.get(p.id)
+      if (t != null) p.acquiredAt = t
+    }
+  })
+}
 
 function locateViewer(full: FullBoards, address: string): YouPayload {
   return {
@@ -245,6 +267,19 @@ export async function GET(request: Request) {
     const revealedIds = await readRevealedMapIdsServer()
     const maps = getMapsForChain(celo.id, revealedIds)
     const snapshots = await fetchGlobalSnapshots(read, maps)
+
+    // Enrich with per-pixel acquisition times so all three boards break ties by
+    // who reached their standing first. Best-effort: on failure (or when the
+    // subgraph isn't configured) boards fall back to the address tie-break.
+    if (subgraphConfigured()) {
+      try {
+        await enrichSnapshotsWithTimestamps(snapshots)
+      } catch (err) {
+        logger.warn('global-board timestamp enrich failed, using address tie-break', {
+          err: String(err),
+        })
+      }
+    }
 
     // Rank every owner (no limit) so viewer lookups below the top-N work;
     // the response payload trims to TOP_N.

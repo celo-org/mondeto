@@ -428,7 +428,7 @@ export default function RanksPage() {
                     textAlign: 'center',
                   }}
                 >
-                  {"YOU'RE UNRANKED — CLAIM YOUR FIRST PIXEL"}
+                  {"YOU'RE UNRANKED — CLAIM A PIXEL"}
                 </div>
               </div>
             )}

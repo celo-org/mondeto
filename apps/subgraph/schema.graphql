@@ -1,0 +1,174 @@
+# Data model for the Mondeto Goldsky subgraph (The Graph protocol stack).
+#
+# Ported from the retired Envio indexer (apps/indexer/schema.graphql) with three
+# additions the frontend now depends on:
+#   - Money is normalized to 6-decimal "microcents" (the unit `formatUSDT`
+#     renders and the API routes return), NOT raw token base units. The payment
+#     token's decimals come from the Token entity (fed by AcceptedTokenAdded).
+#   - `totalEarned` on Owner / OwnerMapStat — what later buyers paid for pixels a
+#     wallet used to own (even split per batch), so /api/pnl is a single query.
+#   - `lastGainAt` (+ block/logIndex) — the timestamp of a wallet's most recent
+#     count-INCREASING buy. This is the leaderboard tie-break: when two wallets
+#     are tied on pixelCount, the one who reached that count earlier ranks first.
+#
+# Conventions:
+#   - Addresses are lowercase Bytes everywhere.
+#   - Money fields (totalSpent, totalEarned, totalCost, pricePaid, MapStat sums)
+#     are BigInt in 6-decimal microcents.
+#   - Composite ids use "-" separators: Pixel "<mapId>-<pixelId>",
+#     OwnerMapStat / OwnerProfile "<mapId>-<address>",
+#     PurchaseBatch "<txHash>-<logIndex>", Purchase "<txHash>-<logIndex>-<arrayIndex>",
+#     ActiveBuyer "<mapId>-<address>".
+
+"Current state of one pixel on one map."
+type Pixel @entity(immutable: false) {
+  "<mapId>-<pixelId>"
+  id: ID!
+  mapId: Int!
+  pixelId: BigInt!
+  "Current holder (lowercase address)."
+  owner: Bytes!
+  "How many times this pixel has been sold in total."
+  saleCount: Int!
+  """
+  Exact price of the last sale when it was a single-pixel purchase (6-dec
+  microcents); null when the pixel last changed hands inside a multi-pixel batch
+  (the contract only emits the batch total — see PurchaseBatch.totalCost).
+  """
+  lastPricePaid: BigInt
+  lastSoldAt: BigInt!
+  lastTxHash: Bytes!
+}
+
+"Global (cross-map) aggregate per wallet. Powers the GLOBAL AREA leaderboard."
+type Owner @entity(immutable: false) {
+  "Lowercase address."
+  id: ID!
+  address: Bytes!
+  "Pixels currently held across all maps."
+  pixelCount: Int!
+  "Gross spend across all maps, 6-dec microcents. Never decremented."
+  totalSpent: BigInt!
+  "What later buyers paid for pixels this wallet used to own, 6-dec microcents."
+  totalEarned: BigInt!
+  firstPurchaseAt: BigInt!
+  lastPurchaseAt: BigInt!
+  "Timestamp of the most recent buy that INCREASED pixelCount (tie-break key)."
+  lastGainAt: BigInt!
+  "Block + logIndex of that buy, for a deterministic tie-break within a second."
+  lastGainBlock: BigInt!
+  lastGainLogIndex: BigInt!
+}
+
+"Per-(map, wallet) aggregate — the per-map AREA leaderboard row."
+type OwnerMapStat @entity(immutable: false) {
+  "<mapId>-<address>"
+  id: ID!
+  mapId: Int!
+  address: Bytes!
+  "Pixels currently held on this map."
+  pixelCount: Int!
+  "Gross spend on this map, 6-dec microcents. Never decremented."
+  totalSpent: BigInt!
+  "Earnings on this map, 6-dec microcents (even split per batch)."
+  totalEarned: BigInt!
+  "Timestamp of the most recent buy that INCREASED pixelCount on this map."
+  lastGainAt: BigInt!
+  lastGainBlock: BigInt!
+  lastGainLogIndex: BigInt!
+}
+
+"""
+One PixelsPurchased event as emitted: the pixel-id batch plus the batch total.
+totalCost is normalized to 6-dec microcents. Queried by /api/analytics for the
+rolling 24h / 7d windows (where timestamp >= cutoff).
+"""
+type PurchaseBatch @entity(immutable: true) {
+  "<txHash>-<logIndex>"
+  id: ID!
+  mapId: Int!
+  buyer: Bytes!
+  "Stablecoin the buyer paid with (lowercase address)."
+  token: Bytes!
+  pixelIds: [BigInt!]!
+  pixelCountInBatch: Int!
+  "Batch total in 6-dec microcents."
+  totalCost: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+"""
+One pixel changing hands. previousOwner is the raid record: who held the pixel
+before this buyer took it (null on a first claim from the map).
+"""
+type Purchase @entity(immutable: true) {
+  "<txHash>-<logIndex>-<arrayIndex>"
+  id: ID!
+  batch: PurchaseBatch!
+  mapId: Int!
+  buyer: Bytes!
+  pixelId: BigInt!
+  previousOwner: Bytes
+  "Exact per-pixel price only for single-pixel batches (6-dec microcents); null otherwise."
+  pricePaid: BigInt
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+"Latest ProfileUpdated state per (map, wallet) — profiles are per contract."
+type OwnerProfile @entity(immutable: false) {
+  "<mapId>-<address>"
+  id: ID!
+  mapId: Int!
+  address: Bytes!
+  "uint24 RGB color as an integer."
+  color: Int!
+  "Raw label bytes as emitted; decoded to UTF-8 client-side (lib/decodeBytes)."
+  label: Bytes!
+  "Raw url bytes as emitted; decoded to UTF-8 client-side."
+  url: Bytes!
+  updatedAt: BigInt!
+}
+
+"""
+An accepted payment token and its ERC-20 decimals, from AcceptedTokenAdded.
+Used to normalize each PixelsPurchased totalCost to 6-dec microcents, exactly
+like `toMicrocents(cost, tokenConfig(token).decimals)` in the old live scanner.
+"""
+type Token @entity(immutable: false) {
+  "Lowercase token address."
+  id: ID!
+  decimals: Int!
+  accepted: Boolean!
+}
+
+"""
+Per-map running analytics totals — the all-time figures for /api/analytics.
+Windowed (24h/7d) figures are derived in the route from PurchaseBatch instead.
+Revenue is computed in the route as primaryProceeds + resaleVolume*feeRateBps/1e4
+(matching the current treasury logic, which applies the CURRENT fee rate).
+"""
+type MapStat @entity(immutable: false) {
+  "<mapId>"
+  id: ID!
+  mapId: Int!
+  "Sum of all normalized batch totals, 6-dec microcents."
+  volumeAllTime: BigInt!
+  txCountAllTime: Int!
+  "Distinct buyers ever (see ActiveBuyer markers)."
+  uniqueBuyers: Int!
+  "Per-pixel cost of first (primary) sales — 100% treasury. 6-dec microcents."
+  primaryProceeds: BigInt!
+  "Per-pixel cost of resales — treasury takes feeRateBps of this. 6-dec microcents."
+  resaleVolume: BigInt!
+  "Current fee rate in basis points (from FeeRateUpdated / initialize)."
+  feeRateBps: Int!
+}
+
+"Existence marker so MapStat.uniqueBuyers counts each (map, buyer) once."
+type ActiveBuyer @entity(immutable: true) {
+  "<mapId>-<address>"
+  id: ID!
+}

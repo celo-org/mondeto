@@ -1,0 +1,20 @@
+{
+  "name": "subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Goldsky subgraph (The Graph protocol) for the Mondeto map contracts on Celo",
+  "scripts": {
+    "gen-manifest": "node scripts/gen-subgraph-yaml.js",
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "goldsky subgraph deploy mondeto/1.0.2 --path .",
+    "type-check": "if [ -d generated ]; then graph build; else echo '[subgraph] type-check skipped: run pnpm --filter subgraph codegen first'; fi"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.97.0",
+    "@graphprotocol/graph-ts": "^0.38.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
