@@ -12,14 +12,14 @@ import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { useMapRulers } from '@/hooks/useMapRulers'
-import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
-import { decodePixelBatch } from '@/lib/contractReads'
 import { rankGap } from '@/lib/maps/leaderboards'
-import { fetchAreaLeaderboard, subgraphConfigured } from '@/lib/subgraph'
+import { fetchAreaLeaderboard, fetchOwnedPixelIds, subgraphConfigured } from '@/lib/subgraph'
+import { MONDETO_ABI } from '@/lib/contract'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
+import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
 import { SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
@@ -70,9 +70,10 @@ export default function ProfilePage() {
   const [nameError, setNameError] = useState<string | null>(null)
 
   const [pixelCount, setPixelCount] = useState(0)
-  // Current market value of the land the wallet holds right now = the price to
-  // buy those pixels at today's epoch price (selectionPrice, 6-dec USDT units).
-  // null until read; 0n when the wallet owns nothing.
+  // Total current market value of the wallet's held land across ALL active
+  // (revealed) maps — a portfolio figure, not just the map on screen. Summed
+  // from each owned pixel's current on-chain price (6-dec USDT). null until the
+  // multi-map scan resolves (renders a placeholder); 0n when nothing is owned.
   const [landValue, setLandValue] = useState<bigint | null>(null)
   const [rank, setRank] = useState(0)
   const [rankGapLabel, setRankGapLabel] = useState<string | undefined>(undefined)
@@ -83,106 +84,10 @@ export default function ProfilePage() {
   // "0.00" — the full-history scan behind /api/pnl takes a few seconds cold.
   const [pnlReady, setPnlReady] = useState(false)
 
-  // Fetch owned pixel count from contract
+  // SPENT / EARNED — lifetime earn/spend via /api/pnl (subgraph-backed when
+  // configured). Independent of the owned-pixel stats effect below.
   useEffect(() => {
-    if (!publicClient || !addrStr) return
-
-    async function fetchStats() {
-      try {
-        // Fetch pixel batch for the full map
-        const batchData = await publicClient!.readContract({
-          address: mondetoAddress,
-          abi: MONDETO_ABI,
-          functionName: 'getPixelBatch',
-          args: [0, 0, mondetoContract.width, mondetoContract.height],
-        }) as `0x${string}`
-
-        // Decode into a pixelId-indexed array (decodePixelBatch maps each packed
-        // record back to its row-major pixel id via the land mask) so we can
-        // collect the exact ids the wallet holds — needed for selectionPrice.
-        const { mask } = getMaskData(mondetoContract.slug)
-        const pixels = decodePixelBatch(
-          batchData,
-          0, 0,
-          mondetoContract.width,
-          mondetoContract.height,
-          mondetoContract.width,
-          mondetoContract.height,
-          mask,
-        )
-        const me = addrStr!.toLowerCase()
-        const ownerCounts = new Map<string, number>()
-        const ownedIds: number[] = []
-        for (let id = 0; id < pixels.length; id++) {
-          const owner = pixels[id].owner
-          if (!owner || owner === ZERO_ADDRESS) continue
-          const lo = owner.toLowerCase()
-          ownerCounts.set(lo, (ownerCounts.get(lo) ?? 0) + 1)
-          if (lo === me) ownedIds.push(id)
-        }
-        const myCount = ownedIds.length
-        setPixelCount(myCount)
-
-        // Current market value of held land = selectionPrice of those ids (what
-        // they'd cost to buy now). Non-blocking relative to rank below.
-        if (ownedIds.length === 0) {
-          setLandValue(0n)
-        } else {
-          try {
-            const value = (await publicClient!.readContract({
-              address: mondetoAddress,
-              abi: MONDETO_ABI,
-              functionName: 'selectionPrice',
-              args: [ownedIds.map((n) => BigInt(n))],
-            })) as bigint
-            setLandValue(value)
-          } catch (e) {
-            console.warn('Failed to read land value (selectionPrice):', e)
-          }
-        }
-
-        // Compute rank + the gap to the rank above ("N PX FROM #K") so the
-        // RANK card doubles as a nudge toward the next spot on the board.
-        //
-        // Prefer the subgraph AREA board so this matches the leaderboard exactly
-        // — same pixel-count ranking with the "reached the count first"
-        // tie-break. Falls back to the local pixel-batch decode (address /
-        // insertion tie-break) when the subgraph isn't configured or errors.
-        if (subgraphConfigured()) {
-          try {
-            const board = await fetchAreaLeaderboard(currentMapId)
-            const rg = rankGap(board, addrStr!)
-            if (rg) {
-              setRank(rg.rank)
-              setRankGapLabel(
-                rg.rank === 1 ? 'RULER' : `${rg.gap ?? 0} PX FROM #${rg.rank - 1}`,
-              )
-            } else {
-              setRank(0)
-              setRankGapLabel(undefined)
-            }
-            return
-          } catch (e) {
-            console.warn('rank from subgraph failed, using local decode:', e)
-          }
-        }
-        const sorted = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1])
-        const rankIdx = sorted.findIndex(([owner]) => owner === addrStr!.toLowerCase())
-        setRank(rankIdx >= 0 ? rankIdx + 1 : 0)
-        if (rankIdx === 0) {
-          setRankGapLabel('RULER')
-        } else if (rankIdx > 0) {
-          const gap = sorted[rankIdx - 1][1] - myCount
-          setRankGapLabel(`${gap} PX FROM #${rankIdx}`)
-        } else {
-          setRankGapLabel(undefined)
-        }
-      } catch (e) {
-        console.warn('Failed to fetch pixel stats from contract:', e)
-      }
-    }
-
-    fetchStats()
+    if (!addrStr) return
 
     // P&L (spent / earned) comes from a wide PixelsPurchased log scan across
     // the whole contract history. That scan is heavy and unreliable on the
@@ -248,7 +153,140 @@ export default function ProfilePage() {
 
     setPnlReady(false)
     fetchPnL()
-  }, [publicClient, addrStr, mondetoAddress, currentMapId, mondetoContract.width, mondetoContract.height])
+  }, [addrStr, mondetoAddress, currentMapId])
+
+  // Owned-pixel portfolio — PIXELS, LAND VALUE, and RANK, all keyed to what the
+  // wallet actually holds across ALL active (revealed) maps rather than the map
+  // currently on screen. A player who owns nothing on the map they're viewing
+  // still sees their real totals and their rank on the map they hold.
+  //
+  // Owned pixel ids come from the subgraph (tiny, reliable) so we never decode a
+  // whole on-chain pixel batch here — that heavy `getPixelBatch` read is exactly
+  // what fails on throttled RPCs, which zeroed these stats. When the subgraph
+  // isn't configured we fall back to the on-chain full-map decode. Either way:
+  //   PIXELS     = total owned across active maps
+  //   LAND VALUE = Σ selectionPrice(owned ids) per map (exact current buy price)
+  //   RANK       = standing on the map where the wallet owns the most
+  useEffect(() => {
+    if (!addrStr || revealedMaps.length === 0) {
+      setPixelCount(0)
+      setLandValue(0n)
+      setRank(0)
+      setRankGapLabel(undefined)
+      return
+    }
+    if (!publicClient) return
+
+    let cancelled = false
+    // Reset LAND VALUE to its loading placeholder while the scan runs.
+    setLandValue(null)
+    const read = publicClient.readContract.bind(publicClient)
+    const useSubgraph = subgraphConfigured()
+
+    async function loadPortfolio() {
+      const me = addrStr!.toLowerCase()
+
+      // Owned pixel ids (and, in the on-chain fallback, per-map owner tallies for
+      // the local rank) for every revealed map. One map failing yields an empty
+      // set for that map, never a thrown scan.
+      const perMap = await Promise.all(
+        revealedMaps.map(async (m) => {
+          try {
+            if (useSubgraph) {
+              const ids = await fetchOwnedPixelIds(m.id, me)
+              return { map: m, ids, ownerCounts: null as Map<string, number> | null }
+            }
+            const { mask } = getMaskData(m.slug)
+            const pixels = await fetchAllPixelsFromContract(
+              read as Parameters<typeof fetchAllPixelsFromContract>[0],
+              m.address, m.width, m.height, mask,
+            )
+            const ids: number[] = []
+            const ownerCounts = new Map<string, number>()
+            for (let id = 0; id < pixels.length; id++) {
+              const owner = pixels[id].owner
+              if (!owner || owner === ZERO_ADDRESS) continue
+              const lo = owner.toLowerCase()
+              ownerCounts.set(lo, (ownerCounts.get(lo) ?? 0) + 1)
+              if (lo === me) ids.push(id)
+            }
+            return { map: m, ids, ownerCounts }
+          } catch (e) {
+            console.warn(`owned pixels lookup failed for map ${m.id}:`, e)
+            return { map: m, ids: [] as number[], ownerCounts: null as Map<string, number> | null }
+          }
+        }),
+      )
+      if (cancelled) return
+
+      // PIXELS — total held across active maps.
+      setPixelCount(perMap.reduce((n, x) => n + x.ids.length, 0))
+
+      // LAND VALUE — exact current buy price of the held ids via selectionPrice,
+      // per map. Chunked so a whale's holdings don't blow up a single eth_call.
+      let value = 0n
+      for (const { map, ids } of perMap) {
+        if (ids.length === 0) continue
+        try {
+          const CHUNK = 400
+          for (let i = 0; i < ids.length; i += CHUNK) {
+            const price = (await read({
+              address: map.address,
+              abi: MONDETO_ABI,
+              functionName: 'selectionPrice',
+              args: [ids.slice(i, i + CHUNK).map((n) => BigInt(n))],
+            })) as bigint
+            value += price
+          }
+        } catch (e) {
+          console.warn(`selectionPrice failed for map ${map.id}:`, e)
+        }
+      }
+      if (cancelled) return
+      setLandValue(value)
+
+      // RANK — on the map where the wallet holds the most land (lowest id wins a
+      // tie). "-" only when it owns nothing anywhere.
+      const dominant = perMap
+        .filter((x) => x.ids.length > 0)
+        .sort((a, b) => b.ids.length - a.ids.length || a.map.id - b.map.id)[0]
+      if (!dominant) {
+        setRank(0)
+        setRankGapLabel(undefined)
+        return
+      }
+      try {
+        if (useSubgraph) {
+          const board = await fetchAreaLeaderboard(dominant.map.id)
+          const rg = rankGap(board, addrStr!)
+          if (cancelled) return
+          if (rg) {
+            setRank(rg.rank)
+            setRankGapLabel(rg.rank === 1 ? 'RULER' : `${rg.gap ?? 0} PX FROM #${rg.rank - 1}`)
+          } else {
+            setRank(0)
+            setRankGapLabel(undefined)
+          }
+        } else if (dominant.ownerCounts) {
+          // On-chain fallback: rank on the dominant map from its owner tally.
+          const sorted = [...dominant.ownerCounts.entries()].sort((a, b) => b[1] - a[1])
+          const idx = sorted.findIndex(([o]) => o === me)
+          if (cancelled) return
+          setRank(idx >= 0 ? idx + 1 : 0)
+          if (idx === 0) setRankGapLabel('RULER')
+          else if (idx > 0) setRankGapLabel(`${sorted[idx - 1][1] - dominant.ids.length} PX FROM #${idx}`)
+          else setRankGapLabel(undefined)
+        }
+      } catch (e) {
+        console.warn('rank computation failed:', e)
+      }
+    }
+
+    loadPortfolio()
+    return () => {
+      cancelled = true
+    }
+  }, [publicClient, addrStr, revealedMaps])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :

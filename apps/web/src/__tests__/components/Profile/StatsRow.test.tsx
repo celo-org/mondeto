@@ -42,4 +42,18 @@ describe('StatsRow', () => {
     render(<StatsRow pixels={0} balance="0.00" rank={0} rankGapLabel="RULER" />)
     expect(screen.queryByText('RULER')).not.toBeInTheDocument()
   })
+
+  it('shows the LAND VALUE card when a value is provided', () => {
+    render(<StatsRow pixels={42} balance="10.00" rank={3} landValue="12.34" spent="5.00" earned="2.00" />)
+    expect(screen.getByText('LAND VALUE')).toBeInTheDocument()
+    expect(screen.getByText('12.34')).toBeInTheDocument()
+    expect(screen.getByText('SPENT')).toBeInTheDocument()
+    expect(screen.getByText('EARNED')).toBeInTheDocument()
+  })
+
+  it('omits the LAND VALUE card (and the whole money row) when no money figures are passed', () => {
+    render(<StatsRow pixels={42} balance="10.00" rank={3} />)
+    expect(screen.queryByText('LAND VALUE')).not.toBeInTheDocument()
+    expect(screen.queryByText('SPENT')).not.toBeInTheDocument()
+  })
 })

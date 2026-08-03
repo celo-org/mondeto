@@ -13,7 +13,8 @@ interface StatsRowProps {
   rankGapLabel?: string
   spent?: string
   earned?: string
-  /** Current market value of held land (formatted). Omitted → card hidden. */
+  /** Total current market value of the wallet's held land across all active
+   *  maps (formatted, 6-dec USDT). Omitted → card hidden. */
   landValue?: string
 }
 
@@ -29,6 +30,10 @@ export default function StatsRow({ pixels, balance, balanceSymbol, rank, rankGap
     },
   ]
 
+  // Money row — LAND VALUE (what your held pixels are worth now) sits with the
+  // SPENT / EARNED figures so all three USD numbers read as one group. LAND
+  // VALUE is only added when a value was passed; the whole row is hidden when
+  // no money figures are supplied.
   const pnlCards = [
     { value: spent || '0.00', label: 'SPENT' },
     { value: earned || '0.00', label: 'EARNED' },
