@@ -12,8 +12,8 @@ import { useProfile } from '@/hooks/useProfile'
 import { useStablecoinBalance } from '@/hooks/useStablecoinBalance'
 import { useMaps } from '@/hooks/useMaps'
 import { useMapRulers } from '@/hooks/useMapRulers'
-import { MONDETO_ABI } from '@/lib/contract'
 import { getMapContractById } from '@/lib/maps/contracts'
+import { getMaskData } from '@/lib/maps/masks'
 import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { useCurrentMapMeta } from '@/hooks/useCurrentMapMeta'
@@ -75,10 +75,11 @@ export default function ProfilePage() {
   const [rankGapLabel, setRankGapLabel] = useState<string | undefined>(undefined)
   const [spent, setSpent] = useState(0n)
   const [earned, setEarned] = useState(0n)
-  // Current market value of the wallet's owned pixels on the active map —
-  // the contract's authoritative selectionPrice() over the owned ids (6-dec
-  // USDT). landValueReady gates a placeholder so an owner never briefly reads
-  // "0.00" while the batch + price read are in flight.
+  // Total current market value of the wallet's owned pixels across ALL active
+  // (revealed) maps — a portfolio figure, not just the map on screen. Summed
+  // from each owned pixel's current on-chain price (6-dec USDT).
+  // landValueReady gates a placeholder so an owner never briefly reads "0.00"
+  // while the multi-map scan is in flight.
   const [landValue, setLandValue] = useState(0n)
   const [landValueReady, setLandValueReady] = useState(false)
   // Whether the P&L fetch has produced a value yet (cache or network). Until it
@@ -105,20 +106,18 @@ export default function ProfilePage() {
         )
 
         const me = addrStr!.toLowerCase()
-        // Count pixels owned by current user, track all owners for rank, and
-        // gather the owned pixel ids for the land-value price read.
+        // Count pixels owned by current user and track all owners for rank.
         const ownerCounts = new Map<string, number>()
-        const ownedIds: number[] = []
+        let myCount = 0
 
-        for (let id = 0; id < pixels.length; id++) {
-          const owner = pixels[id].owner
+        for (const px of pixels) {
+          const owner = px.owner
           if (!owner || owner === ZERO_ADDRESS) continue
           const lc = owner.toLowerCase()
           ownerCounts.set(lc, (ownerCounts.get(lc) ?? 0) + 1)
-          if (lc === me) ownedIds.push(id)
+          if (lc === me) myCount++
         }
 
-        const myCount = ownedIds.length
         setPixelCount(myCount)
 
         // Compute rank + the gap to the rank above ("N PX FROM #K") so the
@@ -134,38 +133,11 @@ export default function ProfilePage() {
         } else {
           setRankGapLabel(undefined)
         }
-
-        // LAND VALUE — what it would cost a buyer to take all your pixels right
-        // now = the contract's selectionPrice() over the owned ids (6-dec USDT).
-        // Chunked so a whale's holdings don't blow up a single eth_call; prices
-        // are additive so the chunk sums are exact.
-        if (ownedIds.length === 0) {
-          setLandValue(0n)
-        } else {
-          const CHUNK = 500
-          let total = 0n
-          for (let i = 0; i < ownedIds.length; i += CHUNK) {
-            const chunk = ownedIds.slice(i, i + CHUNK)
-            const price = (await publicClient!.readContract({
-              address: mapMeta.address,
-              abi: MONDETO_ABI,
-              functionName: 'selectionPrice',
-              args: [chunk.map((id) => BigInt(id))],
-            })) as bigint
-            total += price
-          }
-          setLandValue(total)
-        }
       } catch (e) {
         console.warn('Failed to fetch pixel stats from contract:', e)
-      } finally {
-        // Resolve the placeholder either way — a failed read falls back to the
-        // last-known (or 0.00) rather than spinning forever.
-        setLandValueReady(true)
       }
     }
 
-    setLandValueReady(false)
     fetchStats()
 
     // P&L (spent / earned) comes from a wide PixelsPurchased log scan across
@@ -233,6 +205,60 @@ export default function ProfilePage() {
     setPnlReady(false)
     fetchPnL()
   }, [publicClient, addrStr, mapMeta, mondetoAddress, currentMapId])
+
+  // LAND VALUE — total current market value of the wallet's pixels across ALL
+  // active (revealed) maps, not just the one on screen. Scans every revealed
+  // map's pixel batch (the same all-maps pattern as useOwnedMaps) and sums the
+  // current price of the pixels this wallet owns. Prices come from the same
+  // on-chain config / client mirror the rest of the app renders, so the total
+  // is consistent with the per-pixel prices shown elsewhere. Runs separately
+  // from the current-map count/rank scan above since it spans every map.
+  useEffect(() => {
+    if (!addrStr || revealedMaps.length === 0) {
+      setLandValue(0n)
+      setLandValueReady(true)
+      return
+    }
+    if (!publicClient) return
+
+    let cancelled = false
+    setLandValueReady(false)
+
+    async function fetchLandValue() {
+      const me = addrStr!.toLowerCase()
+      const read = publicClient!.readContract.bind(publicClient) as Parameters<
+        typeof fetchAllPixelsFromContract
+      >[0]
+
+      // Scan maps in parallel; a single map failing must not zero the whole
+      // portfolio, so each map resolves to its own subtotal (0n on failure).
+      const subtotals = await Promise.all(
+        revealedMaps.map(async (m) => {
+          try {
+            const { mask } = getMaskData(m.slug)
+            const pixels = await fetchAllPixelsFromContract(read, m.address, m.width, m.height, mask)
+            let sum = 0n
+            for (const px of pixels) {
+              if (px.owner.toLowerCase() === me) sum += px.currentPrice
+            }
+            return sum
+          } catch (e) {
+            console.warn(`Failed to value pixels on map ${m.id}:`, e)
+            return 0n
+          }
+        }),
+      )
+
+      if (cancelled) return
+      setLandValue(subtotals.reduce((a, b) => a + b, 0n))
+      setLandValueReady(true)
+    }
+
+    fetchLandValue()
+    return () => {
+      cancelled = true
+    }
+  }, [publicClient, addrStr, revealedMaps])
 
   const saveLabel =
     saveState === 'saving' ? 'SAVING\u2026' :
