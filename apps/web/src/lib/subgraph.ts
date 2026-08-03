@@ -230,6 +230,44 @@ export async function fetchPixelTimestamps(
 }
 
 /* ------------------------------------------------------------------ *
+ * Owned pixels (for the profile's cross-map PIXELS + LAND VALUE)
+ * ------------------------------------------------------------------ */
+
+const OWNED_PIXELS_QUERY = `
+  query OwnedPixels($mapId: Int!, $owner: Bytes!, $first: Int!, $skip: Int!) {
+    pixels(where: { mapId: $mapId, owner: $owner }, first: $first, skip: $skip) {
+      pixelId
+    }
+  }
+`
+
+/**
+ * The pixel ids a wallet currently holds on one map (contract ids = y*width+x).
+ *
+ * Sourced from the subgraph so the profile never has to decode the whole
+ * on-chain pixel batch (a heavy `getPixelBatch` read that fails on throttled
+ * RPCs). The caller prices these with a small `selectionPrice(ids)` contract
+ * call. Paged; bounded by the wallet's holdings on the map.
+ */
+export async function fetchOwnedPixelIds(
+  mapId: MapId,
+  address: string,
+): Promise<number[]> {
+  const owner = address.toLowerCase()
+  const ids: number[] = []
+  for (let skip = 0; skip <= MAX_SKIP; skip += PAGE) {
+    const data = await querySubgraph<{ pixels: Array<{ pixelId: string }> }>(
+      OWNED_PIXELS_QUERY,
+      { mapId, owner, first: PAGE, skip },
+    )
+    const page = data.pixels ?? []
+    for (const p of page) ids.push(Number(p.pixelId))
+    if (page.length < PAGE) break
+  }
+  return ids
+}
+
+/* ------------------------------------------------------------------ *
  * Analytics
  * ------------------------------------------------------------------ */
 
