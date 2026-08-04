@@ -321,3 +321,81 @@ export async function fetchBatchesSince(
   for (const page of pages) out.push(...page)
   return out
 }
+
+/* ------------------------------------------------------------------ *
+ * Live activity feed (recent purchases)
+ * ------------------------------------------------------------------ */
+
+/** One recent purchase batch for the on-map activity toast. */
+export interface ActivityBatchRow {
+  /** `${txHash}-${logIndex}` — stable de-dupe key. */
+  id: string
+  /** Lowercase buyer address. */
+  buyer: string
+  pixelCountInBatch: number
+  /** Batch total, 6-dec microcents (formatUSDT-ready). */
+  totalCost: string
+  /** Unix seconds. */
+  timestamp: string
+  txHash: string
+}
+
+const RECENT_BATCHES_QUERY = `
+  query RecentBatches($mapId: Int!, $first: Int!) {
+    purchaseBatches(
+      where: { mapId: $mapId }
+      orderBy: timestamp
+      orderDirection: desc
+      first: $first
+    ) {
+      id
+      buyer
+      pixelCountInBatch
+      totalCost
+      timestamp
+      txHash
+    }
+  }
+`
+
+/** The most recent purchase batches on a map, newest first. */
+export async function fetchRecentBatches(
+  mapId: MapId,
+  first: number,
+): Promise<ActivityBatchRow[]> {
+  const data = await querySubgraph<{ purchaseBatches: ActivityBatchRow[] }>(
+    RECENT_BATCHES_QUERY,
+    { mapId, first },
+  )
+  return data.purchaseBatches ?? []
+}
+
+/** A profile row for feed enrichment. `label` is raw bytes (decode with `decodeBytes`). */
+export interface ActivityProfileRow {
+  address: string
+  label: string
+  color: number
+}
+
+const ACTIVITY_PROFILES_QUERY = `
+  query ActivityProfiles($mapId: Int!, $addrs: [Bytes!]!) {
+    ownerProfiles(where: { mapId: $mapId, address_in: $addrs }) {
+      address
+      label
+      color
+    }
+  }
+`
+
+/** On-chain profiles for the given buyers on a map (for name + color). */
+export async function fetchProfilesFor(
+  mapId: MapId,
+  addrs: string[],
+): Promise<ActivityProfileRow[]> {
+  if (addrs.length === 0) return []
+  const data = await querySubgraph<{ ownerProfiles: ActivityProfileRow[] }>(
+    ACTIVITY_PROFILES_QUERY,
+    { mapId, addrs },
+  )
+  return data.ownerProfiles ?? []
+}
