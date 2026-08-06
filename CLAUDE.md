@@ -65,18 +65,22 @@ the commit you want in the log.
 
 ### Branch names
 
-`<github-handle>/<slug>`, where the slug describes the problem, not the
-solution:
+`<author-handle>/<slug>` — the author's own GitHub handle, and a slug that
+describes the problem rather than the solution:
 
 ```
 GigaHierz/deals-map-heatmap-tiers
-GigaHierz/reward-shows-full-not-latest
 GigaHierz/non-land-pixel-checkout-fix
+csacanam/document-repo-conventions
 ```
 
-Older branches use `feat/`, `fix/`, `chore/` prefixes. That was the
-convention through early July 2026 and has since been replaced by the
-handle prefix — it is history, not a live alternative.
+Bots keep their own prefix: Renovate opens `renovate/<slug>`.
+
+Type prefixes (`feat/`, `fix/`, `chore/`, `docs/`) also appear in the
+history. There was no cutover — the handle form has been in use since
+mid-May 2026 and the two ran in parallel, with the type prefixes tapering
+off through July and none since. Use the handle form; the type prefixes
+are history rather than a live alternative.
 
 ### Titles
 
@@ -111,7 +115,10 @@ Two shapes coexist, and both are fine — pick by size of change:
   change needs (`What`/`Why`/`How`, `Problem`/`Fix`/`Why it's safe`,
   per-app sections); there is no fixed template.
 
-What does not vary is the content. Whichever shape you use, cover:
+On a substantial change the content below is invariant, whichever shape
+you pick. A small self-contained fix is often a single prose paragraph
+with no sections and no metrics, and that is fine — scale the body to the
+change.
 
 1. **The problem, with its evidence.** What was actually observed, not a
    restatement of the title. Production data is cited when it exists —
