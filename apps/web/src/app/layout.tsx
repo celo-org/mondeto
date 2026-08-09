@@ -6,6 +6,9 @@ import { PostHogProvider } from "@/components/posthog-provider"
 import { CurrentMapProvider } from "@/hooks/useMaps"
 import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 import RewardAnnouncement from "@/components/RewardAnnouncement"
+import { headers } from 'next/headers'
+import { logger } from "@/lib/logger"
+import { inspectUserAgent } from "@/lib/userAgentInsight"
 
 const APP_URL = 'https://www.mondeto.app'
 const TITLE = 'Mondeto — every pixel is up for grabs'
@@ -58,11 +61,26 @@ export const viewport: Viewport = {
 // whack-a-mole on this every time we touch a wallet-aware hook.
 export const dynamic = 'force-dynamic';
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Engine census, deliberately server-side. A bundle that fails to parse
+  // never initialises PostHog, so the browsers we most need to count are
+  // precisely the ones missing from client analytics (#196). The document
+  // request precedes any of our JavaScript, so this sees them. `dynamic =
+  // 'force-dynamic'` above already opted every route out of static
+  // rendering, so reading a header costs nothing extra.
+  const userAgent = (await headers()).get('user-agent')
+  const engine = inspectUserAgent(userAgent)
+  logger.info('document request', {
+    ua: userAgent ?? 'none',
+    chromeMajor: engine.chromeMajor ?? -1,
+    isAndroidWebView: engine.isAndroidWebView,
+    belowKnownFloor: engine.belowKnownFloor,
+  })
+
   return (
     <html lang="en">
       <head>
