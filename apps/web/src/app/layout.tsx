@@ -6,6 +6,8 @@ import { PostHogProvider } from "@/components/posthog-provider"
 import { CurrentMapProvider } from "@/hooks/useMaps"
 import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 import RewardAnnouncement from "@/components/RewardAnnouncement"
+import Script from 'next/script'
+import { LEGACY_SHIM } from "@/lib/legacyShim"
 
 const APP_URL = 'https://www.mondeto.app'
 const TITLE = 'Mondeto — every pixel is up for grabs'
@@ -66,6 +68,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Built-ins that our dependency tree calls but pre-2021 Chromium
+            lacks. `beforeInteractive` is what puts this ahead of Next's own
+            bootstrap scripts — a plain inline <script> here is emitted
+            *after* them in the head, and we need the patches installed
+            before any chunk evaluates. MiniPay renders with the device's
+            system WebView, which on older Android is still Chrome 80. See
+            lib/legacyShim.ts. */}
+        <Script
+          id="legacy-shim"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: LEGACY_SHIM }}
+        />
         {/* Pre-warm Google Fonts DNS + TLS so the @font-face requests don't
             block first paint. Combined with preload below this is the
             highest-impact PageSpeed change for our mobile target. */}
