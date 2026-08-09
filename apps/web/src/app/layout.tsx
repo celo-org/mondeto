@@ -8,6 +8,7 @@ import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 import RewardAnnouncement from "@/components/RewardAnnouncement"
 import Script from 'next/script'
 import { LEGACY_SHIM } from "@/lib/legacyShim"
+import { DEBUG_ERROR_OVERLAY } from "@/lib/debugErrorOverlay"
 
 const APP_URL = 'https://www.mondeto.app'
 const TITLE = 'Mondeto — every pixel is up for grabs'
@@ -79,6 +80,15 @@ export default function RootLayout({
           id="legacy-shim"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: LEGACY_SHIM }}
+        />
+        {/* `?debug=1` only — paints uncaught errors into an on-screen banner.
+            MiniPay's WebView has no reachable console, so "see the browser
+            console" is a dead end on the devices that actually fail. See
+            lib/debugErrorOverlay.ts. */}
+        <Script
+          id="debug-error-overlay"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: DEBUG_ERROR_OVERLAY }}
         />
         {/* Pre-warm Google Fonts DNS + TLS so the @font-face requests don't
             block first paint. Combined with preload below this is the
