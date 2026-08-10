@@ -244,3 +244,9 @@
   51%, 100% { opacity: 0; }
 }
 .animate-blink { animation: blink 1s steps(1) infinite; }
+
+/* Entrance for the live activity toast: rises + fades in from the corner. */
+@keyframes activityIn {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
