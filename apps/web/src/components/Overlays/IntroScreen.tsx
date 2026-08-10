@@ -126,7 +126,10 @@ function SlidePaint() {
   )
 }
 
-const SLIDES: Slide[] = [
+// Exported for the copy regression guard in
+// __tests__/components/Overlays/IntroScreen.test.tsx — the rewards slide's
+// wording is support-critical, not cosmetic.
+export const SLIDES: Slide[] = [
   {
     key: 'tycoon',
     kicker: 'BUY LAND. BECOME A TYCOON.',
