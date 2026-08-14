@@ -7,7 +7,8 @@ import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getAttributionSuffix } from '@/lib/attribution'
 import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
-import { classifyBuyError, isUserRejectedError } from '@/lib/buyErrors'
+import { classifyBuy, isUserRejectedError } from '@/lib/buyErrors'
+import type { BuyBlockedReason, GasFallbackLevel } from '@/lib/buyErrors'
 import {
   APPROVAL_CAP_USD,
   BPS_DENOM,
@@ -92,6 +93,26 @@ export function useBuyPixels(mapId?: MapId) {
     if (inFlight.current) return
     inFlight.current = true
 
+    // Shared by every event this function emits. Built before the pre-wallet
+    // guards below so a blocked buy reports the same shape as one that ran —
+    // `token` is the only field that can't exist yet, since the guards include
+    // "no stablecoin at all".
+    const baseProps = {
+      mapId: mapId ?? 0,
+      pixelCount: ids.length,
+      totalPriceUsd: Number(totalPriceHint) / 1_000_000,
+      ref: getReferrer() ?? undefined,
+    }
+    // The three guards below stop the buy BEFORE `pixel_buy_started` fires, so
+    // they are absent from the started/failed funnel by construction — counting
+    // them as failures would break that funnel's arithmetic, and leaving them
+    // silent is what made them invisible in the first place. They get their own
+    // event instead: never preceded by `pixel_buy_started`, never followed by
+    // `pixel_buy_failed`, and safe to sum separately.
+    const trackBlocked = (reason: BuyBlockedReason) => {
+      track('pixel_buy_blocked', { ...baseProps, reason })
+    }
+
     // The contracts live on Celo. If the wallet is on another chain (common when
     // testing in a browser wallet that defaults to Ethereum), prompt a switch —
     // which also ADDS Celo to the wallet if it's missing — before touching any
@@ -100,6 +121,7 @@ export function useBuyPixels(mapId?: MapId) {
       try {
         await switchChainAsync({ chainId: celo.id })
       } catch {
+        trackBlocked('chain_switch_rejected')
         setError('Switch your wallet to the Celo network to buy.')
         setStep('error')
         inFlight.current = false
@@ -108,6 +130,7 @@ export function useBuyPixels(mapId?: MapId) {
     }
 
     if (!preferred) {
+      trackBlocked('no_stablecoin_balance')
       setError('No stablecoin balance — top up before buying.')
       setStep('error')
       inFlight.current = false
@@ -119,6 +142,7 @@ export function useBuyPixels(mapId?: MapId) {
     // error — so block it here with a clear message. Also covers the
     // single-pixel path (onBuyThisPixel), which never renders the drawer gate.
     if (isOverSpendCap(totalPriceHint)) {
+      trackBlocked('over_spend_cap')
       setError(OVER_SPEND_CAP_MESSAGE)
       setStep('error')
       inFlight.current = false
@@ -127,12 +151,17 @@ export function useBuyPixels(mapId?: MapId) {
 
     const tokenAddress = preferred.address
     const tokenDecimals = preferred.decimals
-    const eventProps = {
-      mapId: mapId ?? 0,
-      pixelCount: ids.length,
-      totalPriceUsd: Number(totalPriceHint) / 1_000_000,
-      token: preferred.symbol,
-      ref: getReferrer() ?? undefined,
+    const eventProps = { ...baseProps, token: preferred.symbol }
+    // A gas estimate that fell back is not a failure — the buy usually still
+    // goes out — but it is the tell for the MiniPay CIP-64 hazard, so it has to
+    // be visible on its own rather than only when the buy later dies.
+    const trackGasFallback = (stage: 'approve' | 'buy', level: GasFallbackLevel, err: unknown) => {
+      track('pixel_buy_gas_fallback', {
+        ...eventProps,
+        stage,
+        level,
+        detail: (err instanceof Error ? err.message : String(err)).slice(0, 100),
+      })
     }
     track('pixel_buy_started', eventProps)
 
@@ -226,6 +255,7 @@ export function useBuyPixels(mapId?: MapId) {
           // accepted), padding for the CIP-64 intrinsic overhead; last resort a
           // safe ceiling so the tx still goes out with a limit.
           if (feeCurrency) {
+            trackGasFallback('approve', 'without_fee_currency', err)
             try {
               const g = await publicClient.estimateContractGas({
                 address: tokenAddress,
@@ -237,6 +267,7 @@ export function useBuyPixels(mapId?: MapId) {
               approveGas = (g * 12n) / 10n + 60_000n
             } catch (err2) {
               console.warn('approve gas fallback failed; using ceiling:', err2)
+              trackGasFallback('approve', 'ceiling', err2)
               approveGas = 150_000n
             }
           }
@@ -283,6 +314,7 @@ export function useBuyPixels(mapId?: MapId) {
         // MiniPay: never fall through to a gas-less send (see approve above).
         // Retry without feeCurrency, then a pixel-count-scaled ceiling.
         if (feeCurrency) {
+          trackGasFallback('buy', 'without_fee_currency', err)
           try {
             const g = await publicClient.estimateContractGas({
               address: contractAddress,
@@ -294,6 +326,7 @@ export function useBuyPixels(mapId?: MapId) {
             buyGas = (g * 12n) / 10n + 100_000n
           } catch (err2) {
             console.warn('buyPixels gas fallback failed; using ceiling:', err2)
+            trackGasFallback('buy', 'ceiling', err2)
             buyGas = 300_000n + BigInt(bigIds.length) * 80_000n
           }
         }
@@ -355,8 +388,17 @@ export function useBuyPixels(mapId?: MapId) {
       // Keep the raw error in the console for debugging; show players only the
       // short, human-readable line — never the raw viem/wallet dump.
       console.error('Buy failed:', detail, e)
-      const short = classifyBuyError(hay, preferred.symbol)
-      track('pixel_buy_failed', { ...eventProps, reason: short })
+      const { message: short, category } = classifyBuy(hay, preferred.symbol)
+      // `reason` is player copy and moves with wording; `category` is the
+      // stable key to segment on. `detail` carries the unwrapped raw error
+      // (truncated, same as profile_save_failed) so a rising `unknown` bucket
+      // can be read and turned into a new branch instead of guessed at.
+      track('pixel_buy_failed', {
+        ...eventProps,
+        reason: short,
+        category,
+        detail: detail.slice(0, 100),
+      })
       setError(short)
       setStep('error')
     } finally {

@@ -20,21 +20,43 @@ import posthog from 'posthog-js'
  *   leaderboard_viewed        { board, scope, mapId }
  *   pixel_info_viewed         { pixelId, owned }
  *   profile_saved             { hasUrl }                             fires when the updateProfile tx confirms
- *   invite_shared             { mapId }
+ *   profile_save_failed       { reason }                             reason is the raw error, truncated to 100 chars
  *   share_clicked             { kind, platform, mapId }               kind: positions|rank|invite|reward; platform: twitter|telegram|whatsapp|clipboard
  *   reward_viewed             { campaignId, amountUsd }               the "you won $X" announcement was shown
  *   support_form_opened       {}
+ *   activity_feed_shown       { mapId, batchId }                     a live-purchase toast was surfaced (fires per toast, not per session)
  *   buy_blocked_not_connected { pixelCount }                         selected pixels while signed out
  *   checkout_opened           { mapId, pixelCount, totalPriceUsd }   review drawer opened (buy intent)
  *   checkout_insufficient_funds { mapId, needUsd, balanceUsd, token, pixelCount }  drawer showed "NOT ENOUGH FUNDS"
  *   checkout_split_currency_blocked { mapId, needUsd, balanceUsd, token, pixelCount, totalUsd }  enough across coins, blocked by one-currency-per-buy rule
  *   checkout_dismissed        { reason, mapId, pixelCount, totalPriceUsd, step }  left the drawer without buying (reason: cleared|closed)
  *   topup_clicked             { mapId, shortfallUsd, token }         insufficient-funds wall
+ *   pixel_buy_blocked         { mapId, pixelCount, totalPriceUsd, reason, ref? }  stopped by our own guard BEFORE the wallet opened — see below
  *   pixel_buy_started         { mapId, pixelCount, totalPriceUsd, token, ref? }
  *   pixel_buy_approve_shown   { mapId, pixelCount, totalPriceUsd, token, ref? }
+ *   pixel_buy_gas_fallback    { mapId, pixelCount, totalPriceUsd, token, stage, level, detail, ref? }  stage: approve|buy; level: without_fee_currency|ceiling
+ *   pixel_buy_over_cap        { mapId, pixelCount, totalPriceUsd, token, reason, ref? }  live price tipped the buy past the $10 cap after it was picked
  *   pixel_buy_succeeded       { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
  *   pixel_buy_rejected        { mapId, pixelCount, totalPriceUsd, token, ref? }   user declined the wallet prompt (silent, no error shown)
- *   pixel_buy_failed          { mapId, pixelCount, totalPriceUsd, token, reason, ref? }
+ *   pixel_buy_failed          { mapId, pixelCount, totalPriceUsd, token, reason, category, detail, ref? }
+ *
+ * On the buy funnel's arithmetic: `pixel_buy_blocked` fires *before*
+ * `pixel_buy_started` and carries no `token`, because one of its reasons is
+ * "no stablecoin at all". So a blocked buy is never counted as a started one
+ * and never produces a `pixel_buy_failed` — do not add it to a failure rate
+ * whose denominator is `pixel_buy_started`; sum it separately. Everything from
+ * `pixel_buy_started` onward is a real attempt and nests normally.
+ *
+ * On `pixel_buy_failed`: `reason` is the player-facing line and changes with
+ * copy edits — segment on `category` (see BuyErrorCategory in lib/buyErrors.ts),
+ * which is stable by contract. `detail` is the unwrapped raw error truncated to
+ * 100 chars, kept so a growing `unknown` category can be read rather than
+ * guessed at.
+ *
+ * `pixel_buy_gas_fallback` is not a failure — the buy usually still goes out.
+ * It marks a buy that had to drop to a cruder gas estimate, which is the tell
+ * for the MiniPay CIP-64 hazard (a gas-less send makes MiniPay answer
+ * "permission denied").
  *
  * `utm_*` params from the landing URL, plus `isMiniPay`, are attached to
  * every event as super-properties (via registerCampaignParams() and
