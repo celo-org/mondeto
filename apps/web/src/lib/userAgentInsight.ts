@@ -16,12 +16,22 @@
  */
 
 /**
- * Lowest Chromium major we are known to run on today, set by the syntax our
- * dependencies publish rather than by a product decision — `||=` and `??=`
- * are Chrome 85. The support floor is still open in #196; when it is
- * settled this constant should follow it, not the other way round.
+ * Lowest Chromium major our bundle can currently be *parsed* by, set by the
+ * syntax our dependencies publish rather than by any product decision —
+ * `||=` and `??=` are Chrome 85.
  */
 export const KNOWN_PARSEABLE_CHROME_MAJOR = 85
+
+/**
+ * Lowest Chromium major we have *decided* to support, settled at Chrome 80
+ * in #196.
+ *
+ * Deliberately a second constant. 85 is what the bundle parses today, 80 is
+ * what we intend to serve, and the range between them — engines we promised
+ * to support and currently break on — is the remaining work. Collapsing the
+ * two into one number would hide exactly the population that matters.
+ */
+export const SUPPORT_FLOOR_CHROME_MAJOR = 80
 
 export type UserAgentInsight = {
   /** Chromium major version, or null when the UA doesn't advertise one. */
@@ -30,6 +40,12 @@ export type UserAgentInsight = {
   isAndroidWebView: boolean
   /** Engine too old to parse our current bundle. Null major → unknown, not old. */
   belowKnownFloor: boolean
+  /**
+   * Engine below the support floor we committed to. Together with
+   * `belowKnownFloor` this splits the census three ways: below 80 is out of
+   * scope by decision, 80–84 is in scope and broken (the bug), 85+ is fine.
+   */
+  belowSupportFloor: boolean
 }
 
 export function inspectUserAgent(userAgent: string | null | undefined): UserAgentInsight {
@@ -45,5 +61,35 @@ export function inspectUserAgent(userAgent: string | null | undefined): UserAgen
     chromeMajor,
     isAndroidWebView: /;\s*wv\)/.test(ua),
     belowKnownFloor: chromeMajor !== null && chromeMajor < KNOWN_PARSEABLE_CHROME_MAJOR,
+    belowSupportFloor: chromeMajor !== null && chromeMajor < SUPPORT_FLOOR_CHROME_MAJOR,
   }
+}
+
+/**
+ * What kind of request this is, which decides whether it can stand for a
+ * person.
+ *
+ * This is the difference between counting requests and counting users, and
+ * the bias runs the wrong way without it. A client whose bundle dies at parse
+ * makes exactly one document request and can never navigate client-side — no
+ * hydration, no router, no prefetch. A healthy client hydrates and then issues
+ * RSC and prefetch requests on top, and comes back besides. Counting all
+ * requests alike therefore *understates* the share of broken engines, which is
+ * the one number this census exists to produce.
+ *
+ * Emitting the kind rather than filtering keeps both readings available: the
+ * document-only slice is the per-visit denominator, and the ratio of RSC to
+ * document requests is itself a decent proxy for whether clients survive
+ * hydration.
+ */
+export type RequestKind = 'document' | 'rsc' | 'prefetch'
+
+export function classifyRequestKind(
+  rscHeader: string | null | undefined,
+  prefetchHeader: string | null | undefined,
+): RequestKind {
+  // A prefetch is also an RSC request, so it has to be tested first.
+  if (prefetchHeader) return 'prefetch'
+  if (rscHeader) return 'rsc'
+  return 'document'
 }

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { inspectUserAgent, KNOWN_PARSEABLE_CHROME_MAJOR } from '@/lib/userAgentInsight'
+import {
+  classifyRequestKind,
+  inspectUserAgent,
+  KNOWN_PARSEABLE_CHROME_MAJOR,
+  SUPPORT_FLOOR_CHROME_MAJOR,
+} from '@/lib/userAgentInsight'
 
 // The two devices from the #196 investigation, verbatim in shape: a Huawei
 // Mate 20 Lite whose system WebView never left the 2018 factory image, and a
@@ -19,6 +24,7 @@ describe('inspectUserAgent', () => {
       chromeMajor: 80,
       isAndroidWebView: true,
       belowKnownFloor: true,
+      belowSupportFloor: false,
     })
   })
 
@@ -27,6 +33,7 @@ describe('inspectUserAgent', () => {
       chromeMajor: 150,
       isAndroidWebView: true,
       belowKnownFloor: false,
+      belowSupportFloor: false,
     })
   })
 
@@ -49,6 +56,7 @@ describe('inspectUserAgent', () => {
         chromeMajor: null,
         isAndroidWebView: false,
         belowKnownFloor: false,
+        belowSupportFloor: false,
       })
     }
   })
@@ -58,5 +66,44 @@ describe('inspectUserAgent', () => {
     const below = `Chrome/${KNOWN_PARSEABLE_CHROME_MAJOR - 1}.0.0.0`
     expect(inspectUserAgent(at).belowKnownFloor).toBe(false)
     expect(inspectUserAgent(below).belowKnownFloor).toBe(true)
+  })
+
+  it('keeps the support floor separate from the parse floor', () => {
+    // The gap between the two is the whole point: engines we committed to
+    // serving and currently break on. Reported as one number it disappears.
+    expect(SUPPORT_FLOOR_CHROME_MAJOR).toBeLessThan(KNOWN_PARSEABLE_CHROME_MAJOR)
+
+    const inGap = inspectUserAgent(`Chrome/${SUPPORT_FLOOR_CHROME_MAJOR}.0.0.0`)
+    expect(inGap.belowSupportFloor).toBe(false) // we said we support it...
+    expect(inGap.belowKnownFloor).toBe(true) //    ...and it can't parse us
+
+    const outOfScope = inspectUserAgent(`Chrome/${SUPPORT_FLOOR_CHROME_MAJOR - 1}.0.0.0`)
+    expect(outOfScope.belowSupportFloor).toBe(true)
+
+    const fine = inspectUserAgent(`Chrome/${KNOWN_PARSEABLE_CHROME_MAJOR}.0.0.0`)
+    expect(fine.belowKnownFloor).toBe(false)
+    expect(fine.belowSupportFloor).toBe(false)
+  })
+})
+
+describe('classifyRequestKind', () => {
+  it('separates the request kinds a healthy client can make', () => {
+    expect(classifyRequestKind(null, null)).toBe('document')
+    expect(classifyRequestKind('1', null)).toBe('rsc')
+    expect(classifyRequestKind('1', '1')).toBe('prefetch')
+  })
+
+  it('calls a prefetch a prefetch even though it is also an RSC request', () => {
+    // Order matters: Next sends both headers on a prefetch, so testing RSC
+    // first would bury every prefetch in the rsc bucket.
+    expect(classifyRequestKind('1', '1')).toBe('prefetch')
+    expect(classifyRequestKind(null, '1')).toBe('prefetch')
+  })
+
+  it('treats a missing or empty header as a plain document request', () => {
+    // Only a document request can stand for a person who never hydrated —
+    // misfiling one as RSC would drop a broken client from the count.
+    expect(classifyRequestKind(undefined, undefined)).toBe('document')
+    expect(classifyRequestKind('', '')).toBe('document')
   })
 })

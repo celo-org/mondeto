@@ -8,7 +8,7 @@ import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 import RewardAnnouncement from "@/components/RewardAnnouncement"
 import { headers } from 'next/headers'
 import { logger } from "@/lib/logger"
-import { inspectUserAgent } from "@/lib/userAgentInsight"
+import { classifyRequestKind, inspectUserAgent } from "@/lib/userAgentInsight"
 
 const APP_URL = 'https://www.mondeto.app'
 const TITLE = 'Mondeto — every pixel is up for grabs'
@@ -72,13 +72,33 @@ export default async function RootLayout({
   // request precedes any of our JavaScript, so this sees them. `dynamic =
   // 'force-dynamic'` above already opted every route out of static
   // rendering, so reading a header costs nothing extra.
-  const userAgent = (await headers()).get('user-agent')
+  //
+  // `requestKind` is what makes this countable per person rather than per
+  // request — a broken client can only ever produce a document request, so
+  // an unsegmented total understates them. See classifyRequestKind.
+  //
+  // What this deliberately cannot do is isolate MiniPay. That is only
+  // detectable client-side, from `window.ethereum.isMiniPay`, and
+  // `isAndroidWebView` matches every embedded WebView — Facebook, Instagram,
+  // Opera's in-app browser, assorted crawlers. So the denominator here is all
+  // traffic, not MiniPay traffic, and the resulting percentage must not be
+  // read as a MiniPay figure. The absolute count of old engines is still the
+  // useful number, and still infinitely better than having none.
+  const requestHeaders = await headers()
+  const userAgent = requestHeaders.get('user-agent')
   const engine = inspectUserAgent(userAgent)
   logger.info('document request', {
     ua: userAgent ?? 'none',
-    chromeMajor: engine.chromeMajor ?? -1,
+    requestKind: classifyRequestKind(
+      requestHeaders.get('rsc'),
+      requestHeaders.get('next-router-prefetch'),
+    ),
+    // Omitted entirely when the UA advertises no Chromium version. A sentinel
+    // like -1 would silently poison any avg/min someone runs over this later.
+    ...(engine.chromeMajor !== null ? { chromeMajor: engine.chromeMajor } : {}),
     isAndroidWebView: engine.isAndroidWebView,
     belowKnownFloor: engine.belowKnownFloor,
+    belowSupportFloor: engine.belowSupportFloor,
   })
 
   return (
