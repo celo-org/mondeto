@@ -19,6 +19,17 @@
  * Lowest Chromium major our bundle can currently be *parsed* by, set by the
  * syntax our dependencies publish rather than by any product decision —
  * `||=` and `??=` are Chrome 85.
+ *
+ * **How this was derived, so it can be re-derived:** by reading the published
+ * source of our dependencies during the #196 investigation and finding the
+ * newest syntax they ship. `||=` / `??=` (Chrome 85) was the *lowest* new
+ * syntax found — not provably the highest. Class static blocks are Chrome 94,
+ * top-level `await` 89, `Object.hasOwn` 93, so a dependency bump can raise the
+ * real parse floor above this constant while it stays put, turning
+ * `belowKnownFloor: false` into a false negative for exactly the population
+ * being measured. Renovate bumps dependencies here continuously, so re-derive
+ * this rather than trusting it; a syntax check over the built chunks would
+ * turn it from remembered into asserted.
  */
 export const KNOWN_PARSEABLE_CHROME_MAJOR = 85
 
@@ -33,6 +44,27 @@ export const KNOWN_PARSEABLE_CHROME_MAJOR = 85
  */
 export const SUPPORT_FLOOR_CHROME_MAJOR = 80
 
+/**
+ * Non-human clients, which land in *both* halves of the ratio and pull it in
+ * opposite directions.
+ *
+ * Numerator: pinned-old-Chrome UAs are ubiquitous among scrapers and uptime
+ * checks — `Chrome/41.0.2228.0` is the classic old-Googlebot spoof and is
+ * still shipped by a lot of tooling. In the log it is indistinguishable from
+ * a genuinely broken handset.
+ *
+ * Denominator: the public share route is unfurled by Twitterbot,
+ * `facebookexternalhit`, WhatsApp, Slack and Discord on every share. Those
+ * render a page, so they log, and mostly carry no `Chrome/` token. Given how
+ * much traffic arrives through sharing, the non-human share of the
+ * denominator is not marginal.
+ *
+ * Kept as a field rather than a filter so the denominator stays correctable
+ * after the fact.
+ */
+const BOT_PATTERN =
+  /bot|crawl|spider|slurp|preview|monitor|headless|lighthouse|facebookexternalhit|whatsapp|telegram|applebot|yandex/i
+
 export type UserAgentInsight = {
   /** Chromium major version, or null when the UA doesn't advertise one. */
   chromeMajor: number | null
@@ -46,6 +78,8 @@ export type UserAgentInsight = {
    * scope by decision, 80–84 is in scope and broken (the bug), 85+ is fine.
    */
   belowSupportFloor: boolean
+  /** Crawler, unfurler or monitor. See BOT_PATTERN for why this matters. */
+  isLikelyBot: boolean
 }
 
 export function inspectUserAgent(userAgent: string | null | undefined): UserAgentInsight {
@@ -62,25 +96,43 @@ export function inspectUserAgent(userAgent: string | null | undefined): UserAgen
     isAndroidWebView: /;\s*wv\)/.test(ua),
     belowKnownFloor: chromeMajor !== null && chromeMajor < KNOWN_PARSEABLE_CHROME_MAJOR,
     belowSupportFloor: chromeMajor !== null && chromeMajor < SUPPORT_FLOOR_CHROME_MAJOR,
+    isLikelyBot: BOT_PATTERN.test(ua),
   }
 }
 
 /**
- * What kind of request this is, which decides whether it can stand for a
- * person.
+ * Whether the raw UA string is worth keeping on this record.
  *
- * This is the difference between counting requests and counting users, and
- * the bias runs the wrong way without it. A client whose bundle dies at parse
- * makes exactly one document request and can never navigate client-side — no
- * hydration, no router, no prefetch. A healthy client hydrates and then issues
- * RSC and prefetch requests on top, and comes back besides. Counting all
- * requests alike therefore *understates* the share of broken engines, which is
- * the one number this census exists to produce.
+ * The raw string is what lets us re-parse when we find a device shape the
+ * parser mishandles, so it earns its place for the population under
+ * investigation. For the healthy majority the three parsed fields already say
+ * everything, and the string is both bytes we don't need and personal data we
+ * don't need to hold.
+ */
+export function shouldRetainRawUserAgent(insight: UserAgentInsight): boolean {
+  return insight.chromeMajor === null || insight.belowKnownFloor || insight.isAndroidWebView
+}
+
+/**
+ * What kind of request this is.
  *
- * Emitting the kind rather than filtering keeps both readings available: the
- * document-only slice is the per-visit denominator, and the ratio of RSC to
- * document requests is itself a decent proxy for whether clients survive
- * hydration.
+ * **This is expected to read `document` for essentially every record today,
+ * and that is the point.** It is a tripwire, not a correction.
+ *
+ * The root layout is not re-entered on soft navigations in this app, so
+ * healthy clients do not in fact generate extra log lines by moving around:
+ * `walkTreeWithFlightRouterState` only calls `createComponentTree` when the
+ * client sent no state tree, the segment mismatches, the level is a leaf, or
+ * the state is `refetch` — none of which hold at the root during a soft
+ * navigation. Prefetches short-circuit earlier still, because there is no
+ * `loading.tsx` anywhere in this app and PPR is off. The two remaining ways
+ * back into the root layout, `router.refresh()` and server actions, are both
+ * absent from `src/`.
+ *
+ * So it earns its place as insurance rather than as a fix. The moment someone
+ * adds a `loading.tsx`, calls `router.refresh()` or turns on PPR, RSC renders
+ * start entering the denominator silently — and this field is what makes that
+ * visible instead of quietly skewing the census.
  */
 export type RequestKind = 'document' | 'rsc' | 'prefetch'
 
