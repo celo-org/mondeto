@@ -3,18 +3,34 @@ import { fallbackReadClient } from '@/lib/chain'
 import { getMapContractById } from '@/lib/maps/contracts'
 import { estimateHistoryFromBlock, scanNormalizedPurchases, toMicrocents } from '@/lib/purchaseLogs'
 import { fetchOwnerPnl, subgraphConfigured } from '@/lib/subgraph'
+import { netOfResaleFee, readFeeRateBps } from '@/lib/resaleFee'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
 /**
  * Server-side profit-and-loss for one wallet on one map: SPENT is the sum of the
- * wallet's own buys; EARNED is what later buyers paid for pixels the wallet used
- * to own. Values are 6-decimal "microcents" (the unit `formatUSDT` renders).
+ * wallet's own buys; EARNED is what actually reached the wallet when later
+ * buyers took pixels off it. Values are 6-decimal "microcents" (the unit
+ * `formatUSDT` renders).
  *
  * When the Goldsky subgraph is configured (NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL),
  * both numbers are a single indexed query (OwnerMapStats.totalSpent/totalEarned).
  * Otherwise we fall back to the legacy full-history `PixelsPurchased` log scan —
  * so this route behaves identically until the subgraph URL is set.
+ *
+ * EARNED is netted of the resale fee here rather than at either source, because
+ * **both sources report it gross**. The subgraph accumulates `perPixelCost`
+ * straight into `Owner.totalEarned` (`apps/subgraph/src/mapping.ts`, despite a
+ * comment there claiming otherwise), and the log scan below does the same. On
+ * chain the seller receives `price − fee`, so reporting either number as-is
+ * overstates what reached the wallet by the fee rate — the app would state a
+ * figure the player's own transaction history contradicts.
+ *
+ * Netting in the route also means no subgraph resync: it corrects historical
+ * data that is already indexed. See `lib/resaleFee.ts` for the two
+ * approximations that come with applying the current rate to lifetime totals.
+ *
+ * SPENT stays gross on purpose — the buyer really does pay the whole price.
  */
 
 export const dynamic = 'force-dynamic'
@@ -35,15 +51,22 @@ const ZERO: Pnl = { spent: '0', earned: '0' }
 const cache = new Map<string, { ts: number; value: Pnl }>()
 
 async function computePnl(mapId: MapId, addr: string): Promise<Pnl> {
-  // Preferred path: one indexed query for the wallet's LIFETIME spend/earn
-  // across every map (the global Owner entity). `mapId` is ignored here — the
-  // profile shows an all-maps lifetime figure. The legacy fallback below is
-  // still per-map (it can only scan one contract's logs).
-  if (subgraphConfigured()) {
-    const { spent, earned } = await fetchOwnerPnl(addr)
-    return { spent, earned }
+  const grossEarnedAndSpent = subgraphConfigured()
+    ? // Preferred path: one indexed query for the wallet's LIFETIME spend/earn
+      // across every map (the global Owner entity). `mapId` is ignored here —
+      // the profile shows an all-maps lifetime figure. The legacy fallback is
+      // still per-map (it can only scan one contract's logs).
+      await fetchOwnerPnl(addr)
+    : await computePnlFromLogs(mapId, addr)
+
+  // Both sources report EARNED gross; the seller only ever received
+  // `price − fee`. The rate is read from the map whose contract we'd scan,
+  // which is also the rate the profile's own map is settling at.
+  const feeRateBps = await readFeeRateBps(getMapContractById(mapId).address, mapId)
+  return {
+    spent: grossEarnedAndSpent.spent,
+    earned: netOfResaleFee(BigInt(grossEarnedAndSpent.earned), feeRateBps).toString(),
   }
-  return computePnlFromLogs(mapId, addr)
 }
 
 async function computePnlFromLogs(mapId: MapId, addr: string): Promise<Pnl> {

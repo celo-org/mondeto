@@ -4,6 +4,7 @@ import { MONDETO_ABI } from '@/lib/contract'
 import { getContractByMapId } from '@/lib/maps/contracts'
 import { estimateHistoryFromBlock, scanNormalizedPurchases, toMicrocents } from '@/lib/purchaseLogs'
 import { fetchBatchesSince, fetchMapStats, subgraphConfigured } from '@/lib/subgraph'
+import { readFeeRateBps } from '@/lib/resaleFee'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
@@ -54,20 +55,6 @@ interface AnalyticsResponse {
 
 // Per-mapId warm-instance cache.
 const cache = new Map<string, { ts: number; value: AnalyticsResponse }>()
-
-async function readFeeRateBps(contractAddress: `0x${string}`, mapId: MapId): Promise<number> {
-  try {
-    const rate = (await fallbackReadClient.readContract({
-      address: contractAddress,
-      abi: MONDETO_ABI,
-      functionName: 'feeRate',
-    })) as bigint
-    return Number(rate)
-  } catch (e) {
-    logger.warn('failed to read feeRate', { err: String(e), mapId })
-    return 0
-  }
-}
 
 const DAY_SECONDS = 86_400
 const WEEK_SECONDS = 604_800
