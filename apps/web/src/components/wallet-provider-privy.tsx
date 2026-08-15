@@ -6,11 +6,11 @@ import {
   createConfig as createPrivyWagmiConfig,
 } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createContext } from "react";
 import { injected } from "wagmi/connectors";
 import { celo, celoSepolia } from "viem/chains";
 import { ChainGuard } from "./ChainGuard";
 import { WalletAnalytics } from "./wallet-analytics";
-import { PrivyReadyContext } from "./privy-ready-context";
 import { celoTransport, celoSepoliaTransport } from "@/lib/chain";
 
 // Privy-only tree, isolated from the MiniPay path. Lazy-loaded by
@@ -35,10 +35,10 @@ const privyWagmiConfig = createPrivyWagmiConfig({
 
 const queryClient = new QueryClient();
 
-// `PrivyReadyContext` lives in its own module (`privy-ready-context.ts`) so
-// consumers can read it without importing this file — importing it here
-// would drag `@privy-io/*` and its `x402` / `@solana/kit` subtree into their
-// chunk. See the note in that module.
+// Children read this to decide whether it's safe to call Privy hooks.
+// The default (false) is what they see under the vanilla wagmi tree on
+// SSR / first paint / MiniPay; PrivyTree below provides `true`.
+export const PrivyReadyContext = createContext(false);
 
 export function PrivyTree({ children }: { children: React.ReactNode }) {
   return (
