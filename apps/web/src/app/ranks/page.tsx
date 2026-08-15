@@ -232,7 +232,20 @@ export default function RanksPage() {
 
   // The campaign board comes from its own route, not from pixelData: it needs
   // two block-pinned subgraph reads that the client snapshot can't produce.
-  const campaign = useCampaignBoard(selectedMapId, address, profilesMap)
+  //
+  // `?from=&to=` lets a preview deployment render the board over an arbitrary
+  // window, so it can be seen with real data without scheduling a campaign in
+  // Edge Config — which every deployment, production included, would show. The
+  // route drops these params on production, so forwarding them unconditionally
+  // is safe: the client cannot conjure a campaign for real players.
+  const previewWindow = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    const from = params.get('from')
+    const to = params.get('to')
+    return from && to ? { from, to } : null
+  }, [])
+  const campaign = useCampaignBoard(selectedMapId, address, profilesMap, previewWindow)
 
   const dataMap: Record<LeaderboardTab, typeof area> = {
     AREA: area,

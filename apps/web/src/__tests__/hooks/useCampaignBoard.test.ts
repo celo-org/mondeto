@@ -92,6 +92,34 @@ describe('useCampaignBoard', () => {
     const url = String(fetchMock.mock.calls[0][0])
     expect(url).toContain('mapId=3')
     expect(url).not.toContain('address=')
+    expect(url).not.toContain('from=')
+  })
+
+  it('forwards an explicit window when one is given', async () => {
+    // Only meaningful on a preview — the route drops these on production — so
+    // the hook forwards them unconditionally rather than trying to guess the
+    // environment from the client.
+    respondWith(RUNNING)
+    renderHook(() =>
+      useCampaignBoard(0, undefined, undefined, {
+        from: '2026-08-15T09:00:00Z',
+        to: '2026-08-15T21:00:00Z',
+      }),
+    )
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+    const url = String(fetchMock.mock.calls[0][0])
+    expect(url).toContain('from=2026-08-15T09%3A00%3A00Z')
+    expect(url).toContain('to=2026-08-15T21%3A00%3A00Z')
+  })
+
+  it('ignores a half-specified window', async () => {
+    respondWith(RUNNING)
+    renderHook(() =>
+      useCampaignBoard(0, undefined, undefined, { from: '2026-08-15T09:00:00Z', to: '' }),
+    )
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('from=')
   })
 
   it('falls back to the between-campaigns state when the route fails', async () => {

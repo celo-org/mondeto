@@ -62,17 +62,37 @@ function formatGain(value: number): string {
   return value > 0 ? `+${value}` : String(value)
 }
 
+/**
+ * An explicit window, forwarded from `?from=`/`?to=` on the page.
+ *
+ * Passed blindly: the route drops these on the production deployment, so this
+ * cannot conjure a campaign for real players. It exists so the board can be
+ * exercised on a preview without scheduling one in Edge Config, which every
+ * deployment — production included — would then show.
+ */
+export interface PreviewWindow {
+  from: string
+  to: string
+}
+
 export function useCampaignBoard(
   mapId: MapId,
   viewer?: string,
   profilesMap?: Map<string, OwnerProfileData>,
+  previewWindow?: PreviewWindow | null,
 ): CampaignBoardResult {
   const [result, setResult] = useState<CampaignBoardResult>({ ...EMPTY, loading: true })
+  const from = previewWindow?.from
+  const to = previewWindow?.to
 
   useEffect(() => {
     let cancelled = false
     const params = new URLSearchParams({ mapId: String(mapId) })
     if (viewer) params.set('address', viewer)
+    if (from && to) {
+      params.set('from', from)
+      params.set('to', to)
+    }
 
     fetch(`/api/campaign-board?${params}`)
       .then((r) => (r.ok ? (r.json() as Promise<ApiResponse>) : Promise.reject(r.status)))
@@ -128,7 +148,7 @@ export function useCampaignBoard(
     return () => {
       cancelled = true
     }
-  }, [mapId, viewer, profilesMap])
+  }, [mapId, viewer, profilesMap, from, to])
 
   return result
 }

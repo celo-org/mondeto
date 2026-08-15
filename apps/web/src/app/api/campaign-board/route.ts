@@ -71,6 +71,28 @@ function respond(
   )
 }
 
+/**
+ * An arbitrary window, for exercising the board without scheduling a campaign
+ * everyone can see.
+ *
+ * A real campaign lives in Edge Config and is read by every deployment sharing
+ * that config, production included — so "just schedule a short one" is not a
+ * test, it is a live campaign. This accepts `from` / `to` instead, and is
+ * **ignored entirely on the production deployment**.
+ *
+ * Same gate as `app/dev/layout.tsx`: `VERCEL_ENV` is `'production'` only on the
+ * prod URL, so previews and local keep it. The decision is made server-side, so
+ * a client passing these params against production simply has them dropped.
+ */
+function windowOverride(url: URL): { startsAt: string; endsAt: string } | null {
+  if (process.env.VERCEL_ENV === 'production') return null
+  const from = url.searchParams.get('from')
+  const to = url.searchParams.get('to')
+  if (!from || !to) return null
+  if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) return null
+  return { startsAt: from, endsAt: to }
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const mapId = (Number(url.searchParams.get('mapId') ?? '0') || 0) as MapId
@@ -78,9 +100,12 @@ export async function GET(req: Request) {
 
   if (!subgraphConfigured()) return NextResponse.json(EMPTY)
 
-  const campaign = await readCampaignServer()
+  const override = windowOverride(url)
   // `readCampaignServer` already returns null outside the active window. A
   // campaign missing either boundary cannot define one, so it cannot be ranked.
+  const campaign = override
+    ? { id: `preview-${override.startsAt}-${override.endsAt}`, ...override }
+    : await readCampaignServer()
   if (!campaign?.startsAt || !campaign.endsAt) return NextResponse.json(EMPTY)
 
   const key = `${campaign.id}:${mapId}`
