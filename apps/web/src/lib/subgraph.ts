@@ -16,6 +16,7 @@
  */
 import type { Address, LeaderEntry, MapId } from '@/lib/maps/types'
 import { compareLeaderEntries } from '@/lib/maps/leaderboards'
+import type { OwnerStatsRow } from '@/lib/campaignBoard'
 
 const ENDPOINT = process.env.NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL
 
@@ -182,6 +183,64 @@ export async function fetchAreaLeaderboard(
     if (page.length < PAGE) break
   }
   return toEntries(rows).sort(compareLeaderEntries)
+}
+
+/* ------------------------------------------------------------------ *
+ * Block-pinned owner stats (the CAMPAIGN board's two reads)
+ * ------------------------------------------------------------------ */
+
+// Same shape as LOCAL_AREA_QUERY plus `block`, which asks the subgraph to
+// answer as of a past block rather than its head. Two of these, diffed, are
+// the whole CAMPAIGN board — see lib/campaignBoard.ts.
+//
+// `pixelCount_gt: 0` on purpose: a wallet holding nothing at the pinned block
+// contributes 0 to the diff either way, and omitting those rows keeps both
+// reads inside the `skip` ceiling.
+const PINNED_OWNER_STATS_QUERY = `
+  query OwnerStatsAtBlock($mapId: Int!, $block: Int!, $first: Int!, $skip: Int!) {
+    ownerMapStats(
+      where: { mapId: $mapId, pixelCount_gt: 0 }
+      orderBy: pixelCount
+      orderDirection: desc
+      first: $first
+      skip: $skip
+      block: { number: $block }
+    ) {
+      address
+      pixelCount
+      lastGainAt
+    }
+  }
+`
+
+/**
+ * Every wallet's pixel count on one map, as the subgraph saw it at `blockNumber`.
+ *
+ * The block must be at or below the subgraph's indexed head — asking about a
+ * block it hasn't reached is an error from the endpoint, not an empty result —
+ * and a few confirmations behind chain head, so a reorg can't silently change
+ * a settled window.
+ *
+ * Paged like the AREA board and capped by the same `skip` ceiling. A campaign
+ * window with more than {@link MAX_SKIP} holders would truncate; the AREA board
+ * has lived with that ceiling since it shipped, and holders-per-map is well
+ * under it in practice.
+ */
+export async function fetchOwnerStatsAtBlock(
+  mapId: MapId,
+  blockNumber: number,
+): Promise<OwnerStatsRow[]> {
+  const rows: OwnerStatsRow[] = []
+  for (let skip = 0; skip <= MAX_SKIP; skip += PAGE) {
+    const data = await querySubgraph<{ ownerMapStats?: OwnerStatsRow[] }>(
+      PINNED_OWNER_STATS_QUERY,
+      { mapId, block: blockNumber, first: PAGE, skip },
+    )
+    const page = data.ownerMapStats ?? []
+    rows.push(...page)
+    if (page.length < PAGE) break
+  }
+  return rows
 }
 
 /* ------------------------------------------------------------------ *

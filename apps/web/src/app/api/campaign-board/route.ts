@@ -1,0 +1,143 @@
+import { NextResponse } from 'next/server'
+import { blockAtTimestamp, reorgSafe } from '@/lib/blockAtTimestamp'
+import { netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
+import { readCampaignServer } from '@/lib/campaign'
+import { fetchOwnerStatsAtBlock, subgraphConfigured } from '@/lib/subgraph'
+import { logger } from '@/lib/logger'
+import type { MapId } from '@/lib/maps/types'
+
+/**
+ * The CAMPAIGN board: who grew the most inside the running campaign's window.
+ *
+ * Server-side because resolving the window costs ~50 sequential RPC round
+ * trips — a binary search per boundary — which must not run in a browser, and
+ * because both block-pinned subgraph reads page up to the `skip` ceiling.
+ *
+ * Returns `board: null` rather than an error when no campaign is running. That
+ * is the normal state, not a failure: campaigns run on selected days, so the
+ * client renders its "no active campaign" state from this.
+ */
+
+export const dynamic = 'force-dynamic'
+// Two binary searches plus two paged subgraph reads. Comfortably inside this,
+// and well past the 10s default.
+export const maxDuration = 60
+
+const CACHE_TTL_MS = 30_000
+
+interface BoardPayload {
+  campaignId: string
+  /** Ranked, `netGain > 0` only. */
+  entries: { address: string; value: number; tiebreak?: number }[]
+  fromBlock: string
+  toBlock: string
+  /** Echoed so the client can label the window it is showing. */
+  startsAt: string
+  endsAt: string
+}
+
+interface CampaignBoardResponse {
+  /** Null when no campaign is running — the expected state most days. */
+  board: BoardPayload | null
+  /** The caller's own movement, present even when they don't rank. */
+  you: { netGain: number; ranks: boolean } | null
+}
+
+const EMPTY: CampaignBoardResponse = { board: null, you: null }
+
+/**
+ * Per (campaignId, mapId) warm-instance cache.
+ *
+ * The two pinned reads are kept next to the board they produced so a viewer's
+ * own standing can be derived on a cache hit without re-querying. The board is
+ * identical for everyone; only `you` varies, so the viewer is deliberately not
+ * part of the key.
+ */
+const cache = new Map<
+  string,
+  { ts: number; board: BoardPayload; startRows: OwnerStatsRow[]; endRows: OwnerStatsRow[] }
+>()
+
+function respond(
+  entry: { board: BoardPayload; startRows: OwnerStatsRow[]; endRows: OwnerStatsRow[] },
+  viewer: string,
+) {
+  const you = /^0x[0-9a-f]{40}$/.test(viewer)
+    ? ownStanding(viewer, entry.startRows, entry.endRows)
+    : null
+  return NextResponse.json(
+    { board: entry.board, you } satisfies CampaignBoardResponse,
+    { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } },
+  )
+}
+
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const mapId = (Number(url.searchParams.get('mapId') ?? '0') || 0) as MapId
+  const viewer = (url.searchParams.get('address') ?? '').toLowerCase()
+
+  if (!subgraphConfigured()) return NextResponse.json(EMPTY)
+
+  const campaign = await readCampaignServer()
+  // `readCampaignServer` already returns null outside the active window. A
+  // campaign missing either boundary cannot define one, so it cannot be ranked.
+  if (!campaign?.startsAt || !campaign.endsAt) return NextResponse.json(EMPTY)
+
+  const key = `${campaign.id}:${mapId}`
+  const hit = cache.get(key)
+  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return respond(hit, viewer)
+
+  try {
+    const startSec = BigInt(Math.floor(new Date(campaign.startsAt).getTime() / 1000))
+    const endSec = BigInt(Math.floor(new Date(campaign.endsAt).getTime() / 1000))
+    if (!(startSec < endSec)) {
+      logger.warn('campaign window is empty or inverted', {
+        campaignId: campaign.id,
+        startsAt: campaign.startsAt,
+        endsAt: campaign.endsAt,
+      })
+      return NextResponse.json(EMPTY)
+    }
+
+    // Both boundaries step back a few confirmations: a reorg at either end
+    // would re-derive the same campaign to a different order, and the payout
+    // is re-derived from these same blocks.
+    const [fromRaw, toRaw] = await Promise.all([
+      blockAtTimestamp(startSec),
+      blockAtTimestamp(endSec),
+    ])
+    const fromBlock = reorgSafe(fromRaw)
+    const toBlock = reorgSafe(toRaw)
+    if (toBlock <= fromBlock) return NextResponse.json(EMPTY)
+
+    const [startRows, endRows] = await Promise.all([
+      fetchOwnerStatsAtBlock(mapId, Number(fromBlock)),
+      fetchOwnerStatsAtBlock(mapId, Number(toBlock)),
+    ])
+
+    const entry = {
+      ts: Date.now(),
+      board: {
+        campaignId: campaign.id,
+        entries: netGainEntries(startRows, endRows),
+        fromBlock: fromBlock.toString(),
+        toBlock: toBlock.toString(),
+        startsAt: campaign.startsAt,
+        endsAt: campaign.endsAt,
+      },
+      startRows,
+      endRows,
+    }
+    cache.set(key, entry)
+    return respond(entry, viewer)
+  } catch (err) {
+    logger.error('failed to compute campaign board', {
+      err: String(err),
+      mapId,
+      campaignId: campaign.id,
+    })
+    // Stale beats empty: a board that is 30s old still ranks correctly.
+    if (hit) return respond(hit, viewer)
+    return NextResponse.json(EMPTY)
+  }
+}
