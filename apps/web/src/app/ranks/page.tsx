@@ -13,8 +13,10 @@ import {
   type OwnerProfileData,
   type YouStanding,
 } from '@/hooks/useLeaderboard'
+import { useCampaignBoard } from '@/hooks/useCampaignBoard'
 import { useMaps } from '@/hooks/useMaps'
 import { useOwnedMaps } from '@/hooks/useOwnedMaps'
+import { BOARD_LABELS } from '@/lib/maps/leaderboards'
 import type { MapId } from '@/lib/maps/types'
 import { track } from '@/lib/analytics'
 import { ShareButton } from '@/components/ShareButton'
@@ -64,17 +66,17 @@ function writeProfilesCache(addr: string, profiles: Map<string, OwnerProfileData
 }
 
 /**
- * Rank-proximity copy for the player's own row. The delta is phrased per
- * board: AREA/EMPIRE in pixels, TYCOONS as a price gap. Rank 1 gets the
- * defend-it line instead of a target.
+ * Rank-proximity copy for the player's own row. Every board's delta is now in
+ * pixels — AREA and EMPIRE by holdings, CAMPAIGN by gain inside the window —
+ * so the phrasing is uniform. Rank 1 gets the defend-it line instead of a
+ * target.
  */
 function gapCopy(tab: LeaderboardTab, you: YouStanding): string {
   if (you.entry.rank === 1) {
-    return tab === 'TYCOONS' ? 'TOP SPOT — DEFEND IT' : 'RULER — DEFEND IT'
+    return tab === 'CAMPAIGN' ? 'LEADING THE CLIMB' : 'RULER — DEFEND IT'
   }
   const target = `#${you.entry.rank - 1}`
   if (you.gapValue === null) return ''
-  if (tab === 'TYCOONS') return `$${you.gapValue} FROM ${target}`
   return `${you.gapValue} PX FROM ${target}`
 }
 
@@ -228,15 +230,19 @@ export default function RanksPage() {
     },
   )
 
+  // The campaign board comes from its own route, not from pixelData: it needs
+  // two block-pinned subgraph reads that the client snapshot can't produce.
+  const campaign = useCampaignBoard(selectedMapId, address, profilesMap)
+
   const dataMap: Record<LeaderboardTab, typeof area> = {
     AREA: area,
     EMPIRE: empire,
-    TYCOONS: tycoons,
+    CAMPAIGN: campaign.board?.entries ?? [],
   }
   const youMap: Record<LeaderboardTab, YouStanding | null> = {
     AREA: you.area,
     EMPIRE: you.empire,
-    TYCOONS: you.tycoons,
+    CAMPAIGN: campaign.you,
   }
 
   const currentData = dataMap[activeTab]
@@ -254,11 +260,11 @@ export default function RanksPage() {
     const opts = [
       { board: 'LAND', s: you.area },
       { board: 'EMPIRE', s: you.empire },
-      { board: 'TYCOONS', s: you.tycoons },
+      { board: BOARD_LABELS.CAMPAIGN, s: campaign.you },
     ].filter((o): o is { board: string; s: YouStanding } => !!o.s)
     if (opts.length === 0) return null
     return opts.reduce((best, o) => (o.s.entry.rank < best.s.entry.rank ? o : best))
-  }, [you.area, you.empire, you.tycoons])
+  }, [you.area, you.empire, campaign.you])
   const youText = youStanding ? gapCopy(activeTab, youStanding) : undefined
   const youInView =
     !!youStanding &&
@@ -344,12 +350,26 @@ export default function RanksPage() {
                 minHeight: 32,
               }}
             >
-              {!isLoading && (
-                <>
-                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
-                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
-                </>
-              )}
+              {!isLoading &&
+                (activeTab === 'CAMPAIGN' && !campaign.board ? (
+                  // Said explicitly rather than shown as a blank board. A
+                  // player who sees an empty list assumes it's broken; a
+                  // player who sees names assumes they're competing. Campaigns
+                  // run on selected days, so this is the ordinary state.
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      no active campaign right now
+                    </span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      this board ranks growth while one is running
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
+                  </>
+                ))}
             </div>
           </div>
         ) : (

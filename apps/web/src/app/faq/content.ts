@@ -67,7 +67,7 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'which-board',
         q: 'Which leaderboard gets paid?',
-        a: `It depends on the campaign. Some pay the ${BOARD_LABELS.AREA} board, some pay ${BOARD_LABELS.TYCOONS}, some pay ${BOARD_LABELS.EMPIRE}. The campaign banner says which board it pays and how many places. Topping a board the campaign didn't name pays nothing.`,
+        a: `It depends on the campaign. Some pay the ${BOARD_LABELS.AREA} board, some pay ${BOARD_LABELS.EMPIRE}, some pay ${BOARD_LABELS.CAMPAIGN}. The campaign banner says which board it pays and how many places. Topping a board the campaign didn't name pays nothing.`,
       },
       {
         id: 'ranked-not-paid',
@@ -145,7 +145,7 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'boards',
         q: 'How do leaderboards work?',
-        a: `Three boards per map: ${BOARD_LABELS.AREA} (most pixels owned), ${BOARD_LABELS.EMPIRE} (largest single connected run of land), and ${BOARD_LABELS.TYCOONS} (single most valuable pixel). Each map has its own boards, so you can rank on one map and not another.`,
+        a: `Three boards per map: ${BOARD_LABELS.AREA} (most pixels owned), ${BOARD_LABELS.EMPIRE} (largest single connected run of land), and ${BOARD_LABELS.CAMPAIGN} (who grew the most while a campaign is running — pixels gained minus pixels raided from you). ${BOARD_LABELS.AREA} and ${BOARD_LABELS.EMPIRE} count what you hold right now, so long-time players tend to stay on top; ${BOARD_LABELS.CAMPAIGN} only counts movement inside the campaign window, so it starts level every time. Each map has its own boards, so you can rank on one map and not another.`,
       },
       {
         id: 'buyout-rule',

@@ -33,10 +33,13 @@ const tabConfig: {
     globalDescription: 'Biggest connected empire on any single map.',
   },
   {
-    key: 'TYCOONS',
-    label: BOARD_LABELS.TYCOONS,
-    description: 'Who holds the single most valuable pixel.',
-    globalDescription: 'Single most valuable pixel held anywhere.',
+    key: 'CAMPAIGN',
+    label: BOARD_LABELS.CAMPAIGN,
+    // The only place the mechanic is explained in-app. Net gain means a player
+    // raided late in the window watches their number fall, which reads as a bug
+    // unless something says otherwise — and this sentence is that something.
+    description: 'Who grew the most during the campaign. Pixels you gained, minus pixels raided from you.',
+    globalDescription: 'Who grew the most during the campaign. Pixels you gained, minus pixels raided from you.',
   },
 ]
 
