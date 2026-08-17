@@ -1,6 +1,6 @@
 "use client";
 
-import { PrivyProvider } from "@privy-io/react-auth";
+import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import {
   WagmiProvider as PrivyWagmiProvider,
   createConfig as createPrivyWagmiConfig,
@@ -40,6 +40,21 @@ const queryClient = new QueryClient();
 // would drag `@privy-io/*` and its `x402` / `@solana/kit` subtree into their
 // chunk. See the note in that module.
 
+// The context must observe `usePrivy().ready`, not assert it: `ready` is
+// false for a moment after `PrivyProvider` mounts, and consumers gated on
+// this context (`ConnectButtonInteractive` is its own dynamic chunk) can
+// resolve inside that window and call Privy hooks too early. A hardcoded
+// `true` here was one source of the `useWallets was called outside the
+// PrivyProvider component` warnings in #221.
+function PrivyReadyBridge({ children }: { children: React.ReactNode }) {
+  const { ready } = usePrivy();
+  return (
+    <PrivyReadyContext.Provider value={ready}>
+      {children}
+    </PrivyReadyContext.Provider>
+  );
+}
+
 export function PrivyTree({ children }: { children: React.ReactNode }) {
   return (
     <PrivyProvider
@@ -62,11 +77,11 @@ export function PrivyTree({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <PrivyWagmiProvider config={privyWagmiConfig}>
-          <PrivyReadyContext.Provider value={true}>
+          <PrivyReadyBridge>
             <ChainGuard />
             <WalletAnalytics />
             {children}
-          </PrivyReadyContext.Provider>
+          </PrivyReadyBridge>
         </PrivyWagmiProvider>
       </QueryClientProvider>
     </PrivyProvider>
