@@ -141,21 +141,24 @@ not included` in #183) instead of widening.
 ## What CI checks
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on PRs to
-`main` and on pushes to `main`. It gates on two things, both in `apps/web`:
+`main` and on pushes to `main`. It calls the pm-kit shared baseline
+(`celo-org/pm-kit` `ci-node.yml`), which runs the root scripts — the
+required check is `ci / ci`:
 
 ```sh
-pnpm --filter web run type-check
-pnpm --filter web run test
+pnpm run lint        # turbo run lint → apps/web `next lint`
+pnpm run typecheck   # turbo run type-check → apps/web `tsc --noEmit`
+pnpm run test        # turbo run test:coverage → apps/web vitest + coverage
 ```
 
-Run both before opening a PR — they are exactly what will fail otherwise.
-Builds and deploys are Vercel's job, not CI's.
+Run all three before opening a PR — they are exactly what will fail
+otherwise. Coverage floors live in `apps/web/vitest.config.ts` and fail
+the test step on regression. Builds and deploys are Vercel's job, not
+CI's (`run-build: false`).
 
-Nothing else is gated today: `apps/contracts` and `apps/subgraph` have no
-CI job, and lint does not run anywhere. Conventions those would otherwise
-enforce (notably the no-`console.log` rule in
-[`apps/web/CLAUDE.md`](apps/web/CLAUDE.md)) rest on review and on this
-document.
+`apps/contracts` and `apps/subgraph` still have no gated CI beyond this:
+contracts has no package.json (Foundry), and the subgraph defines no
+`lint`/`test` scripts, so the turbo tasks don't reach them.
 
 Dependencies are managed by Renovate (`renovate.json`, extending
 `celo-org/.github`), with `rebaseWhen: behind-base-branch` — added in #166
