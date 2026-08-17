@@ -39,10 +39,14 @@ function staticImportSources(source: string): string[] {
 
 // Modules reachable from `TopBar` / `navbar` on every page, including the map,
 // which is the MiniPay entry path. None of these may reach Privy.
+// `wallet-provider.tsx` wraps every page from the root layout and reaches
+// `wallet-provider-privy` only through a dynamic `import()`, which the
+// static-import matcher deliberately ignores.
 const MINIPAY_PATH_MODULES = [
   'connect-button.tsx',
   'connect-button-styles.ts',
   'privy-ready-context.ts',
+  'wallet-provider.tsx',
 ]
 
 describe('MiniPay bundle isolation', () => {

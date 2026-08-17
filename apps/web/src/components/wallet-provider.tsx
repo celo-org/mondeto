@@ -1,7 +1,6 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useConnect, WagmiProvider, createConfig } from "wagmi";
 import { injected } from "wagmi/connectors";
@@ -24,11 +23,21 @@ import { celoTransport, celoSepoliaTransport } from "@/lib/chain";
 //    and the injected connector auto-connects. The Privy SDK never
 //    loads for them — if Privy is broken, MiniPay still works.
 //
-// 3. Non-MiniPay clients lazy-load the Privy tree via
-//    `next/dynamic({ ssr: false })`. `PrivyProvider` initializes only
-//    in the browser where its context value populates correctly, so
-//    `@privy-io/wagmi`'s hooks (which transitively call `useWallets`)
-//    no longer trip on the server pass.
+// 3. Non-MiniPay clients load the Privy tree with a dynamic `import()`
+//    started from an effect, and swap to it only once the chunk has
+//    resolved — children stay mounted in the vanilla tree the whole
+//    time, so there is exactly one provider swap and no window where
+//    the app tree is unmounted. `PrivyProvider` still initializes only
+//    in the browser, so `@privy-io/wagmi`'s hooks (which transitively
+//    call `useWallets`) never trip on the server pass.
+//
+//    Do not reintroduce `next/dynamic({ loading: () => null })` here:
+//    with `{children}` as the dynamic component's child, the `null`
+//    loading state unmounts the entire app and remounts it when the
+//    chunk arrives. Whether an in-flight async callback then hits a
+//    ref that unmount already nulled is a chunk-timing race — that is
+//    how an unrelated dependency bump took every non-MiniPay browser
+//    down for days (#221) while no source diff explained it.
 //
 // The previous design rendered `PrivyProvider` during SSR; since Privy
 // v1.55.0 `useWallets` throws outside the provider, and every wagmi
@@ -54,10 +63,7 @@ const wagmiConfig = createConfig({
 
 const queryClient = new QueryClient();
 
-const PrivyTree = dynamic(
-  () => import("./wallet-provider-privy").then((m) => m.PrivyTree),
-  { ssr: false, loading: () => null },
-);
+type PrivyTreeComponent = React.ComponentType<{ children: React.ReactNode }>;
 
 function detectMiniPaySync(): boolean {
   if (typeof window === "undefined") return false;
@@ -84,11 +90,35 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // the same vanilla tree.
   const [isMiniPay] = useState(detectMiniPaySync);
   const [mounted, setMounted] = useState(false);
+  const [Privy, setPrivy] = useState<PrivyTreeComponent | null>(null);
   useEffect(() => setMounted(true), []);
 
+  // Start the Privy chunk load; the vanilla tree below keeps rendering
+  // until it resolves. This must stay a dynamic `import()` — a static
+  // import would put Privy (and its `x402` / `@solana/kit` subtree) in
+  // the shared chunk MiniPay clients download, undoing the isolation
+  // asserted in minipay-privy-isolation.test.ts.
+  useEffect(() => {
+    if (isMiniPay) return;
+    let live = true;
+    import("./wallet-provider-privy")
+      .then((m) => {
+        if (live) setPrivy(() => m.PrivyTree);
+      })
+      .catch((err) => {
+        // Degraded, not down: without the chunk the Privy connect flow
+        // is unavailable, but the vanilla tree keeps the app rendering.
+        console.error("wallet-provider: Privy chunk failed to load", err);
+      });
+    return () => {
+      live = false;
+    };
+  }, [isMiniPay]);
+
   // SSR + first paint: vanilla wagmi only. Also the branch for MiniPay
-  // once mounted — no Privy code path is reachable here.
-  if (!mounted || isMiniPay) {
+  // once mounted — no Privy code path is reachable here — and for
+  // browsers while the Privy chunk is still in flight.
+  if (!mounted || isMiniPay || !Privy) {
     return (
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={wagmiConfig}>
@@ -101,7 +131,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Browser, non-MiniPay: bring up the Privy tree. The dynamic import
-  // resolves on the client only, so no Privy code ran on the server.
-  return <PrivyTree>{children}</PrivyTree>;
+  // Browser, non-MiniPay, chunk resolved: one deterministic swap into
+  // the Privy tree. No Privy code ran on the server.
+  return <Privy>{children}</Privy>;
 }
