@@ -175,3 +175,6 @@ Detail lives in [`README.md`](README.md); what matters when writing code:
 - `NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL` points the app at the subgraph;
   unset falls back to the legacy live log-scan. Both paths need to keep
   working.
+
+@.claude/shared/engineering-rules.md
+@.claude/shared/money-path-checklist.md
