@@ -1,9 +1,11 @@
 name: CI
 
-# Gate merges on the web app's type-check + unit tests. Deploys/build are
-# handled by Vercel; this workflow is the fast correctness check — in
-# particular the regression guards for the silent RPC-data failures
-# (getLogs chunk size, transport failover config).
+# Gate merges on lint + type-check + unit tests via the pm-kit shared
+# baseline (celo-org/pm-kit ci-node.yml). Deploys/build are handled by
+# Vercel; this workflow is the fast correctness check — in particular the
+# regression guards for the silent RPC-data failures (getLogs chunk size,
+# transport failover config). Coverage floors live in
+# apps/web/vitest.config.ts and fail the `test` step on regression.
 on:
   pull_request:
     branches: [main]
@@ -16,53 +18,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  web:
-    name: web · type-check + tests + coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8.10.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Type-check
-        run: pnpm --filter web run type-check
-
-      # Runs the same suite as `run test`, plus v8 coverage. The thresholds
-      # live in apps/web/vitest.config.ts and are floors set just under
-      # today's numbers, so this fails on a coverage *regression* rather than
-      # demanding new tests from whoever touches a file next.
-      - name: Unit tests + coverage
-        run: pnpm --filter web run test:coverage
-
-      # Surface the numbers on the run itself, so a drop is visible without
-      # opening the log. Runs even when the step above failed the gate —
-      # that is exactly when you want to see them.
-      - name: Coverage summary
-        if: always()
-        run: |
-          f=apps/web/coverage/coverage-summary.json
-          [ -f "$f" ] || exit 0
-          {
-            echo "### Coverage"
-            echo
-            echo "| metric | covered | % |"
-            echo "|---|---|---|"
-            node -e '
-              const t = require("./apps/web/coverage/coverage-summary.json").total
-              for (const k of ["statements", "branches", "functions", "lines"]) {
-                console.log(`| ${k} | ${t[k].covered}/${t[k].total} | ${t[k].pct}% |`)
-              }
-            '
-          } >> "$GITHUB_STEP_SUMMARY"
+  ci:
+    uses: celo-org/pm-kit/.github/workflows/ci-node.yml@main
+    with:
+      node-version: '20'
+      run-build: false # Vercel builds; CI is the correctness gate (matches current behavior)
