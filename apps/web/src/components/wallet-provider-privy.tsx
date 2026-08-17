@@ -1,6 +1,6 @@
 "use client";
 
-import { PrivyProvider } from "@privy-io/react-auth";
+import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import {
   WagmiProvider as PrivyWagmiProvider,
   createConfig as createPrivyWagmiConfig,
@@ -40,6 +40,25 @@ const queryClient = new QueryClient();
 // would drag `@privy-io/*` and its `x402` / `@solana/kit` subtree into their
 // chunk. See the note in that module.
 
+/**
+ * Publishes Privy's *actual* readiness rather than asserting it.
+ *
+ * This used to be a hardcoded `value={true}`, which claimed readiness the
+ * instant `PrivyProvider` mounted. `usePrivy().ready` is false for a moment
+ * after that, and `ConnectButtonInteractive` — gated on this context and itself
+ * a second `next/dynamic` boundary — could resolve inside that window and call
+ * `useConnectWallet` before Privy had initialised. That is the likely source of
+ * the two `useWallets was called outside the PrivyProvider component` warnings
+ * that preceded the crash in #221.
+ *
+ * Observing the real value costs nothing: consumers already treat `false` as
+ * "keep the placeholder", which is what the first moments should show anyway.
+ */
+function PrivyReady({ children }: { children: React.ReactNode }) {
+  const { ready } = usePrivy();
+  return <PrivyReadyContext.Provider value={ready}>{children}</PrivyReadyContext.Provider>;
+}
+
 export function PrivyTree({ children }: { children: React.ReactNode }) {
   return (
     <PrivyProvider
@@ -62,11 +81,11 @@ export function PrivyTree({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <PrivyWagmiProvider config={privyWagmiConfig}>
-          <PrivyReadyContext.Provider value={true}>
+          <PrivyReady>
             <ChainGuard />
             <WalletAnalytics />
             {children}
-          </PrivyReadyContext.Provider>
+          </PrivyReady>
         </PrivyWagmiProvider>
       </QueryClientProvider>
     </PrivyProvider>
