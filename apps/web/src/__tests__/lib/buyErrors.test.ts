@@ -98,6 +98,69 @@ describe('categorizeBuyError', () => {
     expect(categorizeBuyError('Execution Reverted')).toBe('chain_revert')
   })
 
+  it('files a real revert as chain_revert even inside a full viem envelope', () => {
+    // The fixture that matters. viem appends `Docs: https://viem.sh…` to any
+    // error with a docsPath — writeContract, simulateContract and
+    // estimateContractGas all set one — so a bare `http` match would swallow
+    // this and file a genuine on-chain revert as a transport blip. Bare
+    // fragments like 'execution reverted' pass either way and prove nothing.
+    const hay = [
+      'The contract function "buyPixels" reverted.',
+      '',
+      'Error: NotEnoughSomething()',
+      '  Contract Call:',
+      '    address:   0x1234567890123456789012345678901234567890',
+      '    function:  buyPixels(uint256[] ids, address token, uint256 maxTotalCost, uint256 deadline)',
+      '    sender:    0x9876543210987654321098765432109876543210',
+      '',
+      'Docs: https://viem.sh/docs/contract/simulateContract',
+      'Version: viem@2.21.0',
+    ].join('\n')
+    expect(categorizeBuyError(hay)).toBe('chain_revert')
+  })
+
+  it('files a genuine transport failure as rpc, envelope and all', () => {
+    const hay = [
+      'HTTP request failed.',
+      '',
+      'Status: 429',
+      'URL: https://lb.drpc.org/ogrpc?network=celo',
+      'Request body: {"method":"eth_call"}',
+      '',
+      'Details: Too Many Requests',
+      'Version: viem@2.21.0',
+    ].join('\n')
+    expect(categorizeBuyError(hay)).toBe('rpc')
+  })
+
+  it('does not read the fallback RPC hostname as an RPC failure', () => {
+    // `lb.drpc.org` carries the substring `rpc`, so a bare token match files
+    // every error routed through the fallback endpoint as a transport problem.
+    // Deliberately a revert with NO named error in the list above — otherwise
+    // an earlier rule claims it and the fixture proves nothing either way.
+    const hay = [
+      'The contract function "buyPixels" reverted.',
+      'Error: CustomErrorNobodyMapped()',
+      'URL: https://lb.drpc.org/ogrpc?network=celo',
+      'Version: viem@2.21.0',
+    ].join('\n')
+    expect(categorizeBuyError(hay)).toBe('chain_revert')
+  })
+
+  it('does not read a gas field in a revert envelope as an estimation failure', () => {
+    // Again no named error: `gas: 300000` in the request arguments is what a
+    // bare `gas` match would seize on, and `gas_estimate` is ordered ahead of
+    // `chain_revert`.
+    const hay = [
+      'The contract function "buyPixels" reverted.',
+      'Error: CustomErrorNobodyMapped()',
+      '  Request Arguments:',
+      '    gas:  300000',
+      'Docs: https://viem.sh/docs/contract/writeContract',
+    ].join('\n')
+    expect(categorizeBuyError(hay)).toBe('chain_revert')
+  })
+
   it('files a transient RPC blip as rpc, not as an on-chain revert', () => {
     // viem wraps provider hiccups as a "reverted" message. If chain_revert were
     // tested first, every Forno rate-limit would be miscounted as a contract

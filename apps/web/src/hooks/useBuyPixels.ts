@@ -120,8 +120,16 @@ export function useBuyPixels(mapId?: MapId) {
     if (chainId !== celo.id) {
       try {
         await switchChainAsync({ chainId: celo.id })
-      } catch {
-        trackBlocked('chain_switch_rejected')
+      } catch (e) {
+        // Split rather than filing everything as a rejection: a wallet that
+        // fails `wallet_addEthereumChain` outright is a compatibility problem
+        // we can act on, while a decline is a user choice we can't. Calling
+        // both "rejected" would bury the actionable one.
+        trackBlocked(
+          isUserRejectedError(e, e instanceof Error ? e.message : String(e))
+            ? 'chain_switch_rejected'
+            : 'chain_switch_failed',
+        )
         setError('Switch your wallet to the Celo network to buy.')
         setStep('error')
         inFlight.current = false
@@ -155,12 +163,22 @@ export function useBuyPixels(mapId?: MapId) {
     // A gas estimate that fell back is not a failure — the buy usually still
     // goes out — but it is the tell for the MiniPay CIP-64 hazard, so it has to
     // be visible on its own rather than only when the buy later dies.
+    // `level: 'ceiling'` is always preceded by `'without_fee_currency'` for the
+    // same stage — the ceiling branch is nested inside the retry's catch — so
+    // count `without_fee_currency` to size the affected buys. `ceiling` is a
+    // strict subset, and summing raw events overstates by roughly 2x.
     const trackGasFallback = (stage: 'approve' | 'buy', level: GasFallbackLevel, err: unknown) => {
       track('pixel_buy_gas_fallback', {
         ...eventProps,
         stage,
         level,
-        detail: (err instanceof Error ? err.message : String(err)).slice(0, 100),
+        // Unwrapped, not the raw message. viem masks provider failures as "An
+        // unknown RPC error occurred" at the top level and puts the real reason
+        // in `.cause`/`.details` — so for the MiniPay estimate failure this
+        // event exists to explain, the raw first 100 chars are boilerplate and
+        // a URL while `permission denied` sits well past the cut. Using the
+        // unwrapped detail also keeps the authenticated RPC URL out of PostHog.
+        detail: extractErrorDetail(err).slice(0, 100),
       })
     }
     track('pixel_buy_started', eventProps)

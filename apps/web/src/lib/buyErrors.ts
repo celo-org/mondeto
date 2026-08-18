@@ -54,7 +54,10 @@ export type BuyErrorCategory =
  * the buy was stopped by one of our own guards.
  */
 export type BuyBlockedReason =
+  /** The player declined the network switch. */
   | 'chain_switch_rejected'
+  /** The switch failed for any other reason — a wallet that can't add Celo. */
+  | 'chain_switch_failed'
   | 'no_stablecoin_balance'
   | 'over_spend_cap'
 
@@ -129,26 +132,56 @@ const RULES: Rule[] = [
   },
   {
     category: 'timeout',
-    test: (_hay, lower) => lower.includes('timeout') || lower.includes('timed out'),
+    test: (_hay, lower) =>
+      lower.includes('timed out') ||
+      lower.includes('timeout') ||
+      lower.includes('took too long to respond'),
     message: () => GENERIC_RETRY_MESSAGE,
   },
   {
+    // Every marker here is a multi-word phrase describing a transport failure,
+    // never a bare token that could appear in a URL. That distinction is the
+    // whole rule: viem appends `Docs: https://viem.sh…` to any error with a
+    // `docsPath` — which `writeContract`, `simulateContract` and
+    // `estimateContractGas` all set — and `RpcRequestError` prepends
+    // `URL: https://…`. A bare `http` match is therefore true for essentially
+    // every viem error this hook can catch, and since this rule is ordered
+    // ahead of `chain_revert` it would file real on-chain reverts as transport
+    // blips, relabelling the generic bucket instead of splitting it.
+    //
+    // A bare `rpc` is the same trap from the other direction: the fallback
+    // endpoints include `lb.drpc.org`, so the substring rides along in the URL
+    // of any error routed through them.
     category: 'rpc',
     test: (_hay, lower) =>
-      lower.includes('rpc') ||
-      lower.includes('http') ||
+      lower.includes('http request failed') ||
+      lower.includes('rpc request failed') ||
+      lower.includes('rpc endpoint') ||
+      lower.includes('http client error') ||
       lower.includes('rate limit') ||
       lower.includes('failed to fetch') ||
       lower.includes('fetch failed') ||
-      lower.includes('network error'),
+      lower.includes('network error') ||
+      lower.includes('status: 429') ||
+      lower.includes('status: 5'),
     message: () => GENERIC_RETRY_MESSAGE,
   },
   {
+    // Phrases again, not a bare `gas`: viem prints an `Estimate Gas Arguments`
+    // block and transaction details carry `gas:` fields, so the bare token
+    // appears in errors that have nothing to do with estimation.
     category: 'gas_estimate',
-    test: (_hay, lower) => lower.includes('gas'),
+    test: (_hay, lower) =>
+      lower.includes('estimate gas') ||
+      lower.includes('intrinsic gas') ||
+      lower.includes('out of gas') ||
+      lower.includes('gas required exceeds') ||
+      lower.includes('gas limit'),
     message: () => GENERIC_RETRY_MESSAGE,
   },
   {
+    // Last before `unknown`, so it can stay broad — everything more specific
+    // has already had its chance.
     category: 'chain_revert',
     test: (_hay, lower) => lower.includes('revert'),
     message: () => GENERIC_RETRY_MESSAGE,

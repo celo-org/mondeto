@@ -31,7 +31,7 @@ import posthog from 'posthog-js'
  *   checkout_split_currency_blocked { mapId, needUsd, balanceUsd, token, pixelCount, totalUsd }  enough across coins, blocked by one-currency-per-buy rule
  *   checkout_dismissed        { reason, mapId, pixelCount, totalPriceUsd, step }  left the drawer without buying (reason: cleared|closed)
  *   topup_clicked             { mapId, shortfallUsd, token }         insufficient-funds wall
- *   pixel_buy_blocked         { mapId, pixelCount, totalPriceUsd, reason, ref? }  stopped by our own guard BEFORE the wallet opened — see below
+ *   pixel_buy_blocked         { mapId, pixelCount, totalPriceUsd, reason, ref? }  stopped by our own guard BEFORE the wallet opened — see below. reason: chain_switch_rejected|chain_switch_failed|no_stablecoin_balance|over_spend_cap
  *   pixel_buy_started         { mapId, pixelCount, totalPriceUsd, token, ref? }
  *   pixel_buy_approve_shown   { mapId, pixelCount, totalPriceUsd, token, ref? }
  *   pixel_buy_gas_fallback    { mapId, pixelCount, totalPriceUsd, token, stage, level, detail, ref? }  stage: approve|buy; level: without_fee_currency|ceiling
@@ -56,7 +56,10 @@ import posthog from 'posthog-js'
  * `pixel_buy_gas_fallback` is not a failure — the buy usually still goes out.
  * It marks a buy that had to drop to a cruder gas estimate, which is the tell
  * for the MiniPay CIP-64 hazard (a gas-less send makes MiniPay answer
- * "permission denied").
+ * "permission denied"). Count `level: 'without_fee_currency'` to size the
+ * affected buys: `'ceiling'` is nested inside that retry's catch and is always
+ * preceded by one, so it is a strict subset — summing raw events overstates by
+ * roughly 2x, and up to 4x across both stages.
  *
  * `utm_*` params from the landing URL, plus `isMiniPay`, are attached to
  * every event as super-properties (via registerCampaignParams() and
