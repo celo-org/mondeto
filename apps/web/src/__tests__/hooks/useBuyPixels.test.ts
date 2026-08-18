@@ -81,7 +81,9 @@ vi.mock('@/hooks/useStablecoinBalance', () => ({
 }))
 
 // Keep analytics inert — and assertable: the funnel events are part of the
-// hook's contract (started / rejected / failed / succeeded).
+// hook's contract (started / rejected / failed / succeeded). The pre-wallet
+// guards fire before pixel_buy_started, so "it blocked" is only half of what
+// needs proving — the emission that keeps the block visible is the other half.
 vi.mock('@/lib/analytics', () => ({
   track: (...args: unknown[]) => h.track(...args),
   getReferrer: () => undefined,
@@ -255,6 +257,18 @@ describe('useBuyPixels spend-cap gates', () => {
     expect(result.current.error).toBe(OVER_SPEND_CAP_MESSAGE)
     // Never reached the approve/buy writes.
     expect(h.writeContractAsync).not.toHaveBeenCalled()
+
+    // The guard has to be *counted*, not just enforced: it fires before
+    // `pixel_buy_started`, so without this event the attempt is invisible in
+    // the funnel — not merely missing a failure, but absent from the denominator.
+    expect(h.track).toHaveBeenCalledWith(
+      'pixel_buy_blocked',
+      expect.objectContaining({ reason: 'over_spend_cap' }),
+    )
+    // And it must not double as a failure: a `pixel_buy_failed` with no matching
+    // `pixel_buy_started` would corrupt the very funnel this exists to keep clean.
+    expect(h.track).not.toHaveBeenCalledWith('pixel_buy_failed', expect.anything())
+    expect(h.track).not.toHaveBeenCalledWith('pixel_buy_started', expect.anything())
   })
 
   it('blocks with a "prices moved" nudge when the live price tips a sub-$10 pick over the cap', async () => {

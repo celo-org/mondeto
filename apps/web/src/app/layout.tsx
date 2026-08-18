@@ -6,6 +6,13 @@ import { PostHogProvider } from "@/components/posthog-provider"
 import { CurrentMapProvider } from "@/hooks/useMaps"
 import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 import RewardAnnouncement from "@/components/RewardAnnouncement"
+import { headers } from 'next/headers'
+import { logger } from "@/lib/logger"
+import {
+  classifyRequestKind,
+  inspectUserAgent,
+  shouldRetainRawUserAgent,
+} from "@/lib/userAgentInsight"
 
 const APP_URL = 'https://www.mondeto.app'
 const TITLE = 'Mondeto — every pixel is up for grabs'
@@ -58,11 +65,60 @@ export const viewport: Viewport = {
 // whack-a-mole on this every time we touch a wallet-aware hook.
 export const dynamic = 'force-dynamic';
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Engine census, deliberately server-side. A bundle that fails to parse
+  // never initialises PostHog, so the browsers we most need to count are
+  // precisely the ones missing from client analytics (#196). The document
+  // request precedes any of our JavaScript, so this sees them. `dynamic =
+  // 'force-dynamic'` above already opted every route out of static
+  // rendering, so reading a header costs nothing extra.
+  //
+  // Unlike every other `logger.*` call in this codebase, which sit on failure
+  // paths, this one is unconditional and turns an exception channel into a
+  // per-request stream. That is deliberate — a `document request` line is not
+  // a sign anything went wrong. It also means every request now writes to
+  // Vercel's volume-limited runtime log stream, which during an incident can
+  // push `error` lines out of the retention window. Accepted knowingly, and a
+  // reason this census should be time-boxed rather than left running.
+  //
+  // The headline number is `isAndroidWebView && belowKnownFloor &&
+  // !isLikelyBot` over records with a known `chromeMajor`. The desktop
+  // old-Chrome bucket is essentially all bots and must not reach the figure
+  // quoted in #196.
+  //
+  // What this deliberately cannot do is isolate MiniPay. That is only
+  // detectable client-side, from `window.ethereum.isMiniPay`, and
+  // `isAndroidWebView` matches every embedded WebView — Facebook, Instagram,
+  // Opera's in-app browser, assorted crawlers. So the denominator here is all
+  // traffic, not MiniPay traffic, and the resulting percentage must not be
+  // read as a MiniPay figure.
+  const requestHeaders = await headers()
+  const userAgent = requestHeaders.get('user-agent')
+  const engine = inspectUserAgent(userAgent)
+  logger.info('document request', {
+    requestKind: classifyRequestKind(
+      requestHeaders.get('rsc'),
+      requestHeaders.get('next-router-prefetch'),
+    ),
+    // Omitted entirely when the UA advertises no Chromium version. A sentinel
+    // like -1 would poison aggregations and, worse, undo the parser's own
+    // guarantee that unknown is not old — every Safari and crawler would fall
+    // under a `chromeMajor < 85` filter.
+    ...(engine.chromeMajor !== null ? { chromeMajor: engine.chromeMajor } : {}),
+    isAndroidWebView: engine.isAndroidWebView,
+    belowKnownFloor: engine.belowKnownFloor,
+    belowSupportFloor: engine.belowSupportFloor,
+    isLikelyBot: engine.isLikelyBot,
+    // The raw string only rides along for the population under investigation:
+    // it is what lets us re-parse a device shape the parser mishandles, and
+    // for the healthy majority it is bytes and personal data we don't need.
+    ...(shouldRetainRawUserAgent(engine) ? { ua: userAgent ?? 'none' } : {}),
+  })
+
   return (
     <html lang="en">
       <head>
