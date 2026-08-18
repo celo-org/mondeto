@@ -189,6 +189,26 @@ export async function fetchAreaLeaderboard(
  * Block-pinned owner stats (the CAMPAIGN board's two reads)
  * ------------------------------------------------------------------ */
 
+/**
+ * Highest block the subgraph has indexed.
+ *
+ * A block-pinned query above this is an error from the endpoint, not an empty
+ * result — so the end of a campaign window has to be clamped to it. Indexing
+ * lag routinely runs longer than the few seconds a fixed block offset would
+ * buy, and a live campaign whose `endsAt` is in the future resolves to *chain*
+ * head, which is always ahead of this.
+ *
+ * Mirrors `subgraphHead()` in the admin's `src/lib/contest/subgraph.ts` so both
+ * sides clamp the same way; admin#51 requires the guard on the end block.
+ */
+export async function subgraphHead(): Promise<bigint> {
+  const data = await querySubgraph<{ _meta: { block: { number: number } } | null }>(
+    '{ _meta { block { number } } }',
+  )
+  if (!data._meta) throw new Error('subgraph _meta unavailable')
+  return BigInt(data._meta.block.number)
+}
+
 // Same shape as LOCAL_AREA_QUERY plus `block`, which asks the subgraph to
 // answer as of a past block rather than its head. Two of these, diffed, are
 // the whole CAMPAIGN board — see lib/campaignBoard.ts.

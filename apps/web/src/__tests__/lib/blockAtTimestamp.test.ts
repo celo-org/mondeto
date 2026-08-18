@@ -18,7 +18,7 @@ vi.mock('@/lib/chain', () => ({
   },
 }))
 
-import { blockAtTimestamp, reorgSafe, REORG_SAFETY_BLOCKS } from '@/lib/blockAtTimestamp'
+import { blockAtTimestamp } from '@/lib/blockAtTimestamp'
 
 beforeEach(() => {
   head = 1_000_000n
@@ -73,16 +73,5 @@ describe('blockAtTimestamp', () => {
     const a = await blockAtTimestamp(GENESIS + 123_456n)
     const b = await blockAtTimestamp(GENESIS + 123_456n)
     expect(a).toBe(b)
-  })
-})
-
-describe('reorgSafe', () => {
-  it('steps back so a reorg cannot reorder a settled window', () => {
-    expect(reorgSafe(1_000n)).toBe(1_000n - REORG_SAFETY_BLOCKS)
-  })
-
-  it('clamps at zero rather than going negative near genesis', () => {
-    expect(reorgSafe(REORG_SAFETY_BLOCKS)).toBe(0n)
-    expect(reorgSafe(0n)).toBe(0n)
   })
 })

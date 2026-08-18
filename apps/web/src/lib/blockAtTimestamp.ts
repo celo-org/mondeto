@@ -49,17 +49,3 @@ export async function blockAtTimestamp(timestampSec: bigint): Promise<bigint> {
 
   return lo
 }
-
-/**
- * Step back from a block so a reorg can't change a settled window.
- *
- * A window boundary read at chain head can be reorganised out from under the
- * result, which would make the same campaign re-derive to a different order —
- * and the payout is re-derived from these blocks. Backing off a few
- * confirmations costs a few seconds of recency and removes that entirely.
- */
-export const REORG_SAFETY_BLOCKS = 10n
-
-export function reorgSafe(blockNumber: bigint): bigint {
-  return blockNumber > REORG_SAFETY_BLOCKS ? blockNumber - REORG_SAFETY_BLOCKS : 0n
-}

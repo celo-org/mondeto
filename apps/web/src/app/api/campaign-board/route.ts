@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { blockAtTimestamp, reorgSafe } from '@/lib/blockAtTimestamp'
+import { blockAtTimestamp } from '@/lib/blockAtTimestamp'
 import { netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
 import { readCampaignServer } from '@/lib/campaign'
-import { fetchOwnerStatsAtBlock, subgraphConfigured } from '@/lib/subgraph'
+import { fetchOwnerStatsAtBlock, subgraphConfigured, subgraphHead } from '@/lib/subgraph'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
@@ -41,9 +41,19 @@ interface CampaignBoardResponse {
   board: BoardPayload | null
   /** The caller's own movement, present even when they don't rank. */
   you: { netGain: number; ranks: boolean } | null
+  /**
+   * The board couldn't be computed, as distinct from nothing running.
+   *
+   * A cold miss costs ~50 sequential unretried `getBlock` calls plus two paged
+   * subgraph reads, so a single hiccup is enough. Collapsing that into the
+   * between-campaigns state tells players there is no campaign during one —
+   * the same class of wrong as the payout confusion the FAQ rewrite fixed.
+   */
+  error?: true
 }
 
 const EMPTY: CampaignBoardResponse = { board: null, you: null }
+const FAILED: CampaignBoardResponse = { board: null, you: null, error: true }
 
 /**
  * Per (campaignId, mapId) warm-instance cache.
@@ -104,9 +114,13 @@ export async function GET(req: Request) {
   // `readCampaignServer` already returns null outside the active window. A
   // campaign missing either boundary cannot define one, so it cannot be ranked.
   const campaign = override
-    ? { id: `preview-${override.startsAt}-${override.endsAt}`, ...override }
+    ? { id: `preview-${override.startsAt}-${override.endsAt}`, mapId: undefined, ...override }
     : await readCampaignServer()
   if (!campaign?.startsAt || !campaign.endsAt) return NextResponse.json(EMPTY)
+
+  // A campaign targets one map. Without this a map-3 campaign lights a CAMPAIGN
+  // board on all eight, ranking growth nobody is being paid for.
+  if (campaign.mapId != null && campaign.mapId !== mapId) return NextResponse.json(EMPTY)
 
   const key = `${campaign.id}:${mapId}`
   const hit = cache.get(key)
@@ -124,15 +138,28 @@ export async function GET(req: Request) {
       return NextResponse.json(EMPTY)
     }
 
-    // Both boundaries step back a few confirmations: a reorg at either end
-    // would re-derive the same campaign to a different order, and the payout
-    // is re-derived from these same blocks.
-    const [fromRaw, toRaw] = await Promise.all([
+    // No offset on either boundary. The admin's `resolveBlockNumber` returns
+    // `blockAtTimestamp(t)` unmodified, and admin#51 defines the window as the
+    // campaign's own start and end — so any offset here, however well meant,
+    // ranks a different window than the payout pays. That is #48 reintroduced
+    // one layer below the comparator.
+    //
+    // The earlier version subtracted ten blocks from both ends in the name of
+    // reorg safety. On the start block that isn't reorg safety at all — a
+    // running campaign's start is hours old and unreorganisable — it just let
+    // ~10s of pre-campaign buys count as in-window gain. On the end it dropped
+    // the final ~10s of the window, which is exactly where buzzer-beater
+    // sniping lands and exactly the rows that flip a rank.
+    //
+    // Clamping the end to the subgraph's indexed head gives both guarantees at
+    // once: never ahead of what the subgraph can answer, and never inside the
+    // reorg-prone zone, since indexing necessarily trails chain head.
+    const [fromBlock, endBlock, head] = await Promise.all([
       blockAtTimestamp(startSec),
       blockAtTimestamp(endSec),
+      subgraphHead(),
     ])
-    const fromBlock = reorgSafe(fromRaw)
-    const toBlock = reorgSafe(toRaw)
+    const toBlock = endBlock < head ? endBlock : head
     if (toBlock <= fromBlock) return NextResponse.json(EMPTY)
 
     const [startRows, endRows] = await Promise.all([
@@ -163,6 +190,6 @@ export async function GET(req: Request) {
     })
     // Stale beats empty: a board that is 30s old still ranks correctly.
     if (hit) return respond(hit, viewer)
-    return NextResponse.json(EMPTY)
+    return NextResponse.json(FAILED)
   }
 }

@@ -25,6 +25,16 @@ export interface CampaignBoard {
   /** ISO strings for the window being shown. */
   startsAt: string
   endsAt: string
+  /**
+   * The exact blocks this ranking was pinned to.
+   *
+   * Carried through rather than dropped because they are the mechanism that
+   * makes agreement with the payout checkable: admin#51 takes a `fromBlock`,
+   * so handing an operator this pair lets the payout re-derive from the same
+   * two reads instead of resolving its own and hoping they match.
+   */
+  fromBlock: string
+  toBlock: string
 }
 
 export interface CampaignBoardResult {
@@ -38,9 +48,21 @@ export interface CampaignBoardResult {
    */
   yourNetGain: number | null
   loading: boolean
+  /**
+   * The board failed to load, as distinct from nothing running. Without this a
+   * transient RPC hiccup tells players there is no campaign during one.
+   */
+  failed: boolean
 }
 
-const EMPTY: CampaignBoardResult = { board: null, you: null, yourNetGain: null, loading: false }
+const EMPTY: CampaignBoardResult = {
+  board: null,
+  you: null,
+  yourNetGain: null,
+  loading: false,
+  failed: false,
+}
+const FAILED: CampaignBoardResult = { ...EMPTY, failed: true }
 
 interface ApiEntry {
   address: string
@@ -53,8 +75,11 @@ interface ApiResponse {
     entries: ApiEntry[]
     startsAt: string
     endsAt: string
+    fromBlock: string
+    toBlock: string
   } | null
   you: { netGain: number; ranks: boolean } | null
+  error?: true
 }
 
 /** Growth is always whole pixels, so it renders with an explicit sign. */
@@ -99,7 +124,9 @@ export function useCampaignBoard(
       .then((data) => {
         if (cancelled) return
         if (!data.board) {
-          setResult({ ...EMPTY, yourNetGain: data.you?.netGain ?? null })
+          setResult(
+            data.error ? FAILED : { ...EMPTY, yourNetGain: data.you?.netGain ?? null },
+          )
           return
         }
 
@@ -133,16 +160,19 @@ export function useCampaignBoard(
             entries,
             startsAt: data.board.startsAt,
             endsAt: data.board.endsAt,
+            fromBlock: data.board.fromBlock,
+            toBlock: data.board.toBlock,
           },
           you: mine ? { entry: mine, gap, gapValue: gap === null ? null : String(gap) } : null,
           yourNetGain: data.you?.netGain ?? null,
           loading: false,
+          failed: false,
         })
       })
       .catch(() => {
         // The map is the product; a missing campaign board is not worth an
         // error state. Falls back to the between-campaigns rendering.
-        if (!cancelled) setResult(EMPTY)
+        if (!cancelled) setResult(FAILED)
       })
 
     return () => {

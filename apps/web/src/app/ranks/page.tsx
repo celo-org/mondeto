@@ -364,7 +364,19 @@ export default function RanksPage() {
               }}
             >
               {!isLoading &&
-                (activeTab === 'CAMPAIGN' && !campaign.board ? (
+                (activeTab === 'CAMPAIGN' && campaign.failed ? (
+                  // Distinct from "no campaign": telling a player nothing is
+                  // running during a campaign is the same class of wrong as
+                  // the payout confusion the FAQ rewrite was built to kill.
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      couldn&apos;t load the campaign board
+                    </span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      pull to refresh — your standing is unaffected
+                    </span>
+                  </>
+                ) : activeTab === 'CAMPAIGN' && !campaign.board ? (
                   // Said explicitly rather than shown as a blank board. A
                   // player who sees an empty list assumes it's broken; a
                   // player who sees names assumes they're competing. Campaigns
