@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useBuyPixels } from '@/hooks/useBuyPixels'
 import { OVER_SPEND_CAP_MESSAGE, PRICE_MOVED_MESSAGE } from '@/lib/buyLimits'
+import { track } from '@/lib/analytics'
 
 // Shared, stable write mock so the cap tests can assert the wallet is never
 // opened. Hoisted above the vi.mock factory (which is itself hoisted). The
@@ -67,7 +68,9 @@ vi.mock('@/hooks/useStablecoinBalance', () => ({
 }))
 
 // Keep analytics inert — the execute() path fires funnel events we don't want
-// hitting PostHog in unit tests.
+// hitting PostHog in unit tests. `track` is imported below so the emissions
+// themselves can be asserted: the pre-wallet guards are the paths that were
+// invisible, so "it blocked" is only half of what needs proving.
 vi.mock('@/lib/analytics', () => ({ track: vi.fn(), getReferrer: () => undefined }))
 
 describe('useBuyPixels', () => {
@@ -101,6 +104,18 @@ describe('useBuyPixels', () => {
     expect(result.current.error).toBe(OVER_SPEND_CAP_MESSAGE)
     // Never reached the approve/buy writes.
     expect(writeContractAsync).not.toHaveBeenCalled()
+
+    // The guard has to be *counted*, not just enforced. Blocks like this fire
+    // before `pixel_buy_started`, so they were invisible entirely — not merely
+    // missing a failure event, but absent from the attempt denominator too.
+    expect(track).toHaveBeenCalledWith(
+      'pixel_buy_blocked',
+      expect.objectContaining({ reason: 'over_spend_cap' }),
+    )
+    // And it must not double as a failure: `pixel_buy_failed` with no matching
+    // `pixel_buy_started` would corrupt the very funnel this work exists to fix.
+    expect(track).not.toHaveBeenCalledWith('pixel_buy_failed', expect.anything())
+    expect(track).not.toHaveBeenCalledWith('pixel_buy_started', expect.anything())
   })
 
   it('blocks with a "prices moved" nudge when the live price tips a sub-$10 pick over the cap', async () => {
