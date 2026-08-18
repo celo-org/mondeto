@@ -24,9 +24,6 @@
     "test": {
       "dependsOn": ["compile"]
     },
-    "test:coverage": {
-      "outputs": ["coverage/**"]
-    },
     "deploy": {
       "dependsOn": ["compile"]
     },

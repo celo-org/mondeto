@@ -10,7 +10,7 @@
     "clean": "turbo run clean",
     "type-check": "turbo run type-check",
     "typecheck": "turbo run type-check",
-    "test": "turbo run test:coverage",
+    "test": "turbo run test",
     "contracts:compile": "turbo run compile --filter=hardhat",
     "contracts:test": "turbo run test --filter=hardhat",
     "contracts:deploy": "turbo run deploy --filter=hardhat",
