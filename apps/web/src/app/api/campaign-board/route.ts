@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { blockAtTimestamp } from '@/lib/blockAtTimestamp'
 import { netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
-import { readCampaignServer } from '@/lib/campaign'
+import { readCampaignForBoard } from '@/lib/campaign'
 import { fetchOwnerStatsAtBlock, subgraphConfigured, subgraphHead } from '@/lib/subgraph'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
@@ -34,6 +34,8 @@ interface BoardPayload {
   /** Echoed so the client can label the window it is showing. */
   startsAt: string
   endsAt: string
+  /** The window has closed; this ranking is what the payout settles against. */
+  settled: boolean
 }
 
 interface CampaignBoardResponse {
@@ -111,12 +113,19 @@ export async function GET(req: Request) {
   if (!subgraphConfigured()) return NextResponse.json(EMPTY)
 
   const override = windowOverride(url)
-  // `readCampaignServer` already returns null outside the active window. A
-  // campaign missing either boundary cannot define one, so it cannot be ranked.
-  const campaign = override
-    ? { id: `preview-${override.startsAt}-${override.endsAt}`, mapId: undefined, ...override }
-    : await readCampaignServer()
-  if (!campaign?.startsAt || !campaign.endsAt) return NextResponse.json(EMPTY)
+  // A campaign missing either boundary cannot define a window, so it cannot be
+  // ranked. `readCampaignForBoard` also keeps a just-finished campaign visible
+  // for a grace period — the settled board is what the payout is computed
+  // from, and hiding it at the buzzer means winners never see it.
+  const resolved = override
+    ? {
+        campaign: { id: `preview-${override.startsAt}-${override.endsAt}`, mapId: undefined, ...override },
+        settled: false,
+      }
+    : await readCampaignForBoard()
+  if (!resolved) return NextResponse.json(EMPTY)
+  const campaign = resolved.campaign
+  if (!campaign.startsAt || !campaign.endsAt) return NextResponse.json(EMPTY)
 
   // A campaign targets one map. Without this a map-3 campaign lights a CAMPAIGN
   // board on all eight, ranking growth nobody is being paid for.
@@ -176,6 +185,7 @@ export async function GET(req: Request) {
         toBlock: toBlock.toString(),
         startsAt: campaign.startsAt,
         endsAt: campaign.endsAt,
+        settled: resolved.settled,
       },
       startRows,
       endRows,

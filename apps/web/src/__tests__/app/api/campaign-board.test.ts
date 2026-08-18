@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // The window resolution is the whole point of these tests: both Critical
 // findings on #224 were in how the two boundary blocks are chosen, and the
 // route is where that happens.
-const { blockAtTimestamp, subgraphHead, fetchOwnerStatsAtBlock, readCampaignServer } =
+const { blockAtTimestamp, subgraphHead, fetchOwnerStatsAtBlock, readCampaignForBoard } =
   vi.hoisted(() => ({
     blockAtTimestamp: vi.fn(),
     subgraphHead: vi.fn(),
     fetchOwnerStatsAtBlock: vi.fn(),
-    readCampaignServer: vi.fn(),
+    readCampaignForBoard: vi.fn(),
   }))
 
 vi.mock('@/lib/blockAtTimestamp', () => ({ blockAtTimestamp }))
@@ -17,7 +17,7 @@ vi.mock('@/lib/subgraph', () => ({
   subgraphHead,
   fetchOwnerStatsAtBlock,
 }))
-vi.mock('@/lib/campaign', () => ({ readCampaignServer }))
+vi.mock('@/lib/campaign', () => ({ readCampaignForBoard }))
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }))
 
 import { GET } from '@/app/api/campaign-board/route'
@@ -46,7 +46,7 @@ beforeEach(() => {
   )
   subgraphHead.mockResolvedValue(9_999_999n)
   fetchOwnerStatsAtBlock.mockResolvedValue([])
-  readCampaignServer.mockResolvedValue(campaign())
+  readCampaignForBoard.mockResolvedValue({ campaign: campaign(), settled: false })
 })
 
 describe('campaign-board window resolution', () => {
@@ -84,7 +84,7 @@ describe('campaign-board window resolution', () => {
 
 describe('campaign-board gating', () => {
   it('serves nothing when no campaign is running', async () => {
-    readCampaignServer.mockResolvedValue(null)
+    readCampaignForBoard.mockResolvedValue(null)
     const body = await (await get()).json()
     expect(body).toEqual({ board: null, you: null })
   })
@@ -92,25 +92,25 @@ describe('campaign-board gating', () => {
   it('ignores a campaign targeting a different map', async () => {
     // Otherwise a map-3 campaign lights a CAMPAIGN board on all eight maps,
     // ranking growth nobody is being paid for.
-    readCampaignServer.mockResolvedValue(campaign({ mapId: 3 }))
+    readCampaignForBoard.mockResolvedValue({ campaign: campaign({ mapId: 3 }), settled: false })
     const body = await (await get('mapId=0')).json()
     expect(body.board).toBeNull()
     expect(fetchOwnerStatsAtBlock).not.toHaveBeenCalled()
   })
 
   it('serves a campaign that targets this map', async () => {
-    readCampaignServer.mockResolvedValue(campaign({ mapId: 3 }))
+    readCampaignForBoard.mockResolvedValue({ campaign: campaign({ mapId: 3 }), settled: false })
     const body = await (await get('mapId=3')).json()
     expect(body.board).not.toBeNull()
   })
 
   it('serves a campaign with no map set on any map', async () => {
-    readCampaignServer.mockResolvedValue(campaign({ mapId: undefined }))
+    readCampaignForBoard.mockResolvedValue({ campaign: campaign({ mapId: undefined }), settled: false })
     expect((await (await get('mapId=5')).json()).board).not.toBeNull()
   })
 
   it('rejects an inverted window instead of ranking it backwards', async () => {
-    readCampaignServer.mockResolvedValue(campaign({ startsAt: END, endsAt: START }))
+    readCampaignForBoard.mockResolvedValue({ campaign: campaign({ startsAt: END, endsAt: START }), settled: false })
     expect((await (await get()).json()).board).toBeNull()
   })
 })
@@ -127,7 +127,7 @@ describe('campaign-board failure handling', () => {
   })
 
   it('keeps no-campaign distinguishable from failure', async () => {
-    readCampaignServer.mockResolvedValue(null)
+    readCampaignForBoard.mockResolvedValue(null)
     expect((await (await get()).json()).error).toBeUndefined()
   })
 })

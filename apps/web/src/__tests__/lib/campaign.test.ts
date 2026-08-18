@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   isCampaignActive,
   timeRemainingLabel,
+  SETTLED_BOARD_GRACE_MS,
   type CampaignConfig,
 } from '@/lib/campaign'
 
@@ -61,5 +62,66 @@ describe('timeRemainingLabel', () => {
     // the countdown always shows two units (see timeRemainingLabel).
     expect(timeRemainingLabel({ ...base, endsAt: '2026-07-10T12:45:00Z' }, now)).toBe('0H 45M')
     expect(timeRemainingLabel({ ...base, endsAt: '2026-07-10T12:00:30Z' }, now)).toBe('0H 1M')
+  })
+})
+
+describe('readCampaignForBoard', () => {
+  // Edge Config is imported dynamically inside the function, so the module is
+  // stubbed rather than the network. `process.env.EDGE_CONFIG` gates entry.
+  const ENDS = '2026-07-10T10:00:00Z'
+  const finished: CampaignConfig = { ...base, startsAt: '2026-07-09T10:00:00Z', endsAt: ENDS }
+
+  async function read(at: Date, campaign: CampaignConfig | null = finished) {
+    vi.resetModules()
+    vi.stubEnv('EDGE_CONFIG', 'https://edge-config.test/x')
+    vi.doMock('@vercel/edge-config', () => ({ get: async () => campaign }))
+    const mod = await import('@/lib/campaign')
+    return mod.readCampaignForBoard(at)
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.doUnmock('@vercel/edge-config')
+  })
+
+  it('keeps a just-finished campaign visible, flagged as settled', async () => {
+    // The settled board is what the payout is computed from. Hiding it the
+    // instant the window closes means winners never see the ranking they were
+    // paid on — and payouts land the day AFTER a campaign ends.
+    const justAfter = new Date(Date.parse(ENDS) + 60_000)
+    await expect(read(justAfter)).resolves.toMatchObject({ settled: true })
+  })
+
+  it('still serves it the day after, when the payout actually lands', async () => {
+    const nextDay = new Date(Date.parse(ENDS) + 25 * 60 * 60 * 1000)
+    await expect(read(nextDay)).resolves.toMatchObject({ settled: true })
+  })
+
+  it('drops it once the grace period is over', async () => {
+    const longAfter = new Date(Date.parse(ENDS) + SETTLED_BOARD_GRACE_MS + 1000)
+    await expect(read(longAfter)).resolves.toBeNull()
+  })
+
+  it('reports a running campaign as not settled', async () => {
+    const during = new Date(Date.parse(ENDS) - 60_000)
+    await expect(read(during)).resolves.toMatchObject({ settled: false })
+  })
+
+  it('does not show a campaign that has not started yet', async () => {
+    // "Not active" covers both ends of the window. Only a FINISHED campaign
+    // earns the grace period — showing an unstarted one's empty board is a lie.
+    const future: CampaignConfig = {
+      ...base,
+      startsAt: '2026-07-11T10:00:00Z',
+      endsAt: '2026-07-11T20:00:00Z',
+    }
+    await expect(read(new Date('2026-07-10T12:00:00Z'), future)).resolves.toBeNull()
+  })
+
+  it('ignores a finished campaign with no end boundary', async () => {
+    const open: CampaignConfig = { ...base, startsAt: '2026-07-01T00:00:00Z' }
+    await expect(read(new Date('2026-07-10T12:00:00Z'), open)).resolves.toMatchObject({
+      settled: false,
+    })
   })
 })

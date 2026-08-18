@@ -220,7 +220,7 @@ export default function RanksPage() {
   // The selected map's board, built from the pixelData loaded above.
   // `homeMapId` is the id that pixelData belongs to so the snapshot uses the
   // right dims.
-  const { area, empire, tycoons, loading: boardsLoading, you } = useLeaderboard(
+  const { area, empire, loading: boardsLoading, you } = useLeaderboard(
     pixelData,
     profilesMap,
     {
@@ -297,7 +297,18 @@ export default function RanksPage() {
           }}
         />
       )}
-      <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      <LeaderboardTabs
+        activeTab={activeTab}
+        onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }}
+        // Three states, not two: running shows the rule, closed says so, and
+        // only a pinned payout makes it final. A player who reads "closed" as
+        // "final" before the snapshot is taken is where disputes start.
+        campaignNote={
+          campaign.board?.settled
+            ? 'Campaign closed. This is the ranking the payout settles against.'
+            : null
+        }
+      />
       {/* Flex the player's BEST standing across the three boards (with its board
           name). Shown whenever they're ranked on any board — the shared card +
           link recruit challengers. */}
@@ -473,7 +484,16 @@ export default function RanksPage() {
                     textAlign: 'center',
                   }}
                 >
-                  {"YOU'RE UNRANKED — CLAIM A PIXEL"}
+                  {/* On CAMPAIGN, unranked has a specific cause worth naming:
+                      the board only ranks positive movement, so a player who
+                      was raided is absent BECAUSE they went backwards. Left
+                      generic, the mechanic reads as the board being broken —
+                      and net gain means this will happen to real players. */}
+                  {activeTab === 'CAMPAIGN' && campaign.yourNetGain !== null
+                    ? campaign.yourNetGain < 0
+                      ? `RAIDED — ${campaign.yourNetGain} PX THIS CAMPAIGN`
+                      : 'NO GROWTH YET — BUY TO CLIMB'
+                    : "YOU'RE UNRANKED — CLAIM A PIXEL"}
                 </div>
               </div>
             )}

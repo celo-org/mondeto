@@ -25,6 +25,8 @@ export interface CampaignBoard {
   /** ISO strings for the window being shown. */
   startsAt: string
   endsAt: string
+  /** The window has closed; this is the ranking the payout settles against. */
+  settled: boolean
   /**
    * The exact blocks this ranking was pinned to.
    *
@@ -77,6 +79,7 @@ interface ApiResponse {
     endsAt: string
     fromBlock: string
     toBlock: string
+    settled: boolean
   } | null
   you: { netGain: number; ranks: boolean } | null
   error?: true
@@ -162,6 +165,7 @@ export function useCampaignBoard(
             endsAt: data.board.endsAt,
             fromBlock: data.board.fromBlock,
             toBlock: data.board.toBlock,
+            settled: data.board.settled,
           },
           you: mine ? { entry: mine, gap, gapValue: gap === null ? null : String(gap) } : null,
           yourNetGain: data.you?.netGain ?? null,

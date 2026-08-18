@@ -7,6 +7,15 @@ interface LeaderboardTabsProps {
   activeTab: LeaderboardTab
   onTabChange: (tab: LeaderboardTab) => void
   scope?: LeaderboardScope
+  /**
+   * Replaces the CAMPAIGN description when the window has closed.
+   *
+   * The gap between "the window closed" and "the payout is pinned" is where
+   * "but I was first" complaints come from: with only two states a player
+   * reads a closed board as final while it can still move. Naming the closed
+   * state explicitly is what makes the third one meaningful.
+   */
+  campaignNote?: string | null
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
@@ -43,10 +52,17 @@ const tabConfig: {
   },
 ]
 
-export default function LeaderboardTabs({ activeTab, onTabChange, scope = 'local' }: LeaderboardTabsProps) {
+export default function LeaderboardTabs({
+  activeTab,
+  onTabChange,
+  scope = 'local',
+  campaignNote,
+}: LeaderboardTabsProps) {
   const active = tabConfig.find(t => t.key === activeTab)
   const activeDescription =
-    active && (scope === 'global' ? active.globalDescription : active.description)
+    activeTab === 'CAMPAIGN' && campaignNote
+      ? campaignNote
+      : active && (scope === 'global' ? active.globalDescription : active.description)
 
   return (
     <div>
