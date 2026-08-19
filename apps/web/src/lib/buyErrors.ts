@@ -62,12 +62,22 @@ export type BuyBlockedReason =
   | 'over_spend_cap'
 
 /**
- * Which gas-estimate rung a buy ended up on. The happy path (`feeCurrency`
- * estimate succeeds) emits nothing; the fallbacks are the interesting signal,
- * because in MiniPay a send with no gas limit makes the wallet run its own
- * `eth_estimateGas`, which answers "permission denied" and kills the buy.
+ * Which gas-estimate rung a buy ended up on. The happy path (estimate
+ * succeeds) emits nothing; the fallbacks are the interesting signal, because a
+ * send with no gas limit makes the wallet run its own `eth_estimateGas` — which
+ * in MiniPay answers "permission denied" and kills the buy.
  */
-export type GasFallbackLevel = 'without_fee_currency' | 'ceiling'
+export type GasFallbackLevel =
+  /** Retried the estimate with the CIP-64 fee currency dropped. MiniPay only. */
+  | 'without_fee_currency'
+  /** Both estimates failed; sent with a hard-coded ceiling. MiniPay only. */
+  | 'ceiling'
+  /**
+   * The estimate failed with no fee currency in play, so there was no retry
+   * rung to fall to and the transaction went out with no `gas` field at all.
+   * Strictly worse than either rung above, and not MiniPay-specific.
+   */
+  | 'no_gas_limit'
 
 export const GENERIC_RETRY_MESSAGE = "That didn't go through — please try again."
 
