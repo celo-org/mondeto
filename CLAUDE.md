@@ -59,9 +59,29 @@ forge build && forge test      # in apps/contracts
 Branch → pull request → **squash merge** into `main`. Nothing is pushed
 straight to `main`; every commit in recent history carries its `(#NNN)`.
 
-Because the repo squash-merges with `COMMIT_OR_PR_TITLE`, **the pull
-request title becomes the commit message on `main`**. Write the title as
-the commit you want in the log.
+Because the repo squash-merges with the PR title as the subject and the PR
+body as the message, **the pull request title becomes the commit on `main`
+and the body becomes its commit message**. Write both as the record you
+want in the log — rationale, verification and limits belong in the body,
+not only in review comments.
+
+The branch flow is **feature → PR into `staging` → verify on the staging
+URL → `staging` → `main` → production**. `staging` runs the *same* Celo
+mainnet contracts as production on a separate URL — the prod/staging
+registry split was removed, so `apps/web/src/lib/maps/contracts.ts` is the
+one registry both read. What differs is the URL and the env scope, not the
+chain. `/dev/*` stays reachable on staging and preview deployments and
+404s on production, gated by `VERCEL_ENV` in
+[`apps/web/src/app/dev/layout.tsx`](apps/web/src/app/dev/layout.tsx).
+
+CI runs on pull requests into **both** `main` and `staging`.
+
+Protection on `main` is enforced server-side by an org ruleset, not by
+this document: a PR is required, one approving review, the `ci / ci` check
+must pass, the branch must be up to date with `main` first, approvals are
+dismissed on push, and force-pushes and deletion are blocked. Squash is
+the only merge button. Treat a green check as information rather than
+permission — know what it ran.
 
 ### Branch names
 
@@ -140,13 +160,13 @@ not included` in #183) instead of widening.
 
 ## What CI checks
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on PRs to
-`main` and on pushes to `main`. It calls the pm-kit shared baseline
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on PRs to and
+pushes on `main` and `staging`. It calls the pm-kit shared baseline
 (`celo-org/pm-kit` `ci-node.yml`), which runs the root scripts — the
 required check is `ci / ci`:
 
 ```sh
-pnpm run lint        # turbo run lint → apps/web `next lint`
+pnpm run lint        # turbo run lint → apps/web `eslint .`
 pnpm run typecheck   # turbo run type-check → apps/web `tsc --noEmit`
 pnpm run test        # turbo run test:coverage → apps/web vitest + coverage
 ```
@@ -155,6 +175,18 @@ Run all three before opening a PR — they are exactly what will fail
 otherwise. Coverage floors live in `apps/web/vitest.config.ts` and fail
 the test step on regression. Builds and deploys are Vercel's job, not
 CI's (`run-build: false`).
+
+Two things worth knowing about the lint step. It runs **ESLint 9 with flat
+config** in [`apps/web/eslint.config.mjs`](apps/web/eslint.config.mjs) —
+`next lint` is removed in Next 16 and ESLint 8 is end-of-life, so both were
+migrated together. And it is **not currently a gate**: the rule set emits
+22 warnings and no errors, and there is no `--max-warnings`, so the step
+passes regardless. Choosing the rule set and putting a ceiling on that
+count is tracked separately — until then, do not read a green lint step as
+"no lint findings".
+
+Node version comes from [`.nvmrc`](.nvmrc) (20), which pm-kit's detection
+prefers over the workflow input. `engines` in every package agrees with it.
 
 `apps/contracts` and `apps/subgraph` still have no gated CI beyond this:
 contracts has no package.json (Foundry), and the subgraph defines no

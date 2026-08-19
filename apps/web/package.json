@@ -7,11 +7,14 @@
     "safari >= 13.1",
     "firefox >= 74"
   ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "build": "next build && node scripts/check-syntax-floor.mjs",
     "build:masks": "node scripts/build-masks.mjs",
     "dev": "next dev",
-    "lint": "next lint",
+    "lint": "eslint .",
     "start": "next start",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
@@ -46,6 +49,7 @@
     "wagmi": "^2.0.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20.19.43",
@@ -55,8 +59,8 @@
     "@vitest/coverage-v8": "4.1.0",
     "acorn": "^8.16.0",
     "autoprefixer": "^10.4.17",
-    "eslint": "^8.50.0",
-    "eslint-config-next": "^14.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.23",
     "jsdom": "^29.0.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.4",
