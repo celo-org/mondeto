@@ -6,13 +6,14 @@ name: CI
 # regression guards for the silent RPC-data failures (getLogs chunk size,
 # transport failover config). Coverage floors live in
 # apps/web/vitest.config.ts and fail the `test` step on regression.
-# Runs on `staging` as well as `main`: the collaboration flow is
-# feature -> PR into staging -> verify on the staging URL -> staging -> main,
-# and a check that only guards the last hop lets a broken change sit on
-# staging while everyone treats staging as verified.
+# `pull_request` is unfiltered, matching pm-kit's caller template and the
+# other repos on the shared baseline. That covers the collaboration flow
+# (feature -> PR into staging -> verify on the staging URL -> staging -> main)
+# without enumerating branch names, so adding a branch never means remembering
+# to edit this file. `push` stays narrow: post-merge verification is only
+# meaningful on the two branches people treat as verified.
 on:
   pull_request:
-    branches: [main, staging]
   push:
     branches: [main, staging]
 
@@ -29,12 +30,15 @@ jobs:
       # this), so that file is the single source of truth for the Node version
       # and this input applies only if it is ever deleted. Keep the two in sync.
       node-version: '20'
-      # Still false, and deliberately — measured, not assumed. pm-kit runs
-      # `pnpm run build` at the repo ROOT, which turbo fans out to every
-      # package, and `subgraph#build` fails on a clean checkout: `graph build`
-      # needs `graph codegen` to have written `generated/` first, and turbo.json
-      # does not declare that dependency. So flipping this today turns every PR
-      # red for a reason that has nothing to do with the change under review.
-      # `pnpm --filter web build` passes on its own. Tracked separately; this
-      # issue's scope guard rules out subgraph CI work.
+      # Vercel builds; CI is the correctness gate. This is the org-wide
+      # decision, not a local workaround and not a temporary state — every
+      # deploy-elsewhere repo on the pm-kit baseline sets it the same way
+      # (mondeto-admin, mini-quiz, askbots). pm-kit's own default is `true`
+      # for repos with no deployment platform doing the build; we have one,
+      # and duplicating its build in CI buys a slower merge for a signal
+      # Vercel already produces on every PR via the preview deployment.
+      #
+      # Consequence worth stating rather than discovering: a build break
+      # surfaces on the Vercel check, not on `ci / ci`. Only `ci / ci` is a
+      # required status check, so read the preview deployment before merging.
       run-build: false

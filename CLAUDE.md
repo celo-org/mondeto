@@ -160,10 +160,11 @@ not included` in #183) instead of widening.
 
 ## What CI checks
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on PRs to and
-pushes on `main` and `staging`. It calls the pm-kit shared baseline
-(`celo-org/pm-kit` `ci-node.yml`), which runs the root scripts — the
-required check is `ci / ci`:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **every**
+pull request — the trigger is unfiltered, matching pm-kit's caller template
+— and on pushes to `main` and `staging`. It calls the pm-kit shared
+baseline (`celo-org/pm-kit` `ci-node.yml`), which runs the root scripts —
+the required check is `ci / ci`:
 
 ```sh
 pnpm run lint        # turbo run lint → apps/web `eslint .`
@@ -173,8 +174,16 @@ pnpm run test        # turbo run test:coverage → apps/web vitest + coverage
 
 Run all three before opening a PR — they are exactly what will fail
 otherwise. Coverage floors live in `apps/web/vitest.config.ts` and fail
-the test step on regression. Builds and deploys are Vercel's job, not
-CI's (`run-build: false`).
+the test step on regression.
+
+**Builds and deploys are Vercel's job, not CI's** (`run-build: false`).
+That is the org-wide split every repo on the pm-kit baseline uses, not a
+local quirk: CI is the fast correctness gate, and the build signal comes
+from the Vercel preview deployment that already runs on every PR.
+Duplicating it would slow every merge for a signal we have. The trade-off
+to know: a build break shows up on the Vercel check, and only `ci / ci` is
+a *required* check — so read the preview result before merging rather than
+treating a green `ci / ci` as "it builds".
 
 Two things worth knowing about the lint step. It runs **ESLint 9 with flat
 config** in [`apps/web/eslint.config.mjs`](apps/web/eslint.config.mjs) —
