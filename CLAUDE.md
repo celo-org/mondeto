@@ -194,8 +194,19 @@ passes regardless. Choosing the rule set and putting a ceiling on that
 count is tracked separately — until then, do not read a green lint step as
 "no lint findings".
 
-Node version comes from [`.nvmrc`](.nvmrc) (20), which pm-kit's detection
-prefers over the workflow input. `engines` in every package agrees with it.
+**Node: CI and production are not the same version, and that is worth
+knowing before you debug anything.** CI and local dev take **20**, from
+[`.nvmrc`](.nvmrc) — pm-kit's detection prefers it over the workflow
+input — and `engines` in every package agrees. **Vercel runs 24.x**, set
+on the project rather than in the repo, and Vercel does not read
+`.nvmrc`. So the version serving players is not the version the suite
+runs on.
+
+Nothing here depends on that gap, and 20 is what the sibling repos on the
+shared baseline pin. But it means a green CI run is not evidence about
+Node 24 behaviour: if you are chasing a bug that only reproduces in
+production, check the runtime difference before assuming your local repro
+is faithful.
 
 `apps/contracts` and `apps/subgraph` still have no gated CI beyond this:
 contracts has no package.json (Foundry), and the subgraph defines no

@@ -29,8 +29,22 @@ const eslintConfig = [
   {
     // Flat config has no implicit ignores beyond node_modules, whereas
     // `next lint` skipped build output by default. Without this, `eslint .`
-    // walks .next/ and reports on generated bundles.
-    ignores: ['.next/**', 'coverage/**', 'next-env.d.ts', 'public/**'],
+    // walks generated trees and reports on bundles we don't own.
+    //
+    // This list has to cover everything gitignored that can appear under
+    // apps/web, not just the outputs CI happens to produce: CI lints a clean
+    // checkout, so a gap here shows up only on developer machines. `.vercel/`
+    // is the one to remember — `apps/web/.gitignore` exists solely for it, and
+    // `vercel build` fills it with the entire bundled app.
+    ignores: [
+      '.next/**',
+      '.vercel/**',
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      'next-env.d.ts',
+      'public/**',
+    ],
   },
   ...compat.extends('next/core-web-vitals'),
   {
