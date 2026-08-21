@@ -145,7 +145,7 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'boards',
         q: 'How do leaderboards work?',
-        a: `Three boards per map: ${BOARD_LABELS.AREA} (most pixels owned), ${BOARD_LABELS.EMPIRE} (largest single connected run of land), and ${BOARD_LABELS.CAMPAIGN} (who grew the most while a campaign is running — pixels gained minus pixels raided from you). ${BOARD_LABELS.AREA} and ${BOARD_LABELS.EMPIRE} count what you hold right now, so long-time players tend to stay on top; ${BOARD_LABELS.CAMPAIGN} only counts movement inside the campaign window, so it starts level every time. Each map has its own boards, so you can rank on one map and not another.`,
+        a: `Three boards per map: ${BOARD_LABELS.AREA} (most pixels owned), ${BOARD_LABELS.EMPIRE} (largest single connected run of land), and ${BOARD_LABELS.CAMPAIGN} (who grew the most while a campaign is running — pixels gained minus pixels bought from you). ${BOARD_LABELS.AREA} and ${BOARD_LABELS.EMPIRE} count what you hold right now, so long-time players tend to stay on top; ${BOARD_LABELS.CAMPAIGN} only counts movement inside the campaign window, so it starts level every time. Each map has its own boards, so you can rank on one map and not another.`,
       },
       {
         id: 'buyout-rule',

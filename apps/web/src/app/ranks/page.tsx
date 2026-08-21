@@ -485,14 +485,22 @@ export default function RanksPage() {
                   }}
                 >
                   {/* On CAMPAIGN, unranked has a specific cause worth naming:
-                      the board only ranks positive movement, so a player who
-                      was raided is absent BECAUSE they went backwards. Left
-                      generic, the mechanic reads as the board being broken —
-                      and net gain means this will happen to real players. */}
+                      only positive movement ranks, so a player whose pixels
+                      were bought is absent BECAUSE they went backwards. Left
+                      generic, the mechanic reads as the board being broken.
+
+                      A negative net shows as 0, not as the real figure
+                      (product decision on #200, q5): the movement becomes
+                      invisible rather than confusing. The accepted trade is
+                      that someone who lost three pixels sees the same 0 as
+                      someone who never played — the tab description is what
+                      explains why a number didn't go up.
+
+                      Clamped HERE, not in `ownStanding`, which keeps returning
+                      the true value: `ranks` depends on it, and a truthful
+                      number keeps this display choice reversible. */}
                   {activeTab === 'CAMPAIGN' && campaign.yourNetGain !== null
-                    ? campaign.yourNetGain < 0
-                      ? `RAIDED — ${campaign.yourNetGain} PX THIS CAMPAIGN`
-                      : 'NO GROWTH YET — BUY TO CLIMB'
+                    ? `${Math.max(0, campaign.yourNetGain)} PX THIS CAMPAIGN — BUY TO CLIMB`
                     : "YOU'RE UNRANKED — CLAIM A PIXEL"}
                 </div>
               </div>

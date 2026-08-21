@@ -1,6 +1,12 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+// Module-scope mock over a mutable ref: the factory is hoisted, so it must not
+// close over anything declared with `const` below it.
+const { edgeConfigRef } = vi.hoisted(() => ({ edgeConfigRef: { value: null as unknown } }))
+vi.mock('@vercel/edge-config', () => ({ get: async () => edgeConfigRef.value }))
+
 import {
   isCampaignActive,
+  readCampaignForBoard,
   timeRemainingLabel,
   SETTLED_BOARD_GRACE_MS,
   type CampaignConfig,
@@ -66,23 +72,32 @@ describe('timeRemainingLabel', () => {
 })
 
 describe('readCampaignForBoard', () => {
-  // Edge Config is imported dynamically inside the function, so the module is
-  // stubbed rather than the network. `process.env.EDGE_CONFIG` gates entry.
+  // Edge Config is read through a DYNAMIC import inside the function, so what
+  // it resolves is decided at call time, not at module load. The first version
+  // of this suite stubbed the env and mocked the module *inside* the awaited
+  // call and tore both down in `afterEach` — which made it flaky at roughly 1
+  // run in 12, always as `expected null`, i.e. the env stub being removed out
+  // from under an in-flight call.
+  //
+  // So: the mock is module-scope over a mutable ref, and the env is set once
+  // per test before anything runs. No test's teardown can race another's setup,
+  // and nothing needs `resetModules`.
   const ENDS = '2026-07-10T10:00:00Z'
   const finished: CampaignConfig = { ...base, startsAt: '2026-07-09T10:00:00Z', endsAt: ENDS }
 
-  async function read(at: Date, campaign: CampaignConfig | null = finished) {
-    vi.resetModules()
+  beforeEach(() => {
     vi.stubEnv('EDGE_CONFIG', 'https://edge-config.test/x')
-    vi.doMock('@vercel/edge-config', () => ({ get: async () => campaign }))
-    const mod = await import('@/lib/campaign')
-    return mod.readCampaignForBoard(at)
-  }
+    edgeConfigRef.value = finished
+  })
 
   afterEach(() => {
     vi.unstubAllEnvs()
-    vi.doUnmock('@vercel/edge-config')
   })
+
+  async function read(at: Date, campaign: CampaignConfig | null = finished) {
+    edgeConfigRef.value = campaign
+    return readCampaignForBoard(at)
+  }
 
   it('keeps a just-finished campaign visible, flagged as settled', async () => {
     // The settled board is what the payout is computed from. Hiding it the

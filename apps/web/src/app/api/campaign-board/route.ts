@@ -52,10 +52,18 @@ interface CampaignBoardResponse {
    * the same class of wrong as the payout confusion the FAQ rewrite fixed.
    */
   error?: true
+  /**
+   * The window has closed but the subgraph hasn't indexed up to its end block
+   * yet, so no ranking can be both complete and truthful. Distinct from a
+   * failure: nothing is wrong, the index is just catching up, and it resolves
+   * itself within seconds.
+   */
+  settling?: true
 }
 
 const EMPTY: CampaignBoardResponse = { board: null, you: null }
 const FAILED: CampaignBoardResponse = { board: null, you: null, error: true }
+const SETTLING: CampaignBoardResponse = { board: null, you: null, settling: true }
 
 /**
  * Per (campaignId, mapId) warm-instance cache.
@@ -160,15 +168,35 @@ export async function GET(req: Request) {
     // the final ~10s of the window, which is exactly where buzzer-beater
     // sniping lands and exactly the rows that flip a rank.
     //
-    // Clamping the end to the subgraph's indexed head gives both guarantees at
-    // once: never ahead of what the subgraph can answer, and never inside the
-    // reorg-prone zone, since indexing necessarily trails chain head.
+    // Clamping the end to the subgraph's indexed head keeps a RUNNING board
+    // answerable: its `endsAt` is in the future, so `blockAtTimestamp`
+    // saturates at chain head, which the index always trails. Showing slightly
+    // less than "now" is the right trade while a campaign is live.
+    //
+    // A SETTLED board must not be clamped. Its window is an explicit,
+    // audited boundary, and truncating it silently re-targets the blocks the
+    // payout will settle on — while the UI is calling the result final. The
+    // paying side refuses exactly this: `snapshot.ts` clamps only for
+    // `latest`, and throws on an explicit block ahead of the index rather than
+    // "silently re-target an audited block".
+    //
+    // The lag is the ordinary state right after the buzzer, not an edge case:
+    // `blockAtTimestamp` reads the chain while `subgraphHead` reads the index.
+    // So a player opening /ranks at T+5s would otherwise get a board missing
+    // the final seconds — where buzzer-beater buys land, and precisely the
+    // rows that flip a rank — labelled as what they were paid on, which then
+    // changes when the cache expires.
     const [fromBlock, endBlock, head] = await Promise.all([
       blockAtTimestamp(startSec),
       blockAtTimestamp(endSec),
       subgraphHead(),
     ])
-    const toBlock = endBlock < head ? endBlock : head
+    const behindIndex = head < endBlock
+    // Closed, but the index hasn't caught up: neither live nor final. Saying
+    // so is the third state decision 4 on #200 asked for — the gap between
+    // "closed" and "final" is where "but I was first" comes from.
+    if (resolved.settled && behindIndex) return NextResponse.json(SETTLING)
+    const toBlock = behindIndex ? head : endBlock
     if (toBlock <= fromBlock) return NextResponse.json(EMPTY)
 
     const [startRows, endRows] = await Promise.all([

@@ -80,6 +80,47 @@ describe('campaign-board window resolution', () => {
     const body = await (await get()).json()
     expect(body.board.toBlock).toBe(END_BLOCK.toString())
   })
+
+  it('refuses to clamp a SETTLED window, and says it is still settling', async () => {
+    // The clamp is right for a running board and wrong for a closed one: its
+    // window is an explicit, audited boundary, and truncating it silently
+    // re-targets the blocks the payout settles on — while the UI calls the
+    // result final. The paying side refuses the same thing (`snapshot.ts`
+    // clamps only for `latest`).
+    //
+    // The lag is the ordinary state right after the buzzer, not an edge case:
+    // blockAtTimestamp reads the chain, subgraphHead reads the index.
+    readCampaignForBoard.mockResolvedValue({ campaign: campaign(), settled: true })
+    subgraphHead.mockResolvedValue(END_BLOCK - 30n)
+
+    const body = await (await get()).json()
+    expect(body.board).toBeNull()
+    expect(body.settling).toBe(true)
+    // Nothing was ranked from a truncated window.
+    expect(fetchOwnerStatsAtBlock).not.toHaveBeenCalled()
+  })
+
+  it('serves a settled board once the index has caught up', async () => {
+    readCampaignForBoard.mockResolvedValue({ campaign: campaign(), settled: true })
+    subgraphHead.mockResolvedValue(END_BLOCK + 100n)
+
+    const body = await (await get()).json()
+    expect(body.board.toBlock).toBe(END_BLOCK.toString()) // the real end, unclamped
+    expect(body.board.settled).toBe(true)
+    expect(body.settling).toBeUndefined()
+  })
+
+  it('keeps settling distinct from failure and from no-campaign', async () => {
+    // Three different nulls, three different things to tell the player.
+    readCampaignForBoard.mockResolvedValue({ campaign: campaign(), settled: true })
+    subgraphHead.mockResolvedValue(END_BLOCK - 30n)
+    expect((await (await get()).json()).error).toBeUndefined()
+
+    readCampaignForBoard.mockResolvedValue(null)
+    const none = await (await get()).json()
+    expect(none.settling).toBeUndefined()
+    expect(none.error).toBeUndefined()
+  })
 })
 
 describe('campaign-board gating', () => {
