@@ -25,6 +25,13 @@ General takeaways from building a MiniPay mini-app on Celo. Opinionated defaults
 - **Chain switching**: don't force a chain — default to your target chain but let users switch.
 - **Refresh after writes**: RPC propagation is laggy. Double-refresh (immediate + ~2s delay) after any state-changing tx, or use `wagmi`'s `useWaitForTransactionReceipt` + invalidate queries.
 
+## Debugging in MiniPay's WebView
+
+- **There is no console.** MiniPay renders mini-apps in the device's Android System WebView, which is not remotely inspectable — with MiniPay running, the only devtools socket on the device is Chrome's. Next's "a client-side exception has occurred (see the browser console)" is a dead end there.
+- **Append `?debug=1` to the URL** (e.g. `https://www.mondeto.app/?debug=1`) to paint uncaught errors onto the screen instead. A fixed banner at the top lists every `window.onerror` and `unhandledrejection` as `ERROR: <message> at <source>:<line>` / `UNHANDLED REJECTION: <stack or message>`, plus one `UA:` line with the user agent and one `HAS:` line reporting whether `Object.hasOwn` / `String.prototype.replaceAll` exist — so a failure arrives with the engine that produced it.
+- **Opt-in, display-only, works in production.** Nothing is painted without the exact `debug=1` parameter, and nothing is sent anywhere — it only shows, on the opted-in device, what the engine already hands to `onerror`. It lives in `apps/web/src/lib/debugErrorOverlay.ts` and is inlined from `app/layout.tsx` as a raw `<script>` in `<head>` — not `next/script`'s `beforeInteractive`, which in the App Router is a queue drained by the `main-app` chunk just before hydration and so misses (measured) a parse failure in the React, webpack-runtime or main-app chunks. The raw script runs as soon as the parser reaches it, before any chunk can execute, so it catches parse-time failures — the class of failure no React error boundary ever sees. It is written in ES5 on purpose (pinned by a test) because it has to run on the engine that just failed to parse everything else; keep it that way when editing.
+- **What it does not do:** it cannot make an old engine run new syntax — that is the build-time floor in #225. When a dependency bump reintroduces syntax above the floor, this is how you read which chunk and which token broke.
+
 ## UI / UX
 
 - **Layout constants** in one file (`constants/layout.ts`) — heights, font tokens. Saves 50 inline `style={{ height: 60 }}`s and one nightmare refactor.

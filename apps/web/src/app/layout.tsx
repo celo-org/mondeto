@@ -6,6 +6,7 @@ import { PostHogProvider } from "@/components/posthog-provider"
 import { CurrentMapProvider } from "@/hooks/useMaps"
 import { RevealsProvider } from "@/hooks/useRevealedMapIds"
 import RewardAnnouncement from "@/components/RewardAnnouncement"
+import { DEBUG_ERROR_OVERLAY } from "@/lib/debugErrorOverlay"
 import { headers } from 'next/headers'
 import { logger } from "@/lib/logger"
 import {
@@ -122,6 +123,26 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* `?debug=1` only — paints uncaught errors into an on-screen banner.
+            MiniPay's WebView has no reachable console, so "see the browser
+            console" is a dead end on the devices that actually fail.
+
+            Deliberately a raw <script>, not next/script with
+            `beforeInteractive`. In the App Router, `beforeInteractive` does
+            not emit a script at all: it serialises the body into a
+            `self.__next_s` queue that Next's `main-app` chunk executes right
+            before hydration — so the handlers are only installed once the
+            webpack runtime, the React chunk and main-app have all parsed and
+            run, and a parse failure in any of those, or in any chunk that
+            arrives earlier, is never seen (measured: poisoning the React
+            chunk left the banner empty). A raw inline script runs the moment
+            the HTML parser reaches it, before any `async` chunk can execute,
+            and depends on nothing else parsing. See lib/debugErrorOverlay.ts
+            and __tests__/app/layout.test.ts. */}
+        <script
+          id="debug-error-overlay"
+          dangerouslySetInnerHTML={{ __html: DEBUG_ERROR_OVERLAY }}
+        />
         {/* Pre-warm Google Fonts DNS + TLS so the @font-face requests don't
             block first paint. Combined with preload below this is the
             highest-impact PageSpeed change for our mobile target. */}
