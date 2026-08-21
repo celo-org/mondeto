@@ -23,6 +23,10 @@ export default defineConfig({
         // Next.js file conventions — framework glue with no logic of ours.
         'src/app/**/{layout,error,not-found,loading,opengraph-image}.tsx',
         'src/instrumentation.ts',
+        // Client-side counterpart: a side-effect import of the core-js entry
+        // that SWC rewrites at build time (see next.config.mjs). No logic.
+        'src/instrumentation-client.ts',
+        'src/polyfills.ts',
       ],
       // Floors, not targets. Each is set just under what the suite achieves
       // today, so the gate catches a *regression* without demanding new tests
