@@ -17,6 +17,7 @@ General takeaways from building a MiniPay mini-app on Celo. Opinionated defaults
 
 ## MiniPay-specific gotchas
 
+- **MiniPay renders in the device's Android System WebView, not in Chrome.** On the phones that matter that is a factory Chromium 80 that never updates. Our support floor is Chromium 80; dependency code is down-levelled at build time and the build fails on syntax above the floor. See `apps/web/CLAUDE.md`, "Browser support floor", before adding a dependency or touching `next.config.mjs`.
 - MiniPay injects a wallet automatically. Detect it (`window.ethereum?.isMiniPay`) and skip the connect modal; show a connect button only when not in MiniPay. Never delete the connect-button / wallet-provider components even when restructuring — they're the desktop escape hatch.
 - **Mobile-first, monospace fonts.** Pixel/monospace fonts take more horizontal space; design copy short.
 - **Touch targets ≥ 44×44px** (Fitts's Law). Bottom-nav icons and main CTAs need real hit area.
