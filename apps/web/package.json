@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "browserslist": [
-    "chrome >= 80"
+    "chrome >= 80",
+    "safari >= 13.1",
+    "firefox >= 74"
   ],
   "scripts": {
     "build": "next build && node scripts/check-syntax-floor.mjs",

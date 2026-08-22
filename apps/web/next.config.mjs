@@ -1,16 +1,16 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SUPPORT_FLOOR_CHROME_MAJOR } from './src/lib/browserSupportFloor.mjs'
+import { SUPPORT_TARGETS } from './src/lib/browserSupportFloor.mjs'
 
 const require = createRequire(import.meta.url)
 const here = path.dirname(fileURLToPath(import.meta.url))
 
-// The SWC target for dependency code and the polyfill set. Chrome only: the
-// floor is a MiniPay (Android System WebView) decision, see #196. Desktop
-// browsers that can parse Chrome 80's syntax level (Safari 13.1+, Firefox
-// 74+) are covered by the same output.
-const DOWNLEVEL_TARGETS = { chrome: String(SUPPORT_FLOOR_CHROME_MAJOR) }
+// The SWC target for dependency code and the polyfill set — the same list as
+// `browserslist` in package.json, from one source. Chrome 80 is the floor
+// (a MiniPay / Android System WebView decision, see #196); Safari 13.1 and
+// Firefox 74 are desktop insurance at the same syntax level.
+const DOWNLEVEL_TARGETS = SUPPORT_TARGETS
 const DOWNLEVEL_LOADER = path.join(here, 'scripts/downlevel-loader.cjs')
 const CORE_JS_VERSION = require('core-js/package.json').version
 

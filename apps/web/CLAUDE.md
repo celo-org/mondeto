@@ -80,7 +80,10 @@ cannot import it:
    transitively. Server bundle untouched.
 2. **Runtime APIs** — `src/polyfills.ts` imports `core-js/stable`; SWC's
    preset-env in entry mode replaces it with the core-js modules the
-   `browserslist` in `package.json` (`chrome >= 80`) lacks. Loaded from
+   `browserslist` in `package.json` lacks (`chrome >= 80`, plus
+   `safari >= 13.1` and `firefox >= 74` as desktop insurance — the oldest
+   releases at the same syntax level, so they add no weight for the MiniPay
+   devices; the list lives once in `browserSupportFloor.mjs`). Loaded from
    `src/instrumentation-client.ts`, which runs before any app code. Not
    covered by core-js, and not polyfilled: `crypto.randomUUID` (92) and
    `AbortSignal.timeout` (103) — grep the built chunks before relying on

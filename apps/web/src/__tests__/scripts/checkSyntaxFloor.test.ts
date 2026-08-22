@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { SUPPORT_FLOOR_CHROME_MAJOR } from '@/lib/browserSupportFloor.mjs'
+import { SUPPORT_FLOOR_CHROME_MAJOR, BROWSERSLIST } from '@/lib/browserSupportFloor.mjs'
 import { SUPPORT_FLOOR_CHROME_MAJOR as reExported } from '@/lib/userAgentInsight'
 import {
   SYNTAX_FEATURES,
@@ -39,9 +39,11 @@ describe('the floor is named once', () => {
   })
 
   it('the production browserslist is derived from it', () => {
-    // package.json cannot import a constant, so this pins the copy it holds.
+    // package.json cannot import a constant, so this pins the copy it holds
+    // to the one list the Next config and the polyfill set are built from.
     const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'))
-    expect(pkg.browserslist).toEqual([`chrome >= ${SUPPORT_FLOOR_CHROME_MAJOR}`])
+    expect(pkg.browserslist).toEqual(BROWSERSLIST)
+    expect(BROWSERSLIST).toContain(`chrome >= ${SUPPORT_FLOOR_CHROME_MAJOR}`)
   })
 
   it('the build runs the guard after next build', () => {
