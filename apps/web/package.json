@@ -2,8 +2,13 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "browserslist": [
+    "chrome >= 80",
+    "safari >= 13.1",
+    "firefox >= 74"
+  ],
   "scripts": {
-    "build": "next build",
+    "build": "next build && node scripts/check-syntax-floor.mjs",
     "build:masks": "node scripts/build-masks.mjs",
     "dev": "next dev",
     "lint": "next lint",
@@ -28,6 +33,7 @@
     "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
+    "core-js": "^3.49.0",
     "lucide-react": "^0.460.0",
     "next": "^15.5.20",
     "obscenity": "^0.4.6",
@@ -47,6 +53,7 @@
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^6.0.3",
     "@vitest/coverage-v8": "4.1.0",
+    "acorn": "^8.16.0",
     "autoprefixer": "^10.4.17",
     "eslint": "^8.50.0",
     "eslint-config-next": "^14.0.0",
