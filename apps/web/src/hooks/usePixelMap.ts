@@ -7,7 +7,7 @@ import { getMapContractById } from '@/lib/maps/contracts'
 import { getMaskData } from '@/lib/maps/masks'
 import { useReadClient } from '@/hooks/useReadClient'
 import { track } from '@/lib/analytics'
-import { categorizeBuyError } from '@/lib/buyErrors'
+import { categorizeBuyError, collectErrorText } from '@/lib/buyErrors'
 import type { MapId } from '@/lib/maps/types'
 
 export type LoadState = 'loading' | 'ready' | 'error'
@@ -32,6 +32,16 @@ type MountTrigger = 'entry' | 'switch'
 interface PendingMount {
   startedAt: number
   trigger: MountTrigger
+  /**
+   * The map this mount STARTED on. `map_mount_completed` / `_failed` emit this
+   * rather than reading the current map, so both ends of one mount describe the
+   * same thing. The stored-map restore runs an effect after first render, so
+   * for a returning player the current map can move before the first read has
+   * painted — and joining started to completed on mapId would then show a start
+   * that never completed plus a completion that never started. (Caught in
+   * review.)
+   */
+  mapId: number
   attempts: number
 }
 
@@ -79,7 +89,7 @@ export function usePixelMap(mapId?: MapId) {
   // dev doesn't count as two starts.
   useEffect(() => {
     if (mountRef.current) return
-    mountRef.current = { startedAt: Date.now(), trigger: 'entry', attempts: 0 }
+    mountRef.current = { startedAt: Date.now(), trigger: 'entry', attempts: 0, mapId: resolvedMapId }
     track('map_mount_started', { mapId: resolvedMapId, trigger: 'entry' })
     // Run once per hook mount; the map id is captured at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,7 +154,7 @@ export function usePixelMap(mapId?: MapId) {
     // its attempt count restarts so `attempts` stays "reads of the map that
     // painted" rather than also counting the superseded read.
     if (!mountRef.current) {
-      mountRef.current = { startedAt: Date.now(), trigger: 'switch', attempts: 0 }
+      mountRef.current = { startedAt: Date.now(), trigger: 'switch', attempts: 0, mapId: resolvedMapId }
       track('map_mount_started', { mapId: resolvedMapId, trigger: 'switch' })
     } else {
       mountRef.current.attempts = 0
@@ -168,7 +178,13 @@ export function usePixelMap(mapId?: MapId) {
     if (readyGenerationRef.current !== generationRef.current) return
     mountRef.current = null
     track('map_mount_completed', {
-      mapId: resolvedMapId,
+      mapId: mount.mapId,
+      // Present ONLY when the map moved mid-mount (the stored-map restore),
+      // which is also what makes its presence meaningful: `mapId` is the map
+      // this mount started on so started->completed joins cleanly, and this
+      // says which map actually painted when the two differ. Omitted in the
+      // common case so the usual event payload is unchanged.
+      ...(resolvedMapId !== mount.mapId ? { paintedMapId: resolvedMapId } : {}),
       trigger: mount.trigger,
       elapsedMs: Date.now() - mount.startedAt,
       attempts: mount.attempts,
@@ -231,11 +247,15 @@ export function usePixelMap(mapId?: MapId) {
         mountRef.current = null
         const err = lastErrorRef.current
         track('map_mount_failed', {
-          mapId: resolvedMapId,
+          mapId: mount.mapId,
           trigger: mount.trigger,
           elapsedMs: Date.now() - mount.startedAt,
           attempts: mount.attempts,
-          category: categorizeBuyError(String(err)),
+          // Every field the error carries, not just the outer message — a
+          // rate-limited grid read keeps its classifiable text on the cause,
+          // and that is the failure this event exists to catch. Same helper the
+          // buy path uses; see #215. (Caught in review.)
+          category: categorizeBuyError(`${String(err)} ${collectErrorText(err)}`),
           detail: errorDetail(err),
         })
       }

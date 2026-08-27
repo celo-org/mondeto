@@ -119,6 +119,21 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/**
+ * The shape a rate limit REALLY arrives in from viem: the outer error is
+ * generic and every classifiable field lives on the cause. `String(err)` sees
+ * only the outer line, which is the #215 blind spot — in this path it means the
+ * failure this event exists to catch gets filed as `unknown`.
+ */
+const NESTED_RATE_LIMIT_ERROR = Object.assign(new Error('The contract function "getPixelBatch" returned no data ("0x").'), {
+  shortMessage: 'The contract function "getPixelBatch" returned no data ("0x").',
+  cause: Object.assign(
+    new Error('HTTP request failed.\n\nStatus: 429\nURL: https://forno.celo.org\nVersion: viem@2.0.0'),
+    { shortMessage: 'HTTP request failed.', details: 'Too Many Requests' },
+  ),
+})
+NESTED_RATE_LIMIT_ERROR.name = 'ContractFunctionZeroDataError'
+
 describe('usePixelMap — map mount lifecycle', () => {
   it('fires map_mount_started before the grid read resolves, and completed only after it paints', async () => {
     const { result } = renderHook(() => usePixelMap(0 as MapId))
@@ -183,8 +198,11 @@ describe('usePixelMap — map mount lifecycle', () => {
     }
     return {
       calls,
-      rejectLatest: async () => {
-        calls[calls.length - 1].reject(RATE_LIMIT_ERROR)
+      // Honours the error it is handed. It previously ignored the argument and
+      // always rejected with RATE_LIMIT_ERROR, which would make any test that
+      // passes a different shape silently assert nothing.
+      rejectLatest: async (err: unknown = RATE_LIMIT_ERROR) => {
+        calls[calls.length - 1].reject(err)
         await flush()
       },
       resolveLatest: async () => {
@@ -277,6 +295,31 @@ describe('usePixelMap — map mount lifecycle', () => {
     ])
   })
 
+  it('classifies a rate limit whose text is only on the cause (not `unknown`)', async () => {
+    // Caught in review: this path called categorizeBuyError(String(err)), which
+    // reaches only the outer message. A rate-limited grid read on entry is the
+    // single most likely thing to land here — the freeze this event exists to
+    // measure — and it was the case most likely to be miscategorised.
+    const reads = perCallReads()
+    renderHook(() => usePixelMap(0 as MapId))
+    await flush()
+
+    await reads.rejectLatest(NESTED_RATE_LIMIT_ERROR)
+    await advance(1500)
+    await reads.rejectLatest(NESTED_RATE_LIMIT_ERROR)
+    await advance(4000)
+    await reads.rejectLatest(NESTED_RATE_LIMIT_ERROR)
+    await advance(8000)
+    await reads.rejectLatest(NESTED_RATE_LIMIT_ERROR)
+
+    const failed = eventsNamed('map_mount_failed')
+    expect(failed).toHaveLength(1)
+    expect(failed[0].category).toBe('rpc')
+    // Control: the URL still never travels, so widening the haystack for the
+    // classifier did not widen what we send.
+    expect(String(failed[0].detail)).not.toContain('https://')
+  })
+
   it('a switch before the entry completes keeps one mount and ignores the superseded read', async () => {
     // This is the stored-map restore on every returning continent player: the
     // hook mounts on map 0, the provider restores map 1 one effect later.
@@ -300,7 +343,39 @@ describe('usePixelMap — map mount lifecycle', () => {
     h.batchReads.get(AFRICA.address)!.resolve(BATCH_HEX)
     await flush()
     expect(eventsNamed('map_mount_completed')).toEqual([
-      { mapId: 1, trigger: 'entry', elapsedMs: 500, attempts: 1 },
+      // `mapId` is the map this mount STARTED on, so started/completed join
+      // cleanly; `paintedMapId` is the one that actually rendered. Before the
+      // review fix this asserted mapId: 1 while started said 0 — one mount
+      // described by two different ids.
+      { mapId: 0, paintedMapId: 1, trigger: 'entry', elapsedMs: 500, attempts: 1 },
     ])
+  })
+})
+
+describe('usePixelMap — mount events describe the mount, not the moment', () => {
+  it('started and completed report the SAME mapId when the stored-map restore moves the map mid-mount', async () => {
+    // The entry effect captures resolvedMapId at first render; the completed
+    // effect used to read it at completion time. The stored-map restore runs one
+    // effect after first render, so for any returning player the two ends
+    // disagreed — started says 0, completed says 1 — and anyone joining the two
+    // on mapId sees a start that never completed plus a completion that never
+    // started. That inverts the exact signal this PR exists to produce.
+    const { rerender } = renderHook(({ id }: { id: MapId }) => usePixelMap(id), {
+      initialProps: { id: 0 as MapId },
+    })
+    await flush()
+    const started = eventsNamed('map_mount_started')
+    expect(started).toHaveLength(1)
+
+    // The restore lands: the map moves before the first read has painted.
+    rerender({ id: 1 as MapId })
+    await flush()
+    h.batchReads.get(AFRICA.address)?.resolve(BATCH_HEX)
+    await flush()
+
+    const completed = eventsNamed('map_mount_completed')
+    expect(completed).toHaveLength(1)
+    // Both ends describe one mount. Whichever map that is, they agree.
+    expect(completed[0].mapId).toBe(started[0].mapId)
   })
 })
