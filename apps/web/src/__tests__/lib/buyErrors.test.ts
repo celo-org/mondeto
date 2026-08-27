@@ -3,6 +3,7 @@ import {
   categorizeBuyError,
   classifyBuy,
   classifyBuyError,
+  collectErrorText,
   isUserRejectedError,
   GENERIC_RETRY_MESSAGE,
 } from '@/lib/buyErrors'
@@ -194,5 +195,138 @@ describe('categorizeBuyError', () => {
       expect(message).toBe(classifyBuyError(hay, 'USDT'))
       expect(category).toBe(categorizeBuyError(hay))
     }
+  })
+})
+
+/**
+ * Rule-ordering regression guard (asked for in review of #215).
+ *
+ * `RULES` is first-match-wins and its order is load-bearing. Feeding the
+ * classifier strictly MORE text can only increase the chance an earlier rule
+ * claims an error a later rule used to get, so widening the haystack makes that
+ * ordering load-bearing in a way it was not before.
+ *
+ * This is not hypothetical in this repo — it is the documented failure: a
+ * classifier once asserted on the bare fragment 'execution reverted', real
+ * errors carried a docs URL that a different rule matched first, and real
+ * reverts were filed as network errors with a fully green suite.
+ *
+ * So: realistic viem envelopes, each classified through the NARROW haystack the
+ * hook used to pass and the WIDENED one it passes now. Any divergence is a
+ * reclassification and fails here.
+ */
+describe('widening the haystack does not reclassify the original rules', () => {
+  /** What the hook used to hand the classifier: the outer message only. */
+  const narrow = (e: unknown) => String(e)
+  /** What it hands the classifier now. */
+  const widened = (e: unknown) => `${String(e)} ${collectErrorText(e)}`
+
+  const CASES: Array<{ name: string; error: unknown; expected: string }> = [
+    {
+      name: 'rate-limited Forno read (the #215 case)',
+      expected: 'rpc',
+      error: Object.assign(new Error('HTTP request failed.'), {
+        shortMessage: 'HTTP request failed.',
+        cause: Object.assign(new Error('HTTP request failed.\n\nStatus: 429\nURL: https://forno.celo.org'), {
+          shortMessage: 'HTTP request failed.',
+          details: 'too many requests',
+          status: 429,
+        }),
+      }),
+    },
+    {
+      name: 'real ERC20 allowance revert during approve',
+      expected: 'insufficient_funds',
+      error: Object.assign(
+        new Error('The contract function "buyPixels" reverted with the following reason:\nERC20: transfer amount exceeds allowance'),
+        {
+          shortMessage: 'The contract function "buyPixels" reverted.',
+          cause: Object.assign(new Error('ERC20: transfer amount exceeds allowance'), {
+            reason: 'ERC20: transfer amount exceeds allowance',
+          }),
+        },
+      ),
+    },
+    {
+      name: 'rate limit whose formatted Request Arguments carry a nonce',
+      expected: 'nonce',
+      error: Object.assign(new Error('HTTP request failed.'), {
+        shortMessage: 'HTTP request failed.',
+        cause: Object.assign(
+          new Error('HTTP request failed.\n\nStatus: 429\n\nRequest Arguments:\n  from:   0x1234\n  nonce:  42'),
+          { details: 'too many requests' },
+        ),
+      }),
+    },
+    {
+      name: 'MiniPay permission denied on eth_estimateGas',
+      expected: 'permission_denied',
+      error: Object.assign(new Error('The requested method and/or account has not been authorized by the user.'), {
+        shortMessage: 'Permission denied.',
+        cause: Object.assign(new Error('permission denied'), { code: 4100 }),
+      }),
+    },
+    {
+      name: 'NotLand custom-error revert',
+      expected: 'not_land',
+      error: Object.assign(
+        new Error('The contract function "buyPixels" reverted.\n\nError: NotLand(uint256 id)'),
+        {
+          shortMessage: 'The contract function "buyPixels" reverted.',
+          cause: Object.assign(new Error('NotLand(uint256 id)'), { data: { errorName: 'NotLand' } }),
+        },
+      ),
+    },
+    {
+      name: 'insufficient CELO for gas, wrapped',
+      expected: 'insufficient_funds',
+      error: Object.assign(new Error('The total cost (gas * gas fee + value) of executing this transaction exceeds the balance of the account.'), {
+        shortMessage: 'Insufficient funds.',
+        cause: Object.assign(new Error('insufficient funds for gas * price + value'), { code: -32000 }),
+      }),
+    },
+  ]
+
+  for (const { name, error, expected } of CASES) {
+    it(`${name} — classifies as ${expected}`, () => {
+      expect(categorizeBuyError(widened(error))).toBe(expected)
+    })
+  }
+
+  /**
+   * The invariant that actually matters. `unknown -> named` is the entire point
+   * of widening and must stay allowed; `named -> a DIFFERENT named category` is
+   * the regression, because it means an earlier rule started claiming an error a
+   * later rule used to get.
+   */
+  it('widening never moves an error between two different named categories', () => {
+    const migrations = CASES.map(({ name, error }) => ({
+      name,
+      before: categorizeBuyError(narrow(error)),
+      after: categorizeBuyError(widened(error)),
+    })).filter((r) => r.before !== 'unknown' && r.before !== r.after)
+
+    // KNOWN, pre-existing, and NOT caused by widening the haystack: a rate
+    // limit whose formatted Request Arguments happen to contain a nonce is
+    // claimed by rule 1 (`nonce`) before rule 9 (`rpc`) can see it, so the
+    // player is told "Nonce error — please try again in a few seconds" for what
+    // is really a rate limit. Raised in review as reachability-unverified: the
+    // fixture is constructed and no real viem error proving the nonce token
+    // appears in a rate-limited buy has been captured. Pinned here so it is a
+    // known quantity rather than a surprise, and so that if the ordering is ever
+    // changed deliberately this test says so.
+    expect(migrations.map((m) => `${m.name}: ${m.before} -> ${m.after}`)).toEqual([
+      'rate limit whose formatted Request Arguments carry a nonce: rpc -> nonce',
+    ])
+  })
+
+  it('the widened haystack really is wider — otherwise the pairs above are vacuous', () => {
+    // Control. If collectErrorText returned nothing, every assertion above
+    // would compare a string to itself and pass against a broken widening.
+    const rateLimited = CASES[0].error
+    expect(widened(rateLimited).length).toBeGreaterThan(narrow(rateLimited).length)
+    expect(collectErrorText(rateLimited)).toContain('too many requests')
+    // And the widening is what rescues this case from `unknown`.
+    expect(categorizeBuyError(narrow(rateLimited))).not.toBe('unknown')
   })
 })

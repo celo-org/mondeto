@@ -7,7 +7,7 @@ import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getAttributionSuffix } from '@/lib/attribution'
 import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
-import { classifyBuy, isUserRejectedError } from '@/lib/buyErrors'
+import { classifyBuy, collectErrorText, isUserRejectedError } from '@/lib/buyErrors'
 import type { BuyBlockedReason, GasFallbackLevel } from '@/lib/buyErrors'
 import {
   APPROVAL_CAP_USD,
@@ -67,33 +67,6 @@ function extractErrorDetail(e: unknown): string {
 
 // Every string the error carries, for classification only.
 //
-// `extractErrorDetail` deliberately returns the single MOST SPECIFIC field —
-// right for the console and for the `detail` we send, wrong as a haystack. viem
-// spreads one failure across sibling fields, and picking one drops the rest: a
-// rate-limited Forno read arrives with `cause.details = "too many requests"`
-// (which matches no rule) while `cause.shortMessage = "HTTP request failed."`
-// and `cause.message` containing `Status: 429` (which both do) are discarded.
-// The classifier's own unit tests pass whole viem envelopes, so they never saw
-// the narrower string the hook was really handing it, and every rate limit was
-// filed as `unknown` — the bucket #215 existed to drain.
-//
-// Order does not matter here (the rules test for substrings), only coverage.
-function collectErrorText(e: unknown): string {
-  if (!e || typeof e !== 'object') return typeof e === 'string' ? e : ''
-  const seen: string[] = []
-  const visit = (node: unknown, depth: number) => {
-    if (!node || typeof node !== 'object' || depth > 3) return
-    const n = node as Record<string, unknown>
-    for (const key of ['shortMessage', 'details', 'message'] as const) {
-      if (typeof n[key] === 'string') seen.push(n[key] as string)
-    }
-    visit(n.data, depth + 1)
-    visit(n.cause, depth + 1)
-  }
-  visit(e, 0)
-  return seen.join(' ')
-}
-
 export function useBuyPixels(mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
   const { address, chainId } = useAccount()

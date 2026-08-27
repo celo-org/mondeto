@@ -231,3 +231,37 @@ export function classifyBuyError(hay: string, symbol: string): string {
 export function categorizeBuyError(hay: string): BuyErrorCategory {
   return classifyBuy(hay, '').category
 }
+
+/**
+ * Every classifiable string an error carries, joined — the haystack the
+ * classifier should see.
+ *
+ * viem spreads one failure across sibling fields, so picking the single most
+ * specific one drops the rest: a rate-limited Forno read arrives with
+ * `cause.details = "too many requests"` (matching no rule) while
+ * `cause.shortMessage = "HTTP request failed."` and a `cause.message`
+ * containing `Status: 429` (both of which match) are discarded. That is the
+ * #215 blind spot — every rate limit filed as `unknown`.
+ *
+ * Lives here rather than in the buy hook because it is part of building the
+ * haystack, and any path that classifies an error needs it (the map-mount
+ * failure path in #226 hit the identical defect calling `String(err)`).
+ *
+ * Order does not matter — the rules test for substrings — only coverage.
+ * Bounded at depth 3, walking only `data` and `cause`.
+ */
+export function collectErrorText(e: unknown): string {
+  if (!e || typeof e !== 'object') return typeof e === 'string' ? e : ''
+  const seen: string[] = []
+  const visit = (node: unknown, depth: number) => {
+    if (!node || typeof node !== 'object' || depth > 3) return
+    const n = node as Record<string, unknown>
+    for (const key of ['shortMessage', 'details', 'message'] as const) {
+      if (typeof n[key] === 'string') seen.push(n[key] as string)
+    }
+    visit(n.data, depth + 1)
+    visit(n.cause, depth + 1)
+  }
+  visit(e, 0)
+  return seen.join(' ')
+}
