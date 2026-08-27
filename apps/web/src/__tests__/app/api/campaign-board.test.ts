@@ -156,6 +156,33 @@ describe('campaign-board gating', () => {
   })
 })
 
+describe('campaign-board preview window', () => {
+  // "Ignored entirely on the production deployment" was a docblock guarantee
+  // with no test on either path (review on #224): deleting the VERCEL_ENV
+  // early-return left the suite green. These two are the pin and its control.
+  it('drops from/to entirely on the production deployment', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    try {
+      readCampaignForBoard.mockResolvedValue(null)
+      const body = await (await get(`mapId=0&from=${START}&to=${END}`)).json()
+      expect(body).toEqual({ board: null, you: null })
+      // Dropped means dropped: no window is resolved, nothing is read.
+      expect(fetchOwnerStatsAtBlock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('honours from/to on a preview deployment (control)', async () => {
+    // VERCEL_ENV is unset in this suite, which is the preview/local case.
+    readCampaignForBoard.mockResolvedValue(null)
+    const body = await (await get(`mapId=0&from=${START}&to=${END}`)).json()
+    expect(body.board).not.toBeNull()
+    expect(body.board.campaignId.startsWith('preview-')).toBe(true)
+    expect(fetchOwnerStatsAtBlock).toHaveBeenCalled()
+  })
+})
+
 describe('campaign-board failure handling', () => {
   it('marks a failure as failed, not as "no campaign running"', async () => {
     // A cold miss is ~50 sequential unretried getBlock calls plus two paged

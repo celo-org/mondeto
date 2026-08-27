@@ -8,7 +8,10 @@ interface LeaderboardTabsProps {
   onTabChange: (tab: LeaderboardTab) => void
   scope?: LeaderboardScope
   /**
-   * Replaces the CAMPAIGN description when the window has closed.
+   * Shown ABOVE the CAMPAIGN description when the window has closed — it does
+   * not replace it (caught in review on #224: the note is a *state* line, the
+   * description is the *rule*, and the rule is the only in-app explanation of
+   * why a raided player's number didn't move — needed most on a final board).
    *
    * The gap between "the window closed" and "the payout is pinned" is where
    * "but I was first" complaints come from: with only two states a player
@@ -60,9 +63,8 @@ export default function LeaderboardTabs({
 }: LeaderboardTabsProps) {
   const active = tabConfig.find(t => t.key === activeTab)
   const activeDescription =
-    activeTab === 'CAMPAIGN' && campaignNote
-      ? campaignNote
-      : active && (scope === 'global' ? active.globalDescription : active.description)
+    active && (scope === 'global' ? active.globalDescription : active.description)
+  const activeNote = activeTab === 'CAMPAIGN' && campaignNote ? campaignNote : null
 
   return (
     <div>
@@ -103,7 +105,7 @@ export default function LeaderboardTabs({
           )
         })}
       </div>
-      {activeDescription && (
+      {(activeNote || activeDescription) && (
         <div
           style={{
             padding: '12px 14px',
@@ -116,7 +118,15 @@ export default function LeaderboardTabs({
             background: 'var(--card-bg)',
           }}
         >
-          {activeDescription}
+          {/* State line first, rule second — both render. The rule is the only
+              in-app text explaining net gain, so the settled note must never
+              displace it. */}
+          {activeNote && (
+            <div style={{ color: BRAND_LIME, marginBottom: activeDescription ? 8 : 0 }}>
+              {activeNote}
+            </div>
+          )}
+          {activeDescription && <div>{activeDescription}</div>}
         </div>
       )}
     </div>

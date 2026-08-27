@@ -14,6 +14,7 @@ import {
   type YouStanding,
 } from '@/hooks/useLeaderboard'
 import { useCampaignBoard } from '@/hooks/useCampaignBoard'
+import { campaignOwnRowCopy } from '@/lib/campaignBoard'
 import { useMaps } from '@/hooks/useMaps'
 import { useOwnedMaps } from '@/hooks/useOwnedMaps'
 import { BOARD_LABELS } from '@/lib/maps/leaderboards'
@@ -387,6 +388,20 @@ export default function RanksPage() {
                       pull to refresh — your standing is unaffected
                     </span>
                   </>
+                ) : activeTab === 'CAMPAIGN' && campaign.settling ? (
+                  // The window closed but the index hasn't reached the end
+                  // block. Without this branch a player who just watched the
+                  // countdown hit zero reads "no active campaign" for ~30s and
+                  // then a final board appears — the third state existed
+                  // server-side and never reached them (review on #224).
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      campaign closed — final ranking settling
+                    </span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      check back in a moment
+                    </span>
+                  </>
                 ) : activeTab === 'CAMPAIGN' && !campaign.board ? (
                   // Said explicitly rather than shown as a blank board. A
                   // player who sees an empty list assumes it's broken; a
@@ -488,19 +503,10 @@ export default function RanksPage() {
                       only positive movement ranks, so a player whose pixels
                       were bought is absent BECAUSE they went backwards. Left
                       generic, the mechanic reads as the board being broken.
-
-                      A negative net shows as 0, not as the real figure
-                      (product decision on #200, q5): the movement becomes
-                      invisible rather than confusing. The accepted trade is
-                      that someone who lost three pixels sees the same 0 as
-                      someone who never played — the tab description is what
-                      explains why a number didn't go up.
-
-                      Clamped HERE, not in `ownStanding`, which keeps returning
-                      the true value: `ranks` depends on it, and a truthful
-                      number keeps this display choice reversible. */}
-                  {activeTab === 'CAMPAIGN' && campaign.yourNetGain !== null
-                    ? `${Math.max(0, campaign.yourNetGain)} PX THIS CAMPAIGN — BUY TO CLIMB`
+                      The 0-not-negative decision lives in campaignOwnRowCopy,
+                      where its unit tests pin it. */}
+                  {activeTab === 'CAMPAIGN'
+                    ? campaignOwnRowCopy(campaign.yourNetGain)
                     : "YOU'RE UNRANKED — CLAIM A PIXEL"}
                 </div>
               </div>

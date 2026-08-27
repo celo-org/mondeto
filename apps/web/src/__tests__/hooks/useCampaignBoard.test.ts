@@ -131,6 +131,29 @@ describe('useCampaignBoard', () => {
     expect(result.current.board).toBeNull()
   })
 
+  it('surfaces the SETTLING body as settling, not as no-campaign', async () => {
+    // The route's third state (closed window, index behind). Before the fix
+    // this body and the no-campaign body produced JSON-identical results, so
+    // a player who just watched the countdown hit zero read "no active
+    // campaign" — the review's probe test, kept as the pin.
+    respondWith({ board: null, you: null, settling: true })
+    const { result } = renderHook(() => useCampaignBoard(0))
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.settling).toBe(true)
+    expect(result.current.failed).toBe(false)
+    expect(result.current.board).toBeNull()
+  })
+
+  it('keeps the no-campaign body non-settling (control for the pin above)', async () => {
+    respondWith({ board: null, you: null })
+    const { result } = renderHook(() => useCampaignBoard(0))
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.settling).toBe(false)
+    expect(result.current.failed).toBe(false)
+  })
+
   it('prefers a saved profile name over the generated one', async () => {
     respondWith(RUNNING)
     const profiles = new Map([[A, { label: 'ALICE', url: '', color: '#fff' }]])

@@ -113,3 +113,22 @@ export function ownStanding(
   const netGain = countAt(endRows) - countAt(startRows)
   return { netGain, ranks: netGain > 0 }
 }
+
+/**
+ * The unranked-row copy for the CAMPAIGN tab.
+ *
+ * A negative net shows as 0, not as the real figure (product decision on
+ * #200, q5): the movement becomes invisible rather than confusing. The
+ * accepted trade is that someone who lost three pixels sees the same 0 as
+ * someone who never played — the tab description explains why a number
+ * didn't go up.
+ *
+ * Clamped HERE, not in `ownStanding`, which keeps returning the true value:
+ * `ranks` depends on it, and a truthful number keeps this display choice
+ * reversible. A pure function so the decision is pinned by unit tests rather
+ * than living only in a page comment (review on #224, q5 finding).
+ */
+export function campaignOwnRowCopy(netGain: number | null): string {
+  if (netGain === null) return "YOU'RE UNRANKED — CLAIM A PIXEL"
+  return `${Math.max(0, netGain)} PX THIS CAMPAIGN — BUY TO CLIMB`
+}

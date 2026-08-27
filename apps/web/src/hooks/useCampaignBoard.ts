@@ -55,6 +55,14 @@ export interface CampaignBoardResult {
    * transient RPC hiccup tells players there is no campaign during one.
    */
   failed: boolean
+  /**
+   * The window closed but the subgraph hasn't reached the end block yet, so
+   * the final ranking can't be served. Distinct from "no campaign": a player
+   * who just watched the countdown hit zero must see "settling", not "nothing
+   * is running" (caught in review on #224 — the route served this state and
+   * the hook collapsed it into EMPTY).
+   */
+  settling: boolean
 }
 
 const EMPTY: CampaignBoardResult = {
@@ -63,6 +71,7 @@ const EMPTY: CampaignBoardResult = {
   yourNetGain: null,
   loading: false,
   failed: false,
+  settling: false,
 }
 const FAILED: CampaignBoardResult = { ...EMPTY, failed: true }
 
@@ -83,6 +92,7 @@ interface ApiResponse {
   } | null
   you: { netGain: number; ranks: boolean } | null
   error?: true
+  settling?: true
 }
 
 /** Growth is always whole pixels, so it renders with an explicit sign. */
@@ -128,7 +138,13 @@ export function useCampaignBoard(
         if (cancelled) return
         if (!data.board) {
           setResult(
-            data.error ? FAILED : { ...EMPTY, yourNetGain: data.you?.netGain ?? null },
+            data.error
+              ? FAILED
+              : {
+                  ...EMPTY,
+                  yourNetGain: data.you?.netGain ?? null,
+                  settling: data.settling === true,
+                },
           )
           return
         }
@@ -171,6 +187,7 @@ export function useCampaignBoard(
           yourNetGain: data.you?.netGain ?? null,
           loading: false,
           failed: false,
+          settling: false,
         })
       })
       .catch(() => {

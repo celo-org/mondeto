@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
+import { campaignOwnRowCopy, netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
 
 const row = (address: string, pixelCount: number, lastGainAt: string): OwnerStatsRow => ({
   address,
@@ -110,5 +110,23 @@ describe('ownStanding', () => {
       netGain: 0,
       ranks: false,
     })
+  })
+})
+
+describe('campaignOwnRowCopy', () => {
+  // The q5 decision on #200: a negative net renders as 0, never the real
+  // figure. These two cases are the pin the review asked for — removing the
+  // Math.max clamp turns the first one red.
+  it('clamps a negative net to 0 rather than showing the real figure', () => {
+    expect(campaignOwnRowCopy(-3)).toBe('0 PX THIS CAMPAIGN — BUY TO CLIMB')
+  })
+
+  it('tells a wallet with no reading to claim, not to climb', () => {
+    expect(campaignOwnRowCopy(null)).toBe("YOU'RE UNRANKED — CLAIM A PIXEL")
+  })
+
+  it('shows a real zero and a positive as-is (controls)', () => {
+    expect(campaignOwnRowCopy(0)).toBe('0 PX THIS CAMPAIGN — BUY TO CLIMB')
+    expect(campaignOwnRowCopy(4)).toBe('4 PX THIS CAMPAIGN — BUY TO CLIMB')
   })
 })
