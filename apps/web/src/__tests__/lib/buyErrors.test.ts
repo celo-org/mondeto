@@ -3,6 +3,7 @@ import {
   categorizeBuyError,
   classifyBuy,
   classifyBuyError,
+  collectErrorText,
   isUserRejectedError,
   GENERIC_RETRY_MESSAGE,
 } from '@/lib/buyErrors'
@@ -194,5 +195,164 @@ describe('categorizeBuyError', () => {
       expect(message).toBe(classifyBuyError(hay, 'USDT'))
       expect(category).toBe(categorizeBuyError(hay))
     }
+  })
+})
+
+/**
+ * Rule-ordering regression guard (asked for in review of #215).
+ *
+ * `RULES` is first-match-wins and its order is load-bearing. Feeding the
+ * classifier strictly MORE text can only increase the chance an earlier rule
+ * claims an error a later rule used to get, so widening the haystack makes that
+ * ordering load-bearing in a way it was not before.
+ *
+ * This is not hypothetical in this repo — it is the documented failure: a
+ * classifier once asserted on the bare fragment 'execution reverted', real
+ * errors carried a docs URL that a different rule matched first, and real
+ * reverts were filed as network errors with a fully green suite.
+ *
+ * So: realistic viem envelopes, each classified through the NARROW haystack the
+ * hook used to pass and the WIDENED one it passes now. Any divergence is a
+ * reclassification and fails here.
+ */
+describe('widening the haystack does not reclassify the original rules', () => {
+  /** What the hook used to hand the classifier: the outer message only. */
+  const narrow = (e: unknown) => String(e)
+  /** What it hands the classifier now. */
+  const widened = (e: unknown) => `${String(e)} ${collectErrorText(e)}`
+
+  const CASES: Array<{ name: string; error: unknown; expected: string }> = [
+    {
+      // The real #215 shape: the OUTER error is generic and matches no rule,
+      // and every classifiable field lives on the cause. That is what makes
+      // this fixture proof of the PR's headline claim rather than decoration —
+      // narrow() cannot classify it at all, widened() files it as `rpc`.
+      name: 'rate-limited Forno read (the #215 case)',
+      expected: 'rpc',
+      error: Object.assign(new Error('The contract function "buyPixels" returned no data ("0x").'), {
+        shortMessage: 'The contract function "buyPixels" returned no data ("0x").',
+        cause: Object.assign(new Error('HTTP request failed.\n\nStatus: 429\nURL: https://forno.celo.org'), {
+          shortMessage: 'HTTP request failed.',
+          details: 'too many requests',
+          status: 429,
+        }),
+      }),
+    },
+    {
+      name: 'real ERC20 allowance revert during approve',
+      expected: 'insufficient_funds',
+      error: Object.assign(
+        new Error('The contract function "buyPixels" reverted with the following reason:\nERC20: transfer amount exceeds allowance'),
+        {
+          shortMessage: 'The contract function "buyPixels" reverted.',
+          cause: Object.assign(new Error('ERC20: transfer amount exceeds allowance'), {
+            reason: 'ERC20: transfer amount exceeds allowance',
+          }),
+        },
+      ),
+    },
+    {
+      // Same real shape as the case above, with a nonce in the formatted
+      // Request Arguments. Both the rate-limit text and the nonce token are
+      // reachable only through the cause, so this is where the rule ORDER
+      // decides the answer — see the assertion below the table.
+      name: 'rate limit whose formatted Request Arguments carry a nonce',
+      expected: 'nonce',
+      error: Object.assign(new Error('The contract function "buyPixels" returned no data ("0x").'), {
+        shortMessage: 'The contract function "buyPixels" returned no data ("0x").',
+        cause: Object.assign(
+          new Error('HTTP request failed.\n\nStatus: 429\n\nRequest Arguments:\n  from:   0x1234\n  nonce:  42'),
+          { details: 'too many requests' },
+        ),
+      }),
+    },
+    {
+      name: 'MiniPay permission denied on eth_estimateGas',
+      expected: 'permission_denied',
+      error: Object.assign(new Error('The requested method and/or account has not been authorized by the user.'), {
+        shortMessage: 'Permission denied.',
+        cause: Object.assign(new Error('permission denied'), { code: 4100 }),
+      }),
+    },
+    {
+      name: 'NotLand custom-error revert',
+      expected: 'not_land',
+      error: Object.assign(
+        new Error('The contract function "buyPixels" reverted.\n\nError: NotLand(uint256 id)'),
+        {
+          shortMessage: 'The contract function "buyPixels" reverted.',
+          cause: Object.assign(new Error('NotLand(uint256 id)'), { data: { errorName: 'NotLand' } }),
+        },
+      ),
+    },
+    {
+      name: 'insufficient CELO for gas, wrapped',
+      expected: 'insufficient_funds',
+      error: Object.assign(new Error('The total cost (gas * gas fee + value) of executing this transaction exceeds the balance of the account.'), {
+        shortMessage: 'Insufficient funds.',
+        cause: Object.assign(new Error('insufficient funds for gas * price + value'), { code: -32000 }),
+      }),
+    },
+  ]
+
+  for (const { name, error, expected } of CASES) {
+    it(`${name} — classifies as ${expected}`, () => {
+      expect(categorizeBuyError(widened(error))).toBe(expected)
+    })
+  }
+
+  /**
+   * The invariant that actually matters. `unknown -> named` is the entire point
+   * of widening and must stay allowed; `named -> a DIFFERENT named category` is
+   * the regression, because it means an earlier rule started claiming an error a
+   * later rule used to get.
+   */
+  it('widening never moves an error between two different named categories', () => {
+    const migrations = CASES.map(({ name, error }) => ({
+      name,
+      before: categorizeBuyError(narrow(error)),
+      after: categorizeBuyError(widened(error)),
+    })).filter((r) => r.before !== 'unknown' && r.before !== r.after)
+
+    expect(migrations.map((m) => `${m.name}: ${m.before} -> ${m.after}`)).toEqual([])
+  })
+
+  /**
+   * The rule-order hazard, pinned on its own because it is the one result in
+   * this table that is arguably wrong for the player.
+   *
+   * Two separate facts, and the distinction matters:
+   *   - The HAZARD is pre-existing: `nonce` is rule 1 and tests a bare
+   *     `includes('nonce')`, so it beats `rpc` (rule 9) for any text carrying
+   *     both. Nothing in this PR changed the order.
+   *   - What widening DOES change is the hazard's REACH. The nonce token here
+   *     lives only in the cause's formatted Request Arguments, so before
+   *     widening the classifier never saw it. This fixture is the demonstration.
+   *
+   * Net effect on the player: a rate limit is reported as
+   * "Nonce error — please try again in a few seconds". Filed as #261, kept as
+   * reachability-unverified — the fixture is constructed and no real captured
+   * viem error proves the nonce token appears in a rate-limited buy.
+   */
+  it('a rate limit carrying a nonce is claimed by rule 1 before rule 9 sees it', () => {
+    const withNonce = CASES[2].error
+    expect(categorizeBuyError(narrow(withNonce))).toBe('unknown')
+    expect(categorizeBuyError(widened(withNonce))).toBe('nonce')
+    // Control: strip the nonce and the same envelope files as `rpc`, so the
+    // assertion above pins the rule order rather than something about the shape.
+    expect(categorizeBuyError(widened(CASES[0].error))).toBe('rpc')
+  })
+
+  it('the widened haystack is wider, and is what rescues the rate limit from `unknown`', () => {
+    // Vacuity control AND the PR's headline claim in one place. If
+    // collectErrorText returned nothing, every pair above would compare a
+    // string to itself and pass against a broken widening.
+    const rateLimited = CASES[0].error
+    expect(widened(rateLimited).length).toBeGreaterThan(narrow(rateLimited).length)
+    expect(collectErrorText(rateLimited)).toContain('too many requests')
+    // The outer message matches no rule; the rate limit is reachable only
+    // through the cause. This is the #215 bucket being drained, measured.
+    expect(categorizeBuyError(narrow(rateLimited))).toBe('unknown')
+    expect(categorizeBuyError(widened(rateLimited))).toBe('rpc')
   })
 })

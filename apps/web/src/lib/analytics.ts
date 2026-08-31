@@ -34,7 +34,7 @@ import posthog from 'posthog-js'
  *   pixel_buy_blocked         { mapId, pixelCount, totalPriceUsd, reason, ref? }  stopped by our own guard BEFORE the wallet opened — see below. reason: chain_switch_rejected|chain_switch_failed|no_stablecoin_balance|over_spend_cap
  *   pixel_buy_started         { mapId, pixelCount, totalPriceUsd, token, ref? }
  *   pixel_buy_approve_shown   { mapId, pixelCount, totalPriceUsd, token, ref? }
- *   pixel_buy_gas_fallback    { mapId, pixelCount, totalPriceUsd, token, stage, level, detail, ref? }  stage: approve|buy; level: without_fee_currency|ceiling
+ *   pixel_buy_gas_fallback    { mapId, pixelCount, totalPriceUsd, token, stage, level, detail, ref? }  stage: approve|buy; level: without_fee_currency|ceiling|no_gas_limit
  *   pixel_buy_over_cap        { mapId, pixelCount, totalPriceUsd, token, reason, ref? }  live price tipped the buy past the $10 cap after it was picked
  *   pixel_buy_succeeded       { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
  *   pixel_buy_rejected        { mapId, pixelCount, totalPriceUsd, token, ref? }   user declined the wallet prompt (silent, no error shown)
@@ -60,6 +60,13 @@ import posthog from 'posthog-js'
  * affected buys: `'ceiling'` is nested inside that retry's catch and is always
  * preceded by one, so it is a strict subset — summing raw events overstates by
  * roughly 2x, and up to 4x across both stages.
+ *
+ * `level: 'no_gas_limit'` is the third rung and does NOT nest with the other
+ * two: it fires only when there is no fee currency (i.e. not MiniPay), so there
+ * is no retry to fall to and the transaction is sent with no `gas` field. Sum
+ * it separately — and segment it by `isMiniPay`, because a `no_gas_limit`
+ * carrying `isMiniPay: true` would mean getFeeCurrency() returned undefined
+ * inside MiniPay, which is the CIP-64 wiring itself having broken.
  *
  * `utm_*` params from the landing URL, plus `isMiniPay`, are attached to
  * every event as super-properties (via registerCampaignParams() and
