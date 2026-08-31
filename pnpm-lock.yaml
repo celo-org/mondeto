@@ -49,7 +49,7 @@ importers:
         version: 3.17.0(@solana/kit@5.5.1)(@solana/sysvars@5.5.1)(@tanstack/react-query@5.90.21)(@types/react@18.3.31)(react-dom@18.3.1)(react@18.3.1)(typescript@5.9.3)
       '@privy-io/wagmi':
         specifier: ^4.0.14
-        version: 4.0.14(@privy-io/react-auth@3.17.0)(react@18.3.1)(viem@2.47.4)(wagmi@2.19.5)
+        version: 4.0.16(@privy-io/react-auth@3.17.0)(react@18.3.1)(viem@2.47.4)(wagmi@2.19.5)
       '@radix-ui/react-dialog':
         specifier: ^1.0.5
         version: 1.1.19(@types/react-dom@18.3.7)(@types/react@18.3.31)(react-dom@18.3.1)(react@18.3.1)
@@ -2365,12 +2365,12 @@ packages:
     resolution: {integrity: sha512-cococ82ycPJc+wSCHUG0TrVJXF2PIkmDH8TLV+oGqBr14Q7ziRI63aCFIp6FpSRhdDDo9jmB0VR9NjCak4ptMA==}
     dev: false
 
-  /@privy-io/wagmi@4.0.14(@privy-io/react-auth@3.17.0)(react@18.3.1)(viem@2.47.4)(wagmi@2.19.5):
-    resolution: {integrity: sha512-mBrexUy45efCgZamu9tQG/xbgFM5Y9I7q4PE8zpiir7mWWw5HXRUWVcP2preTj9ATyr6N1k2mcofa6orO8bAEg==}
+  /@privy-io/wagmi@4.0.16(@privy-io/react-auth@3.17.0)(react@18.3.1)(viem@2.47.4)(wagmi@2.19.5):
+    resolution: {integrity: sha512-RrV48An+YIxoZOUJhUrOeYFsWYXw8bD8NEBx/zLrsSjVCzg0o5j+PTQjdE9wRl6NFHC+aKJCjfykBJFVKr/n7Q==}
     peerDependencies:
       '@privy-io/react-auth': ^3
       react: '>=18'
-      viem: 2.52.0
+      viem: 2.55.10
       wagmi: '>=2'
     dependencies:
       '@privy-io/react-auth': 3.17.0(@solana/kit@5.5.1)(@solana/sysvars@5.5.1)(@tanstack/react-query@5.90.21)(@types/react@18.3.31)(react-dom@18.3.1)(react@18.3.1)(typescript@5.9.3)
