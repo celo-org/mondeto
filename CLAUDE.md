@@ -28,7 +28,7 @@ pnpm workspace (`apps/*`) driven by Turborepo.
 
 ## Setup
 
-Pinned: **pnpm 8.10.0**, **Node 20** (`packageManager` + `engines`, and
+Pinned: **pnpm 8.10.0**, **Node 24** (`packageManager` + `engines`, and
 what CI installs). Use those versions.
 
 ```sh
@@ -194,19 +194,20 @@ passes regardless. Choosing the rule set and putting a ceiling on that
 count is tracked separately — until then, do not read a green lint step as
 "no lint findings".
 
-**Node: CI and production are not the same version, and that is worth
-knowing before you debug anything.** CI and local dev take **20**, from
-[`.nvmrc`](.nvmrc) — pm-kit's detection prefers it over the workflow
-input — and `engines` in every package agrees. **Vercel runs 24.x**, set
-on the project rather than in the repo, and Vercel does not read
-`.nvmrc`. So the version serving players is not the version the suite
-runs on.
+**Node: CI, local dev and production are all 24.** CI and local take it
+from [`.nvmrc`](.nvmrc) — pm-kit's detection prefers that over the
+workflow input, and the input is kept in sync as a fallback — `engines`
+in every package agrees, and **Vercel runs 24.x**, set on the project
+rather than in the repo. So a green CI run is evidence about the runtime
+that actually serves players.
 
-Nothing here depends on that gap, and 20 is what the sibling repos on the
-shared baseline pin. But it means a green CI run is not evidence about
-Node 24 behaviour: if you are chasing a bug that only reproduces in
-production, check the runtime difference before assuming your local repro
-is faithful.
+This was not always true: CI ran 20 against a production on 24, which
+meant a green suite said nothing about Node 24 behaviour. Two
+dependencies forced the question rather than a policy decision — pnpm 11
+declares `node >=22.13` and jsdom 30 declares
+`^22.22.2 || ^24.15.0 || >=26`, and both fail on 20 before running a
+single test. Going to 24 rather than the 22.13 minimum closes the
+production gap instead of merely clearing the dependency floor.
 
 `apps/contracts` and `apps/subgraph` still have no gated CI beyond this:
 contracts has no package.json (Foundry), and the subgraph defines no

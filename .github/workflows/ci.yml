@@ -29,7 +29,14 @@ jobs:
       # Fallback only. pm-kit's detect step prefers `.nvmrc` (added alongside
       # this), so that file is the single source of truth for the Node version
       # and this input applies only if it is ever deleted. Keep the two in sync.
-      node-version: '20'
+      #
+      # 24 matches what Vercel runs in production, so a green CI run is evidence
+      # about the runtime that serves players. It is also the floor two
+      # dependencies now require: pnpm 11 declares `node >=22.13` and dies on 20
+      # with `No such built-in module: node:sqlite`, and jsdom 30 declares
+      # `^22.22.2 || ^24.15.0 || >=26` and fails every jsdom worker with
+      # `webidl.util.markAsUncloneable is not a function`.
+      node-version: '24'
       # Vercel builds; CI is the correctness gate. This is the org-wide
       # decision, not a local workaround and not a temporary state — every
       # deploy-elsewhere repo on the pm-kit baseline sets it the same way

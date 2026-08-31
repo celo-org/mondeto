@@ -8,7 +8,7 @@
     "firefox >= 74"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "next build && node scripts/check-syntax-floor.mjs",
