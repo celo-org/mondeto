@@ -16,6 +16,9 @@ import posthog from 'posthog-js'
  *   referral_landed           { ref, mapId? }
  *   intro_completed           { lastSlideIndex }
  *   map_switched              { fromMapId, toMapId }
+ *   map_mount_started         { mapId, trigger }                      the map screen asked for a full grid — see below. trigger: entry|switch
+ *   map_mount_completed       { mapId, trigger, elapsedMs, attempts } the first full grid is painted; elapsedMs since the matching started
+ *   map_mount_failed          { mapId, trigger, elapsedMs, attempts, category, detail }  the grid read failed every retry; category as pixel_buy_failed
  *   map_view_toggled          { view }                               heatmap / myland / deals / normal
  *   leaderboard_viewed        { board, scope, mapId }
  *   pixel_info_viewed         { pixelId, owned }
@@ -52,6 +55,22 @@ import posthog from 'posthog-js'
  * which is stable by contract. `detail` is the unwrapped raw error truncated to
  * 100 chars, kept so a growing `unknown` category can be read rather than
  * guessed at.
+ *
+ * On `map_mount_*` (emitted by hooks/usePixelMap): the pair exists to make a
+ * freeze on entry measurable — a client that hangs on the full-grid read
+ * fires `started` and nothing else, a client whose bundle never parsed fires
+ * neither. Freeze rate = 1 − (completed + failed) / started; the `elapsedMs`
+ * distribution on `completed` is how close the slow tail runs to the host's
+ * not-responding watchdog. Every mount ends in exactly one of completed /
+ * failed / nothing: `failed` is terminal (all retries exhausted), a read that
+ * fails once and recovers on retry completes with `attempts` > 1 instead.
+ * Filter `trigger: 'entry'` for the cold-open number; `switch` mounts are the
+ * same read started by the player picking another map. On entry the
+ * `started` event may carry the pre-restore map id (the stored map is
+ * restored one effect after first render); the mount is not restarted by
+ * that restore, and `completed.mapId` is the map that actually painted.
+ * There is no cache in front of the grid read, so no cache flag is carried —
+ * every mount is a cold full-grid read.
  *
  * `pixel_buy_gas_fallback` is not a failure — the buy usually still goes out.
  * It marks a buy that had to drop to a cruder gas estimate, which is the tell
