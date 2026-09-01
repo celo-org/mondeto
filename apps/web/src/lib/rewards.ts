@@ -23,7 +23,7 @@ export interface RewardEntry {
   campaignId: string
   /** Payout in USD, as a display string (e.g. "5", "12.50"). */
   amountUsd: string
-  /** Optional board the reward was won on: 'LAND' | 'EMPIRE' | 'TYCOONS'. */
+  /** Optional board the reward was won on: 'LAND' | 'EMPIRE' | 'CAMPAIGN'. Free string — settled records may carry 'TYCOONS'. */
   board?: string
   /** Optional final rank on that board. */
   rank?: number

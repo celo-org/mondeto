@@ -42,7 +42,7 @@ export interface ShareParams {
   value?: string
   /** Unit for `value`: 'px', 'USDT', '' (global AREA is a bare %). */
   unit?: string
-  /** Board label: 'LAND' | 'EMPIRE' | 'TYCOONS'. */
+  /** Board label: 'LAND' | 'EMPIRE' | 'CAMPAIGN'. Free string — older shares may carry 'TYCOONS'. */
   board?: string
   /** Map id the share is anchored to (drives the deep-link + ref). */
   mapId?: number

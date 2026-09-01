@@ -13,8 +13,11 @@ import {
   type OwnerProfileData,
   type YouStanding,
 } from '@/hooks/useLeaderboard'
+import { useCampaignBoard } from '@/hooks/useCampaignBoard'
+import { campaignOwnRowCopy } from '@/lib/campaignBoard'
 import { useMaps } from '@/hooks/useMaps'
 import { useOwnedMaps } from '@/hooks/useOwnedMaps'
+import { BOARD_LABELS } from '@/lib/maps/leaderboards'
 import type { MapId } from '@/lib/maps/types'
 import { track } from '@/lib/analytics'
 import { ShareButton } from '@/components/ShareButton'
@@ -64,17 +67,17 @@ function writeProfilesCache(addr: string, profiles: Map<string, OwnerProfileData
 }
 
 /**
- * Rank-proximity copy for the player's own row. The delta is phrased per
- * board: AREA/EMPIRE in pixels, TYCOONS as a price gap. Rank 1 gets the
- * defend-it line instead of a target.
+ * Rank-proximity copy for the player's own row. Every board's delta is now in
+ * pixels — AREA and EMPIRE by holdings, CAMPAIGN by gain inside the window —
+ * so the phrasing is uniform. Rank 1 gets the defend-it line instead of a
+ * target.
  */
 function gapCopy(tab: LeaderboardTab, you: YouStanding): string {
   if (you.entry.rank === 1) {
-    return tab === 'TYCOONS' ? 'TOP SPOT — DEFEND IT' : 'RULER — DEFEND IT'
+    return tab === 'CAMPAIGN' ? 'LEADING THE CLIMB' : 'RULER — DEFEND IT'
   }
   const target = `#${you.entry.rank - 1}`
   if (you.gapValue === null) return ''
-  if (tab === 'TYCOONS') return `$${you.gapValue} FROM ${target}`
   return `${you.gapValue} PX FROM ${target}`
 }
 
@@ -218,7 +221,7 @@ export default function RanksPage() {
   // The selected map's board, built from the pixelData loaded above.
   // `homeMapId` is the id that pixelData belongs to so the snapshot uses the
   // right dims.
-  const { area, empire, tycoons, loading: boardsLoading, you } = useLeaderboard(
+  const { area, empire, loading: boardsLoading, you } = useLeaderboard(
     pixelData,
     profilesMap,
     {
@@ -228,15 +231,32 @@ export default function RanksPage() {
     },
   )
 
+  // The campaign board comes from its own route, not from pixelData: it needs
+  // two block-pinned subgraph reads that the client snapshot can't produce.
+  //
+  // `?from=&to=` lets a preview deployment render the board over an arbitrary
+  // window, so it can be seen with real data without scheduling a campaign in
+  // Edge Config — which every deployment, production included, would show. The
+  // route drops these params on production, so forwarding them unconditionally
+  // is safe: the client cannot conjure a campaign for real players.
+  const previewWindow = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    const from = params.get('from')
+    const to = params.get('to')
+    return from && to ? { from, to } : null
+  }, [])
+  const campaign = useCampaignBoard(selectedMapId, address, profilesMap, previewWindow)
+
   const dataMap: Record<LeaderboardTab, typeof area> = {
     AREA: area,
     EMPIRE: empire,
-    TYCOONS: tycoons,
+    CAMPAIGN: campaign.board?.entries ?? [],
   }
   const youMap: Record<LeaderboardTab, YouStanding | null> = {
     AREA: you.area,
     EMPIRE: you.empire,
-    TYCOONS: you.tycoons,
+    CAMPAIGN: campaign.you,
   }
 
   const currentData = dataMap[activeTab]
@@ -254,11 +274,11 @@ export default function RanksPage() {
     const opts = [
       { board: 'LAND', s: you.area },
       { board: 'EMPIRE', s: you.empire },
-      { board: 'TYCOONS', s: you.tycoons },
+      { board: BOARD_LABELS.CAMPAIGN, s: campaign.you },
     ].filter((o): o is { board: string; s: YouStanding } => !!o.s)
     if (opts.length === 0) return null
     return opts.reduce((best, o) => (o.s.entry.rank < best.s.entry.rank ? o : best))
-  }, [you.area, you.empire, you.tycoons])
+  }, [you.area, you.empire, campaign.you])
   const youText = youStanding ? gapCopy(activeTab, youStanding) : undefined
   const youInView =
     !!youStanding &&
@@ -278,7 +298,18 @@ export default function RanksPage() {
           }}
         />
       )}
-      <LeaderboardTabs activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }} />
+      <LeaderboardTabs
+        activeTab={activeTab}
+        onTabChange={(tab) => { setActiveTab(tab); setShowAll(false) }}
+        // Three states, not two: running shows the rule, closed says so, and
+        // only a pinned payout makes it final. A player who reads "closed" as
+        // "final" before the snapshot is taken is where disputes start.
+        campaignNote={
+          campaign.board?.settled
+            ? 'Campaign closed. This is the ranking the payout settles against.'
+            : null
+        }
+      />
       {/* Flex the player's BEST standing across the three boards (with its board
           name). Shown whenever they're ranked on any board — the shared card +
           link recruit challengers. */}
@@ -344,12 +375,52 @@ export default function RanksPage() {
                 minHeight: 32,
               }}
             >
-              {!isLoading && (
-                <>
-                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
-                  <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
-                </>
-              )}
+              {!isLoading &&
+                (activeTab === 'CAMPAIGN' && campaign.failed ? (
+                  // Distinct from "no campaign": telling a player nothing is
+                  // running during a campaign is the same class of wrong as
+                  // the payout confusion the FAQ rewrite was built to kill.
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      couldn&apos;t load the campaign board
+                    </span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      pull to refresh — your standing is unaffected
+                    </span>
+                  </>
+                ) : activeTab === 'CAMPAIGN' && campaign.settling ? (
+                  // The window closed but the index hasn't reached the end
+                  // block. Without this branch a player who just watched the
+                  // countdown hit zero reads "no active campaign" for ~30s and
+                  // then a final board appears — the third state existed
+                  // server-side and never reached them (review on #224).
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      campaign closed — final ranking settling
+                    </span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      check back in a moment
+                    </span>
+                  </>
+                ) : activeTab === 'CAMPAIGN' && !campaign.board ? (
+                  // Said explicitly rather than shown as a blank board. A
+                  // player who sees an empty list assumes it's broken; a
+                  // player who sees names assumes they're competing. Campaigns
+                  // run on selected days, so this is the ordinary state.
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      no active campaign right now
+                    </span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+                      this board ranks growth while one is running
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>no claims yet</span>
+                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>be the first to own the world</span>
+                  </>
+                ))}
             </div>
           </div>
         ) : (
@@ -428,7 +499,15 @@ export default function RanksPage() {
                     textAlign: 'center',
                   }}
                 >
-                  {"YOU'RE UNRANKED — CLAIM A PIXEL"}
+                  {/* On CAMPAIGN, unranked has a specific cause worth naming:
+                      only positive movement ranks, so a player whose pixels
+                      were bought is absent BECAUSE they went backwards. Left
+                      generic, the mechanic reads as the board being broken.
+                      The 0-not-negative decision lives in campaignOwnRowCopy,
+                      where its unit tests pin it. */}
+                  {activeTab === 'CAMPAIGN'
+                    ? campaignOwnRowCopy(campaign.yourNetGain)
+                    : "YOU'RE UNRANKED — CLAIM A PIXEL"}
                 </div>
               </div>
             )}
