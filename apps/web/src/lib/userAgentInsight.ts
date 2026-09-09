@@ -35,14 +35,19 @@ export const KNOWN_PARSEABLE_CHROME_MAJOR = 85
 
 /**
  * Lowest Chromium major we have *decided* to support, settled at Chrome 80
- * in #196.
+ * in #196. The number itself lives in `browserSupportFloor.mjs` so the build
+ * config and the post-build syntax guard read the same constant; this is a
+ * re-export for the census.
  *
- * Deliberately a second constant. 85 is what the bundle parses today, 80 is
- * what we intend to serve, and the range between them — engines we promised
- * to support and currently break on — is the remaining work. Collapsing the
- * two into one number would hide exactly the population that matters.
+ * Deliberately a second constant from `KNOWN_PARSEABLE_CHROME_MAJOR`. 85 is
+ * what the bundle parsed on before the dependency down-level pass (#225), 80
+ * is what we intend to serve, and the range between them — engines we
+ * promised to support and used to break on — is what the census measures.
+ * Collapsing the two into one number would hide exactly the population that
+ * matters.
  */
-export const SUPPORT_FLOOR_CHROME_MAJOR = 80
+export { SUPPORT_FLOOR_CHROME_MAJOR } from './browserSupportFloor.mjs'
+import { SUPPORT_FLOOR_CHROME_MAJOR } from './browserSupportFloor.mjs'
 
 /**
  * Non-human clients, which land in *both* halves of the ratio and pull it in

@@ -6,11 +6,16 @@ name: CI
 # regression guards for the silent RPC-data failures (getLogs chunk size,
 # transport failover config). Coverage floors live in
 # apps/web/vitest.config.ts and fail the `test` step on regression.
+# `pull_request` is unfiltered, matching pm-kit's caller template and the
+# other repos on the shared baseline. That covers the collaboration flow
+# (feature -> PR into staging -> verify on the staging URL -> staging -> main)
+# without enumerating branch names, so adding a branch never means remembering
+# to edit this file. `push` stays narrow: post-merge verification is only
+# meaningful on the two branches people treat as verified.
 on:
   pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: [main, staging]
 
 # Cancel superseded runs on the same ref so a rapid push sequence doesn't queue.
 concurrency:
@@ -21,5 +26,26 @@ jobs:
   ci:
     uses: celo-org/pm-kit/.github/workflows/ci-node.yml@main
     with:
-      node-version: '20'
-      run-build: false # Vercel builds; CI is the correctness gate (matches current behavior)
+      # Fallback only. pm-kit's detect step prefers `.nvmrc` (added alongside
+      # this), so that file is the single source of truth for the Node version
+      # and this input applies only if it is ever deleted. Keep the two in sync.
+      #
+      # 24 matches what Vercel runs in production, so a green CI run is evidence
+      # about the runtime that serves players. It is also the floor two
+      # dependencies now require: pnpm 11 declares `node >=22.13` and dies on 20
+      # with `No such built-in module: node:sqlite`, and jsdom 30 declares
+      # `^22.22.2 || ^24.15.0 || >=26` and fails every jsdom worker with
+      # `webidl.util.markAsUncloneable is not a function`.
+      node-version: '24'
+      # Vercel builds; CI is the correctness gate. This is the org-wide
+      # decision, not a local workaround and not a temporary state — every
+      # deploy-elsewhere repo on the pm-kit baseline sets it the same way
+      # (mondeto-admin, mini-quiz, askbots). pm-kit's own default is `true`
+      # for repos with no deployment platform doing the build; we have one,
+      # and duplicating its build in CI buys a slower merge for a signal
+      # Vercel already produces on every PR via the preview deployment.
+      #
+      # Consequence worth stating rather than discovering: a build break
+      # surfaces on the Vercel check, not on `ci / ci`. Only `ci / ci` is a
+      # required status check, so read the preview deployment before merging.
+      run-build: false

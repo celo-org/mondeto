@@ -16,6 +16,9 @@ import posthog from 'posthog-js'
  *   referral_landed           { ref, mapId? }
  *   intro_completed           { lastSlideIndex }
  *   map_switched              { fromMapId, toMapId }
+ *   map_mount_started         { mapId, trigger }                      the map screen asked for a full grid — see below. trigger: entry|switch
+ *   map_mount_completed       { mapId, trigger, elapsedMs, attempts } the first full grid is painted; elapsedMs since the matching started
+ *   map_mount_failed          { mapId, trigger, elapsedMs, attempts, category, detail }  the grid read failed every retry; category as pixel_buy_failed
  *   map_view_toggled          { view }                               heatmap / myland / deals / normal
  *   leaderboard_viewed        { board, scope, mapId }
  *   pixel_info_viewed         { pixelId, owned }
@@ -34,7 +37,7 @@ import posthog from 'posthog-js'
  *   pixel_buy_blocked         { mapId, pixelCount, totalPriceUsd, reason, ref? }  stopped by our own guard BEFORE the wallet opened — see below. reason: chain_switch_rejected|chain_switch_failed|no_stablecoin_balance|over_spend_cap
  *   pixel_buy_started         { mapId, pixelCount, totalPriceUsd, token, ref? }
  *   pixel_buy_approve_shown   { mapId, pixelCount, totalPriceUsd, token, ref? }
- *   pixel_buy_gas_fallback    { mapId, pixelCount, totalPriceUsd, token, stage, level, detail, ref? }  stage: approve|buy; level: without_fee_currency|ceiling
+ *   pixel_buy_gas_fallback    { mapId, pixelCount, totalPriceUsd, token, stage, level, detail, ref? }  stage: approve|buy; level: without_fee_currency|ceiling|no_gas_limit
  *   pixel_buy_over_cap        { mapId, pixelCount, totalPriceUsd, token, reason, ref? }  live price tipped the buy past the $10 cap after it was picked
  *   pixel_buy_succeeded       { mapId, pixelCount, totalPriceUsd, token, txHash, ref? }
  *   pixel_buy_rejected        { mapId, pixelCount, totalPriceUsd, token, ref? }   user declined the wallet prompt (silent, no error shown)
@@ -53,6 +56,22 @@ import posthog from 'posthog-js'
  * 100 chars, kept so a growing `unknown` category can be read rather than
  * guessed at.
  *
+ * On `map_mount_*` (emitted by hooks/usePixelMap): the pair exists to make a
+ * freeze on entry measurable — a client that hangs on the full-grid read
+ * fires `started` and nothing else, a client whose bundle never parsed fires
+ * neither. Freeze rate = 1 − (completed + failed) / started; the `elapsedMs`
+ * distribution on `completed` is how close the slow tail runs to the host's
+ * not-responding watchdog. Every mount ends in exactly one of completed /
+ * failed / nothing: `failed` is terminal (all retries exhausted), a read that
+ * fails once and recovers on retry completes with `attempts` > 1 instead.
+ * Filter `trigger: 'entry'` for the cold-open number; `switch` mounts are the
+ * same read started by the player picking another map. On entry the
+ * `started` event may carry the pre-restore map id (the stored map is
+ * restored one effect after first render); the mount is not restarted by
+ * that restore, and `completed.mapId` is the map that actually painted.
+ * There is no cache in front of the grid read, so no cache flag is carried —
+ * every mount is a cold full-grid read.
+ *
  * `pixel_buy_gas_fallback` is not a failure — the buy usually still goes out.
  * It marks a buy that had to drop to a cruder gas estimate, which is the tell
  * for the MiniPay CIP-64 hazard (a gas-less send makes MiniPay answer
@@ -60,6 +79,13 @@ import posthog from 'posthog-js'
  * affected buys: `'ceiling'` is nested inside that retry's catch and is always
  * preceded by one, so it is a strict subset — summing raw events overstates by
  * roughly 2x, and up to 4x across both stages.
+ *
+ * `level: 'no_gas_limit'` is the third rung and does NOT nest with the other
+ * two: it fires only when there is no fee currency (i.e. not MiniPay), so there
+ * is no retry to fall to and the transaction is sent with no `gas` field. Sum
+ * it separately — and segment it by `isMiniPay`, because a `no_gas_limit`
+ * carrying `isMiniPay: true` would mean getFeeCurrency() returned undefined
+ * inside MiniPay, which is the CIP-64 wiring itself having broken.
  *
  * `utm_*` params from the landing URL, plus `isMiniPay`, are attached to
  * every event as super-properties (via registerCampaignParams() and

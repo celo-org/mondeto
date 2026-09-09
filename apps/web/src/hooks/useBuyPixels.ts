@@ -7,7 +7,7 @@ import { MONDETO_ABI, ERC20_ABI } from '@/lib/contract'
 import { getAttributionSuffix } from '@/lib/attribution'
 import { getFeeCurrency } from '@/lib/feeCurrency'
 import { getContractByMapId } from '@/lib/maps/contracts'
-import { classifyBuy, isUserRejectedError } from '@/lib/buyErrors'
+import { classifyBuy, collectErrorText, isUserRejectedError } from '@/lib/buyErrors'
 import type { BuyBlockedReason, GasFallbackLevel } from '@/lib/buyErrors'
 import {
   APPROVAL_CAP_USD,
@@ -65,6 +65,8 @@ function extractErrorDetail(e: unknown): string {
   )
 }
 
+// Every string the error carries, for classification only.
+//
 export function useBuyPixels(mapId?: MapId) {
   const contractAddress = getContractByMapId(mapId ?? 0)
   const { address, chainId } = useAccount()
@@ -167,6 +169,8 @@ export function useBuyPixels(mapId?: MapId) {
     // same stage — the ceiling branch is nested inside the retry's catch — so
     // count `without_fee_currency` to size the affected buys. `ceiling` is a
     // strict subset, and summing raw events overstates by roughly 2x.
+    // `no_gas_limit` is disjoint from both: it is the non-MiniPay branch, where
+    // no fee currency means no retry rung, so the send goes out unbounded.
     const trackGasFallback = (stage: 'approve' | 'buy', level: GasFallbackLevel, err: unknown) => {
       track('pixel_buy_gas_fallback', {
         ...eventProps,
@@ -272,8 +276,8 @@ export function useBuyPixels(mapId?: MapId) {
           // "permission denied". Retry the estimate without feeCurrency (widely
           // accepted), padding for the CIP-64 intrinsic overhead; last resort a
           // safe ceiling so the tx still goes out with a limit.
+          trackGasFallback('approve', feeCurrency ? 'without_fee_currency' : 'no_gas_limit', err)
           if (feeCurrency) {
-            trackGasFallback('approve', 'without_fee_currency', err)
             try {
               const g = await publicClient.estimateContractGas({
                 address: tokenAddress,
@@ -331,8 +335,8 @@ export function useBuyPixels(mapId?: MapId) {
         console.warn('buyPixels gas estimate (feeCurrency) failed:', err)
         // MiniPay: never fall through to a gas-less send (see approve above).
         // Retry without feeCurrency, then a pixel-count-scaled ceiling.
+        trackGasFallback('buy', feeCurrency ? 'without_fee_currency' : 'no_gas_limit', err)
         if (feeCurrency) {
-          trackGasFallback('buy', 'without_fee_currency', err)
           try {
             const g = await publicClient.estimateContractGas({
               address: contractAddress,
@@ -406,7 +410,14 @@ export function useBuyPixels(mapId?: MapId) {
       // Keep the raw error in the console for debugging; show players only the
       // short, human-readable line — never the raw viem/wallet dump.
       console.error('Buy failed:', detail, e)
-      const { message: short, category } = classifyBuy(hay, preferred.symbol)
+      // Classified against every field the error carries, not just the one
+      // `detail` picked — see collectErrorText. `hay` stays the input to
+      // isUserRejectedError above: that branch decides whether the player sees
+      // an error at all, and widening it is a separate change with its own risk.
+      const { message: short, category } = classifyBuy(
+        `${hay} ${collectErrorText(e)}`,
+        preferred.symbol,
+      )
       // `reason` is player copy and moves with wording; `category` is the
       // stable key to segment on. `detail` carries the unwrapped raw error
       // (truncated, same as profile_save_failed) so a rising `unknown` bucket
