@@ -7,6 +7,18 @@ interface LeaderboardTabsProps {
   activeTab: LeaderboardTab
   onTabChange: (tab: LeaderboardTab) => void
   scope?: LeaderboardScope
+  /**
+   * Shown ABOVE the CAMPAIGN description when the window has closed — it does
+   * not replace it (caught in review on #224: the note is a *state* line, the
+   * description is the *rule*, and the rule is the only in-app explanation of
+   * why a raided player's number didn't move — needed most on a final board).
+   *
+   * The gap between "the window closed" and "the payout is pinned" is where
+   * "but I was first" complaints come from: with only two states a player
+   * reads a closed board as final while it can still move. Naming the closed
+   * state explicitly is what makes the third one meaningful.
+   */
+  campaignNote?: string | null
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
@@ -33,17 +45,26 @@ const tabConfig: {
     globalDescription: 'Biggest connected empire on any single map.',
   },
   {
-    key: 'TYCOONS',
-    label: BOARD_LABELS.TYCOONS,
-    description: 'Who holds the single most valuable pixel.',
-    globalDescription: 'Single most valuable pixel held anywhere.',
+    key: 'CAMPAIGN',
+    label: BOARD_LABELS.CAMPAIGN,
+    // The only place the mechanic is explained in-app. Net gain means a player
+    // raided late in the window watches their number fall, which reads as a bug
+    // unless something says otherwise — and this sentence is that something.
+    description: 'Who grew the most during the campaign. Pixels you gained, minus pixels bought from you.',
+    globalDescription: 'Who grew the most during the campaign. Pixels you gained, minus pixels bought from you.',
   },
 ]
 
-export default function LeaderboardTabs({ activeTab, onTabChange, scope = 'local' }: LeaderboardTabsProps) {
+export default function LeaderboardTabs({
+  activeTab,
+  onTabChange,
+  scope = 'local',
+  campaignNote,
+}: LeaderboardTabsProps) {
   const active = tabConfig.find(t => t.key === activeTab)
   const activeDescription =
     active && (scope === 'global' ? active.globalDescription : active.description)
+  const activeNote = activeTab === 'CAMPAIGN' && campaignNote ? campaignNote : null
 
   return (
     <div>
@@ -84,7 +105,7 @@ export default function LeaderboardTabs({ activeTab, onTabChange, scope = 'local
           )
         })}
       </div>
-      {activeDescription && (
+      {(activeNote || activeDescription) && (
         <div
           style={{
             padding: '12px 14px',
@@ -97,7 +118,15 @@ export default function LeaderboardTabs({ activeTab, onTabChange, scope = 'local
             background: 'var(--card-bg)',
           }}
         >
-          {activeDescription}
+          {/* State line first, rule second — both render. The rule is the only
+              in-app text explaining net gain, so the settled note must never
+              displace it. */}
+          {activeNote && (
+            <div style={{ color: BRAND_LIME, marginBottom: activeDescription ? 8 : 0 }}>
+              {activeNote}
+            </div>
+          )}
+          {activeDescription && <div>{activeDescription}</div>}
         </div>
       )}
     </div>

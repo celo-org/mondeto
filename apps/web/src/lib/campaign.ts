@@ -93,3 +93,45 @@ export async function readCampaignServer(): Promise<CampaignConfig | null> {
     return null
   }
 }
+
+/**
+ * How long a finished campaign's board stays visible after it closes.
+ *
+ * `isCampaignActive` flips false the instant `endsAt` passes, which is right
+ * for the banner — the countdown is over — but wrong for the board. The
+ * settled standings are what the payout is computed from, so hiding them at
+ * the buzzer means winners never see the ranking they were paid on, and
+ * nobody can eyeball the board against the payout. Payouts land the day after
+ * a campaign ends (see the FAQ), so the window has to outlast that.
+ */
+export const SETTLED_BOARD_GRACE_MS = 48 * 60 * 60 * 1000
+
+/**
+ * The campaign whose board should be shown: the running one, or the one that
+ * just finished while its result is still worth reading.
+ *
+ * Returns `settled: true` for the latter so callers can label it as final
+ * rather than passing it off as live — the distinction between "closed" and
+ * "still running" is exactly what a player at the buzzer needs.
+ */
+export async function readCampaignForBoard(
+  now: Date = new Date(),
+): Promise<{ campaign: CampaignConfig; settled: boolean } | null> {
+  if (!process.env.EDGE_CONFIG) return null
+  try {
+    const { get } = await import('@vercel/edge-config')
+    const campaign = coerceCampaign(await get('campaign'))
+    if (!campaign) return null
+    if (isCampaignActive(campaign, now)) return { campaign, settled: false }
+
+    // Only *finished* campaigns get the grace period. One that hasn't started
+    // is also "not active", and showing its (empty) board would be a lie.
+    if (!campaign.endsAt) return null
+    const end = Date.parse(campaign.endsAt)
+    if (!Number.isFinite(end) || now.getTime() < end) return null
+    if (now.getTime() - end > SETTLED_BOARD_GRACE_MS) return null
+    return { campaign, settled: true }
+  } catch {
+    return null
+  }
+}
