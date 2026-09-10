@@ -1,2 +1,13 @@
 packages:
   - "apps/*"
+# pnpm 11 refuses to install when a dependency ships a build script that is
+# neither run nor explicitly decided (ERR_PNPM_IGNORED_BUILDS); pnpm 8 only
+# warned. `true` for all six preserves pnpm 8's behaviour exactly, so this
+# upgrade does not quietly change what gets built.
+allowBuilds:
+  '@reown/appkit': true
+  bufferutil: true
+  core-js: true
+  keccak: true
+  unrs-resolver: true
+  utf-8-validate: true
