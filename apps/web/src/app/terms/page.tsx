@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 // Celo Mini Apps Terms and Conditions, provided by counsel. The Mondeto
 // game description (§5) and fee wording (§6) were aligned with the
 // deployed contract mechanics (price doubles on purchase, halves over
-// each 30-day period to a minimum price; 5% fee deducted from the
+// each 30-day period to a minimum price; 7.5% fee deducted from the
 // previous owner's proceeds; unowned-pixel proceeds go to the contract
 // treasury). Any further edits to this text need legal sign-off.
 
@@ -58,7 +58,7 @@ const SECTIONS: Array<{ title: string; paragraphs: string[] }> = [
   {
     title: '6. Fees & Prizes',
     paragraphs: [
-      'For Mondeto, Celo Core Co. may receive a service fee of up to five percent (5%) of the value of each purchase of an owned pixel, deducted from the amount paid to the previous owner. The full purchase price of a previously unowned pixel is paid to Celo Core Co.’s smart-contract treasury. For MiniQuiz, judging and prize amounts are determined in the sole discretion of and paid by Celo Core Co. via its admin process in USDT. Participating in some of the Services and transacting on the Celo Network may require the payment of network "gas" fees. Gas fees fluctuate, are payable by you to network validators, and are non-refundable. Applicable amounts and currency are presented to you before you confirm a transaction.',
+      'For Mondeto, Celo Core Co. may receive a service fee of up to seven and a half percent (7.5%) of the value of each purchase of an owned pixel, deducted from the amount paid to the previous owner. The full purchase price of a previously unowned pixel is paid to Celo Core Co.’s smart-contract treasury. For MiniQuiz, judging and prize amounts are determined in the sole discretion of and paid by Celo Core Co. via its admin process in USDT. Participating in some of the Services and transacting on the Celo Network may require the payment of network "gas" fees. Gas fees fluctuate, are payable by you to network validators, and are non-refundable. Applicable amounts and currency are presented to you before you confirm a transaction.',
     ],
   },
   {
