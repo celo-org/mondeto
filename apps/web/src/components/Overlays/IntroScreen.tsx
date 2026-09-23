@@ -141,7 +141,14 @@ export const SLIDES: Slide[] = [
     key: 'hold',
     kicker: 'HOLD YOUR GROUND',
     headline: 'PRICE x2 EVERY SALE',
-    body: 'Buy early. Next buyer pays 2x.',
+    // "No sell button" and "when somebody else wants it" are load-bearing:
+    // support keeps getting "how do I sell my pixel" and "how will I know
+    // when it sold". There is no listing step and no resale guarantee —
+    // a pixel changes hands only when another player buys it, and the
+    // proceeds land in the owner's wallet in that same transaction. Say
+    // that here, on the slide that already shows the sale, and never in
+    // words that read as a promise of resale, a timeline, or a payout.
+    body: 'Buy early. Next buyer pays 2x. No sell button, no listing: like real estate, your pixel moves when somebody else wants it, and the money lands in your wallet the moment it does.',
     visual: <SlideHold />,
   },
   {
