@@ -61,8 +61,9 @@ describe('FAQ facts', () => {
   // These are the exact values that were wrong before, verified against
   // mainnet `feeRate()` and `config()`. Re-verify with `cast call` before
   // changing either the copy or this test.
-  it('states the 5% fee and never the old 3%', () => {
-    expect(allCopy).toContain('5% ')
+  it('states the 7.5% fee and never an older rate', () => {
+    expect(allCopy).toContain('7.5% ')
+    expect(allCopy).not.toMatch(/(^|[^.\d])5% /)
     expect(allCopy).not.toContain('3%')
   })
 
