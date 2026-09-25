@@ -34,6 +34,17 @@ describe('IntroScreen rewards slide copy', () => {
     expect(rewards!.body).toMatch(/when a campaign runs/i)
   })
 
+  it('never names the retired priciest-plot board, anywhere in the deck', () => {
+    // TYCOONS (priciest pixel) was replaced by CAMPAIGN. Promising a board
+    // that does not exist is the same kind of wrong promise as "daily".
+    const deck = SLIDES.map((s) => `${s.kicker} ${s.headline ?? ''} ${s.body}`).join(' ')
+    expect(deck).not.toMatch(/priciest/i)
+  })
+
+  it('names the campaign board among the flexes', () => {
+    expect(rewards!.body).toMatch(/campaign board/i)
+  })
+
   it('never promises claiming or daily rewards anywhere else in the deck', () => {
     // The promise is what misleads, not the slide it sits on — a rewrite
     // that moves the old wording to another slide is the same defect.

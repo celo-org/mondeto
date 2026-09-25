@@ -163,7 +163,10 @@ export const SLIDES: Slide[] = [
     // "When a campaign runs" and "get paid" are load-bearing: the old line said
     // "Claim daily rewards", and rewards are neither daily nor claimed. That
     // one sentence drove most of the "I wasn't paid" support volume.
-    body: 'Biggest empire, most pixels, priciest plot. Pick your flex. When a campaign runs, top players get paid in USDT.',
+    // Name only boards that exist. The priciest-plot board (TYCOONS) was
+    // retired for CAMPAIGN, and "the campaign board" stays true whatever a
+    // campaign ranks by (net pixel gain, a corridor between two cities).
+    body: 'Biggest empire, most land, or top the campaign board. Pick your flex. When a campaign runs, top players get paid in USDT.',
     visual: <SlideRewards />,
   },
   {
