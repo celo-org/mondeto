@@ -21,7 +21,7 @@ import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
-import { SUPPORT_URL } from '@/lib/deeplinks'
+import { SUPPORT_URL, TELEGRAM_UPDATES_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
 import { InviteButton } from '@/components/InviteButton'
@@ -660,6 +660,22 @@ export default function ProfilePage() {
               >
                 privacy
               </Link>
+              <a
+                href={TELEGRAM_UPDATES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => track('telegram_updates_opened')}
+                style={{
+                  fontSize: 7,
+                  fontFamily: "'Press Start 2P', monospace",
+                  letterSpacing: 2,
+                  color: 'var(--text-muted)',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                updates & campaigns
+              </a>
             </div>
           </div>
         </div>
