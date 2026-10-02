@@ -171,3 +171,24 @@ describe('own standing', () => {
     expect(corridorStanding(B, px(A, kept), px(A, CHAIN), LAGOS_LONDON)).toEqual({ progress: 0, ranks: false })
   })
 })
+
+describe('own standing agrees with the board for every wallet on it', () => {
+  it('a randomised board: standing.progress equals the entry value, and unranked wallets read 0 or less', () => {
+    let seed = 7
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31)
+    const wallets = [A, B, C, D]
+    for (let round = 0; round < 40; round++) {
+      const deal = (density: number) =>
+        [...CHAIN, ...CHAIN2].filter(() => rnd() < density).map((pixelId) => ({ pixelId, owner: wallets[Math.floor(rnd() * 4)] }))
+      const start = deal(0.3)
+      const end = deal(0.6)
+      const entries = corridorEntries(start, end, LAGOS_LONDON)
+      for (const w of wallets) {
+        const s = corridorStanding(w, start, end, LAGOS_LONDON)
+        const e = entries.find((x) => x.address === w)
+        if (e) expect(s).toEqual({ progress: e.value, ranks: true })
+        else expect(s.ranks).toBe(false)
+      }
+    }
+  })
+})

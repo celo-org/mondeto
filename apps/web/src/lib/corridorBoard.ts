@@ -175,7 +175,14 @@ export function corridorEntries(
   return out
 }
 
-/** One wallet's corridor progress, ranked or not, from the same two reads. */
+/**
+ * One wallet's corridor progress, ranked or not, from the same two reads.
+ *
+ * Runs on every viewer request, cache hit or not, so it walks only what this
+ * wallet needs: the empty board and its own two sets (three `connectGap`
+ * calls), not every owner twice. The rule is `corridorEntries`'s: a wallet with
+ * no progress at a read counts as the empty board there.
+ */
 export function corridorStanding(
   address: string,
   startPixels: readonly PixelOwner[],
@@ -183,9 +190,17 @@ export function corridorStanding(
   cfg: CorridorConfig,
 ): { progress: number; ranks: boolean } {
   const target = address.toLowerCase()
-  const { empty, gaps } = corridorGaps(endPixels, cfg)
-  const startGaps = corridorGaps(startPixels, cfg).gaps
-  const end = gaps.get(target)
-  const progress = end === undefined ? 0 : (startGaps.get(target) ?? empty) - end
+  const empty = connectGap(new Set(), cfg)
+  if (empty === null) throw new Error('corridor anchors are on separate landmasses')
+  const gapOf = (pixels: readonly PixelOwner[]): number => {
+    const owned = new Set<number>()
+    for (const p of pixels) if (p.owner.toLowerCase() === target) owned.add(p.pixelId)
+    if (owned.size === 0) return empty
+    const gap = connectGap(owned, cfg)
+    return gap === null || gap >= empty ? empty : gap
+  }
+  const end = gapOf(endPixels)
+  if (end >= empty) return { progress: 0, ranks: false }
+  const progress = gapOf(startPixels) - end
   return { progress, ranks: progress > 0 }
 }

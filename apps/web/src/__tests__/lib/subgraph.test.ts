@@ -306,3 +306,38 @@ describe('fetchRecentBatches / fetchProfilesFor', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('fetchPixelOwnersAtBlock (mondeto#282)', () => {
+  // A World map has 5,622 land pixels and `skip` stops at 5,000, so this read
+  // pages by id. A loop that stopped after the first page would drop the tail
+  // silently, and every board built on it would still look plausible.
+  const page = (from: number, n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: `0-${from + i}`, pixelId: String(from + i), owner: '0xABC' }))
+
+  it('follows the id cursor across pages, concatenates them, and stops on a short page', async () => {
+    const m = await load(URL)
+    const fn = mockFetch([{ pixels: page(0, 1000) }, { pixels: page(1000, 1000) }, { pixels: page(2000, 622) }])
+    const rows = await m.fetchPixelOwnersAtBlock(0, 79_051_322)
+    expect(rows).toHaveLength(2622)
+    expect(rows[0]).toEqual({ pixelId: 0, owner: '0xabc' })
+    expect(rows[2621].pixelId).toBe(2621)
+    expect(fn).toHaveBeenCalledTimes(3)
+    const vars = fn.mock.calls.map((c) => JSON.parse((c as unknown as [string, { body: string }])[1].body).variables)
+    expect(vars.map((v) => v.after)).toEqual(['', '0-999', '0-1999'])
+    expect(vars.every((v) => v.block === 79_051_322 && v.mapId === 0 && v.first === 1000)).toBe(true)
+  })
+
+  it('a full last page asks once more and stops on the empty answer', async () => {
+    const m = await load(URL)
+    const fn = mockFetch([{ pixels: page(0, 1000) }, { pixels: [] }])
+    expect(await m.fetchPixelOwnersAtBlock(0, 1)).toHaveLength(1000)
+    expect(fn).toHaveBeenCalledTimes(2)
+  })
+
+  it('a cursor that never runs out throws instead of looping or truncating', async () => {
+    const m = await load(URL)
+    const fn = mockFetch([{ pixels: page(0, 1000) }])
+    await expect(m.fetchPixelOwnersAtBlock(0, 1)).rejects.toThrow(/did not finish in 30 pages/)
+    expect(fn).toHaveBeenCalledTimes(30)
+  })
+})
