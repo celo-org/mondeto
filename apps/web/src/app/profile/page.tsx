@@ -570,6 +570,62 @@ export default function ProfilePage() {
             </Link>
           </div>
 
+          {/* Telegram banner — the one channel shared by every Celo mini-app.
+              Above the legal box so it is hard to miss; always rendered. */}
+          <div
+            data-testid="telegram-banner"
+            style={{
+              marginTop: 32,
+              background: 'var(--card-bg)',
+              border: '2px solid var(--text-muted)',
+              borderRadius: 10,
+              padding: '14px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              alignItems: 'center',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 6,
+                fontFamily: "'Press Start 2P', monospace",
+                color: 'var(--text-muted)',
+                letterSpacing: 2,
+              }}
+            >
+              📣 MINIAPP UPDATES
+            </div>
+            <div
+              className="font-display"
+              style={{ fontSize: 9, lineHeight: 1.6, letterSpacing: 1 }}
+            >
+              GET THE LATEST MINIAPP UPDATES: JOIN OUR TELEGRAM
+            </div>
+            <div
+              style={{
+                fontSize: 6,
+                fontFamily: "'Press Start 2P', monospace",
+                color: 'var(--text-muted)',
+                letterSpacing: 1,
+                lineHeight: 1.8,
+              }}
+            >
+              NEW FEATURES AND CAMPAIGNS, FIRST-HAND FROM THE TEAM
+            </div>
+            <a
+              href={TELEGRAM_UPDATES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('telegram_updates_opened')}
+              className="pixel-btn pixel-btn-filled font-display"
+              style={STANDARD_BTN_STYLE}
+            >
+              JOIN ON TELEGRAM →
+            </a>
+          </div>
+
           {/* Legal and Help — boxed section grouping the Support action with the
               legal links. The card always renders, so Support stays reachable
               before wallet connect (MiniPay requires Support / Terms / Privacy
@@ -577,7 +633,7 @@ export default function ProfilePage() {
               bg. */}
           <div
             style={{
-              marginTop: 32,
+              marginTop: 16,
               background: 'var(--card-bg)',
               border: '2px solid var(--text-muted)',
               borderRadius: 10,
@@ -660,22 +716,6 @@ export default function ProfilePage() {
               >
                 privacy
               </Link>
-              <a
-                href={TELEGRAM_UPDATES_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => track('telegram_updates_opened')}
-                style={{
-                  fontSize: 7,
-                  fontFamily: "'Press Start 2P', monospace",
-                  letterSpacing: 2,
-                  color: 'var(--text-muted)',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: 3,
-                }}
-              >
-                updates & campaigns
-              </a>
             </div>
           </div>
         </div>
