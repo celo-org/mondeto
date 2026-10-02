@@ -25,9 +25,31 @@ export interface CampaignConfig {
   startsAt?: string
   endsAt?: string
   mapId?: number
+  /**
+   * What the campaign pays, published by the admin's `bannerView`
+   * (mondeto-admin#116): `board` is `CAMPAIGN` when it pays that board,
+   * `strategy` the id that ranks it (`NET_PIXEL_GAIN`, `CONNECT`), `label` a
+   * player-facing name ("Lagos → London"). Absent on keys written before #116.
+   */
+  board?: 'CAMPAIGN'
+  strategy?: string
+  label?: string
+  /**
+   * A CONNECT campaign's two frozen anchor pixel lists, the same the payout
+   * ranks from (mondeto#282). Both or neither.
+   */
+  anchors?: { from: number[]; to: number[] }
 }
 
-function coerceCampaign(value: unknown): CampaignConfig | null {
+/** World grid size: CONNECT runs on the World map only. */
+const WORLD_PIXEL_COUNT = 170 * 100
+
+function anchorPixels(x: unknown): number[] | null {
+  if (!Array.isArray(x) || x.length === 0 || x.length > 256) return null
+  return x.every((p) => Number.isInteger(p) && p >= 0 && p < WORLD_PIXEL_COUNT) ? (x as number[]) : null
+}
+
+export function coerceCampaign(value: unknown): CampaignConfig | null {
   if (typeof value !== 'object' || value === null) return null
   const v = value as Record<string, unknown>
   if (typeof v.id !== 'string' || v.id === '') return null
@@ -40,6 +62,15 @@ function coerceCampaign(value: unknown): CampaignConfig | null {
   if (typeof v.endsAt === 'string') campaign.endsAt = v.endsAt
   if (typeof v.mapId === 'number' && Number.isInteger(v.mapId) && v.mapId >= 0) {
     campaign.mapId = v.mapId
+  }
+  if (v.board === 'CAMPAIGN') campaign.board = 'CAMPAIGN'
+  if (typeof v.strategy === 'string' && v.strategy !== '' && v.strategy.length <= 64) campaign.strategy = v.strategy
+  if (typeof v.label === 'string' && v.label !== '' && v.label.length <= 128) campaign.label = v.label
+  if (typeof v.anchors === 'object' && v.anchors !== null && !Array.isArray(v.anchors)) {
+    const a = v.anchors as Record<string, unknown>
+    const from = anchorPixels(a.from)
+    const to = anchorPixels(a.to)
+    if (from && to) campaign.anchors = { from, to }
   }
   return campaign
 }

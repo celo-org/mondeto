@@ -19,6 +19,12 @@ interface LeaderboardTabsProps {
    * state explicitly is what makes the third one meaningful.
    */
   campaignNote?: string | null
+  /**
+   * Replaces the CAMPAIGN rule text when the running campaign ranks something
+   * else than net gain: a CONNECT corridor (mondeto#282). The rule is the only
+   * in-app explanation of the mechanic, so it has to describe the one in play.
+   */
+  campaignDescription?: string | null
 }
 
 const PIXEL_FONT = "'Press Start 2P', monospace"
@@ -60,10 +66,13 @@ export default function LeaderboardTabs({
   onTabChange,
   scope = 'local',
   campaignNote,
+  campaignDescription,
 }: LeaderboardTabsProps) {
   const active = tabConfig.find(t => t.key === activeTab)
   const activeDescription =
-    active && (scope === 'global' ? active.globalDescription : active.description)
+    activeTab === 'CAMPAIGN' && campaignDescription
+      ? campaignDescription
+      : active && (scope === 'global' ? active.globalDescription : active.description)
   const activeNote = activeTab === 'CAMPAIGN' && campaignNote ? campaignNote : null
 
   return (

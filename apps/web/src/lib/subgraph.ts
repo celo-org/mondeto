@@ -263,6 +263,54 @@ export async function fetchOwnerStatsAtBlock(
   return rows
 }
 
+// Every owned pixel on one map at a pinned block, paged by id rather than by
+// `skip`: a World map has 5,622 land pixels and `skip` stops at 5,000, so a
+// skip-paged read would silently drop the tail (mondeto#282). `id_gt` keeps
+// each page an index seek, however deep. Ids are "<mapId>-<pixelId>" strings,
+// so the cursor is the last id returned, compared as a string by the indexer.
+const PINNED_PIXEL_OWNERS_QUERY = `
+  query PixelOwnersAtBlock($mapId: Int!, $block: Int!, $first: Int!, $after: String!) {
+    pixels(
+      where: { mapId: $mapId, id_gt: $after }
+      orderBy: id
+      orderDirection: asc
+      first: $first
+      block: { number: $block }
+    ) {
+      id
+      pixelId
+      owner
+    }
+  }
+`
+
+/** Guard against a cursor that never advances; 30 pages is 30,000 pixels, past any map. */
+const MAX_PIXEL_PAGES = 30
+
+/**
+ * Who owned each pixel of `mapId` at `blockNumber`, as the subgraph saw it.
+ * The CONNECT board ranks from two of these (window start and end), the same
+ * two reads the payout pins (mondeto-admin `readMapPixels`).
+ */
+export async function fetchPixelOwnersAtBlock(
+  mapId: MapId,
+  blockNumber: number,
+): Promise<{ pixelId: number; owner: string }[]> {
+  const out: { pixelId: number; owner: string }[] = []
+  let after = ''
+  for (let page = 0; page < MAX_PIXEL_PAGES; page++) {
+    const data = await querySubgraph<{ pixels?: { id: string; pixelId: string; owner: string }[] }>(
+      PINNED_PIXEL_OWNERS_QUERY,
+      { mapId, block: blockNumber, first: PAGE, after },
+    )
+    const rows = data.pixels ?? []
+    for (const r of rows) out.push({ pixelId: Number(r.pixelId), owner: r.owner.toLowerCase() })
+    if (rows.length < PAGE) return out
+    after = rows[rows.length - 1].id
+  }
+  throw new Error(`pixel read for map ${mapId} did not finish in ${MAX_PIXEL_PAGES} pages`)
+}
+
 /* ------------------------------------------------------------------ *
  * Per-pixel acquisition times (exact "reached it first" tie-break)
  * ------------------------------------------------------------------ */

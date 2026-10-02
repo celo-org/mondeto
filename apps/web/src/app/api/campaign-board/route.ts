@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
 import { blockAtTimestamp } from '@/lib/blockAtTimestamp'
 import { netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
-import { readCampaignForBoard } from '@/lib/campaign'
-import { fetchOwnerStatsAtBlock, subgraphConfigured, subgraphHead } from '@/lib/subgraph'
+import { coerceCampaign, readCampaignForBoard, type CampaignConfig } from '@/lib/campaign'
+import { corridorEntries, corridorStanding, type CorridorConfig, type PixelOwner } from '@/lib/corridorBoard'
+import { getMaskData } from '@/lib/maps/masks'
+import {
+  fetchOwnerStatsAtBlock,
+  fetchPixelOwnersAtBlock,
+  subgraphConfigured,
+  subgraphHead,
+} from '@/lib/subgraph'
 import { logger } from '@/lib/logger'
 import type { MapId } from '@/lib/maps/types'
 
@@ -27,8 +34,16 @@ const CACHE_TTL_MS = 30_000
 
 interface BoardPayload {
   campaignId: string
-  /** Ranked, `netGain > 0` only. */
-  entries: { address: string; value: number; tiebreak?: number }[]
+  /**
+   * Ranked, value > 0 only. Net pixel gain by default; for a CONNECT campaign
+   * the pixels of corridor distance closed, with `rank` shared and `tied` set
+   * on equal progress (the payout decides that order, mondeto#282).
+   */
+  entries: { address: string; value: number; tiebreak?: number; rank?: number; tied?: boolean }[]
+  /** `CONNECT` for a corridor board; absent for net pixel gain. */
+  strategy?: 'CONNECT'
+  /** The corridor's name, e.g. "New York → Mexico City". */
+  label?: string
   fromBlock: string
   toBlock: string
   /** Echoed so the client can label the window it is showing. */
@@ -73,18 +88,24 @@ const SETTLING: CampaignBoardResponse = { board: null, you: null, settling: true
  * identical for everyone; only `you` varies, so the viewer is deliberately not
  * part of the key.
  */
-const cache = new Map<
-  string,
-  { ts: number; board: BoardPayload; startRows: OwnerStatsRow[]; endRows: OwnerStatsRow[] }
->()
+type CacheEntry =
+  | { ts: number; board: BoardPayload; startRows: OwnerStatsRow[]; endRows: OwnerStatsRow[] }
+  | { ts: number; board: BoardPayload; corridor: CorridorConfig; startPixels: PixelOwner[]; endPixels: PixelOwner[] }
 
-function respond(
-  entry: { board: BoardPayload; startRows: OwnerStatsRow[]; endRows: OwnerStatsRow[] },
-  viewer: string,
-) {
-  const you = /^0x[0-9a-f]{40}$/.test(viewer)
-    ? ownStanding(viewer, entry.startRows, entry.endRows)
-    : null
+const cache = new Map<string, CacheEntry>()
+
+function respond(entry: CacheEntry, viewer: string) {
+  let you: CampaignBoardResponse['you'] = null
+  if (/^0x[0-9a-f]{40}$/.test(viewer)) {
+    if ('corridor' in entry) {
+      // Same shape as net gain so the client needs one path: `netGain` here is
+      // the corridor distance closed, from the same two reads as the board.
+      const s = corridorStanding(viewer, entry.startPixels, entry.endPixels, entry.corridor)
+      you = { netGain: s.progress, ranks: s.ranks }
+    } else {
+      you = ownStanding(viewer, entry.startRows, entry.endRows)
+    }
+  }
   return NextResponse.json(
     { board: entry.board, you } satisfies CampaignBoardResponse,
     { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } },
@@ -104,13 +125,23 @@ function respond(
  * prod URL, so previews and local keep it. The decision is made server-side, so
  * a client passing these params against production simply has them dropped.
  */
-function windowOverride(url: URL): { startsAt: string; endsAt: string } | null {
+function windowOverride(url: URL): CampaignConfig | null {
   if (process.env.VERCEL_ENV === 'production') return null
   const from = url.searchParams.get('from')
   const to = url.searchParams.get('to')
   if (!from || !to) return null
   if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) return null
-  return { startsAt: from, endsAt: to }
+  // `corridor=<from ids>|<to ids>` previews a CONNECT board (mondeto#282) the
+  // same way: through the same coercion the Edge Config key goes through.
+  const corridor = url.searchParams.get('corridor')
+  const [a, b] = corridor ? corridor.split('|').map((s) => s.split(',').map(Number)) : []
+  return coerceCampaign({
+    id: `preview-${from}-${to}${corridor ? `-${corridor}` : ''}`,
+    text: 'preview',
+    startsAt: from,
+    endsAt: to,
+    ...(corridor ? { strategy: 'CONNECT', label: 'Preview corridor', anchors: { from: a, to: b } } : {}),
+  })
 }
 
 export async function GET(req: Request) {
@@ -127,7 +158,7 @@ export async function GET(req: Request) {
   // from, and hiding it at the buzzer means winners never see it.
   const resolved = override
     ? {
-        campaign: { id: `preview-${override.startsAt}-${override.endsAt}`, mapId: undefined, ...override },
+        campaign: override,
         settled: false,
       }
     : await readCampaignForBoard()
@@ -198,6 +229,45 @@ export async function GET(req: Request) {
     if (resolved.settled && behindIndex) return NextResponse.json(SETTLING)
     const toBlock = behindIndex ? head : endBlock
     if (toBlock <= fromBlock) return NextResponse.json(EMPTY)
+
+    // CONNECT ranks the corridor, not net gain (mondeto#282). It runs on the
+    // World map only (the anchors are World pixels), and without both anchor
+    // lists there is nothing that could match the payout, so the board stays
+    // empty rather than falling back to a ranking nobody is paid on.
+    if (campaign.strategy === 'CONNECT') {
+      if (mapId !== 0 || !campaign.anchors) return NextResponse.json(EMPTY)
+      const world = getMaskData('world')
+      const corridor: CorridorConfig = {
+        width: world.width,
+        height: world.height,
+        land: world.mask,
+        from: campaign.anchors.from,
+        to: campaign.anchors.to,
+      }
+      const [startPixels, endPixels] = await Promise.all([
+        fetchPixelOwnersAtBlock(mapId, Number(fromBlock)),
+        fetchPixelOwnersAtBlock(mapId, Number(toBlock)),
+      ])
+      const corridorEntry: CacheEntry = {
+        ts: Date.now(),
+        board: {
+          campaignId: campaign.id,
+          entries: corridorEntries(startPixels, endPixels, corridor),
+          strategy: 'CONNECT',
+          ...(campaign.label ? { label: campaign.label } : {}),
+          fromBlock: fromBlock.toString(),
+          toBlock: toBlock.toString(),
+          startsAt: campaign.startsAt,
+          endsAt: campaign.endsAt,
+          settled: resolved.settled,
+        },
+        corridor,
+        startPixels,
+        endPixels,
+      }
+      cache.set(key, corridorEntry)
+      return respond(corridorEntry, viewer)
+    }
 
     const [startRows, endRows] = await Promise.all([
       fetchOwnerStatsAtBlock(mapId, Number(fromBlock)),

@@ -128,7 +128,23 @@ export function ownStanding(
  * reversible. A pure function so the decision is pinned by unit tests rather
  * than living only in a page comment (review on #224, q5 finding).
  */
-export function campaignOwnRowCopy(netGain: number | null): string {
+export function campaignOwnRowCopy(netGain: number | null, strategy?: 'CONNECT'): string {
   if (netGain === null) return "YOU'RE UNRANKED — CLAIM A PIXEL"
+  // On a corridor board the number is distance closed, and the way to climb is
+  // to buy along the corridor, not anywhere (mondeto#282).
+  if (strategy === 'CONNECT') return `${Math.max(0, netGain)} PX CLOSED — BUY ALONG THE CORRIDOR`
   return `${Math.max(0, netGain)} PX THIS CAMPAIGN — BUY TO CLIMB`
+}
+
+/**
+ * The CAMPAIGN rule text for a corridor board (mondeto#282). Names the two
+ * cities, says what the number counts, and says that a shared rank is a tie the
+ * payout breaks, so a tied player is not surprised by the order they are paid.
+ */
+export function corridorDescription(label: string | undefined): string {
+  const name = label ? `${label}: ` : ''
+  return (
+    `${name}who closed the most distance during the campaign toward an unbroken chain of their own pixels between the two cities. ` +
+    'Equal scores share a rank; the payout breaks the tie by who got there first.'
+  )
 }
