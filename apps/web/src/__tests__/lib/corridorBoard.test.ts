@@ -192,3 +192,15 @@ describe('own standing agrees with the board for every wallet on it', () => {
     }
   })
 })
+
+describe('a player who joins during the campaign', () => {
+  it('has no pixel at the window start, so counts from an empty board: progress = empty − gap', () => {
+    const bought = CHAIN.slice(0, 10)
+    const gap = connectGap(new Set(bought), LAGOS_LONDON)!
+    // B appears only in the end read; A is an unrelated incumbent at both ends.
+    const start = px(A, CHAIN2.slice(0, 5))
+    const end = [...px(A, CHAIN2.slice(0, 5)), ...px(B, bought)]
+    expect(corridorStanding(B, start, end, LAGOS_LONDON)).toEqual({ progress: empty - gap, ranks: true })
+    expect(corridorEntries(start, end, LAGOS_LONDON).find((e) => e.address === B)?.value).toBe(empty - gap)
+  })
+})
