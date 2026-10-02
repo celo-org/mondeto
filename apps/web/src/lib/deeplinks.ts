@@ -16,3 +16,9 @@ export const SUPPORT_URL =
 // this is the only place a player can find out a campaign is starting — the
 // FAQ points at it for exactly that reason.
 export const X_PROFILE_URL = 'https://x.com/mondeto' as const
+
+// Shared Telegram channel marketing posts campaign/update news to, across
+// every Celo mini-app (not Mondeto-specific). Linked from the profile screen
+// so players have a persistent, low-friction way to find it without an
+// in-app banner or modal.
+export const TELEGRAM_UPDATES_URL = 'https://t.me/miniapp_updates' as const
