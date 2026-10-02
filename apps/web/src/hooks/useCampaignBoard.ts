@@ -37,6 +37,13 @@ export interface CampaignBoard {
    */
   fromBlock: string
   toBlock: string
+  /**
+   * `CONNECT` when this is a corridor board (mondeto#282): values are pixels of
+   * distance closed, and equal values share a rank. Absent for net pixel gain.
+   */
+  strategy?: 'CONNECT'
+  /** The corridor's name, e.g. "New York → Mexico City". */
+  label?: string
 }
 
 export interface CampaignBoardResult {
@@ -78,6 +85,8 @@ const FAILED: CampaignBoardResult = { ...EMPTY, failed: true }
 interface ApiEntry {
   address: string
   value: number
+  /** Shared by equal values on a corridor board. */
+  rank?: number
 }
 
 interface ApiResponse {
@@ -89,6 +98,8 @@ interface ApiResponse {
     fromBlock: string
     toBlock: string
     settled: boolean
+    strategy?: 'CONNECT'
+    label?: string
   } | null
   you: { netGain: number; ranks: boolean } | null
   error?: true
@@ -111,6 +122,8 @@ function formatGain(value: number): string {
 export interface PreviewWindow {
   from: string
   to: string
+  /** `<from ids>|<to ids>`: preview a CONNECT corridor board (mondeto#282). */
+  corridor?: string
 }
 
 export function useCampaignBoard(
@@ -122,6 +135,7 @@ export function useCampaignBoard(
   const [result, setResult] = useState<CampaignBoardResult>({ ...EMPTY, loading: true })
   const from = previewWindow?.from
   const to = previewWindow?.to
+  const corridor = previewWindow?.corridor
 
   useEffect(() => {
     let cancelled = false
@@ -130,6 +144,7 @@ export function useCampaignBoard(
     if (from && to) {
       params.set('from', from)
       params.set('to', to)
+      if (corridor) params.set('corridor', corridor)
     }
 
     fetch(`/api/campaign-board?${params}`)
@@ -149,16 +164,19 @@ export function useCampaignBoard(
           return
         }
 
+        const corridor = data.board.strategy === 'CONNECT'
         const entries: LeaderboardEntry[] = data.board.entries.map((e, i) => {
           const profile = profilesMap?.get(e.address.toLowerCase())
           return {
-            rank: i + 1,
+            // A corridor board shares a rank across equal progress: the payout
+            // breaks those ties, and the board must not claim its own order.
+            rank: corridor ? (e.rank ?? i + 1) : i + 1,
             owner: e.address,
             label: profile?.label || generateUsername(e.address),
             url: profile?.url ?? '',
             color: profile?.color ?? '',
-            value: formatGain(e.value),
-            unit: 'PX',
+            value: corridor ? String(e.value) : formatGain(e.value),
+            unit: corridor ? 'PX CLOSED' : 'PX',
           }
         })
 
@@ -169,6 +187,9 @@ export function useCampaignBoard(
         const mine = viewerLower
           ? entries.find((e) => e.owner.toLowerCase() === viewerLower)
           : undefined
+        // `rank - 2` is the row just above this wallet's rank group, which is
+        // also right when ranks are shared: a tied wallet's gap is to the next
+        // better score, never to a wallet it is tied with.
         const above = mine && mine.rank > 1 ? entries[mine.rank - 2] : undefined
         const gap =
           mine && above ? Number(above.value.replace('+', '')) - Number(mine.value.replace('+', '')) : null
@@ -182,6 +203,8 @@ export function useCampaignBoard(
             fromBlock: data.board.fromBlock,
             toBlock: data.board.toBlock,
             settled: data.board.settled,
+            ...(data.board.strategy === 'CONNECT' ? { strategy: 'CONNECT' as const } : {}),
+            ...(data.board.label ? { label: data.board.label } : {}),
           },
           you: mine ? { entry: mine, gap, gapValue: gap === null ? null : String(gap) } : null,
           yourNetGain: data.you?.netGain ?? null,
@@ -199,7 +222,7 @@ export function useCampaignBoard(
     return () => {
       cancelled = true
     }
-  }, [mapId, viewer, profilesMap, from, to])
+  }, [mapId, viewer, profilesMap, from, to, corridor])
 
   return result
 }

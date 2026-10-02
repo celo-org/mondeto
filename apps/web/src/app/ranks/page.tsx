@@ -14,7 +14,7 @@ import {
   type YouStanding,
 } from '@/hooks/useLeaderboard'
 import { useCampaignBoard } from '@/hooks/useCampaignBoard'
-import { campaignOwnRowCopy } from '@/lib/campaignBoard'
+import { campaignOwnRowCopy, corridorDescription } from '@/lib/campaignBoard'
 import { useMaps } from '@/hooks/useMaps'
 import { useOwnedMaps } from '@/hooks/useOwnedMaps'
 import { BOARD_LABELS } from '@/lib/maps/leaderboards'
@@ -244,7 +244,9 @@ export default function RanksPage() {
     const params = new URLSearchParams(window.location.search)
     const from = params.get('from')
     const to = params.get('to')
-    return from && to ? { from, to } : null
+    // `&corridor=<from ids>|<to ids>` previews a CONNECT board (mondeto#282).
+    const corridor = params.get('corridor')
+    return from && to ? { from, to, ...(corridor ? { corridor } : {}) } : null
   }, [])
   const campaign = useCampaignBoard(selectedMapId, address, profilesMap, previewWindow)
 
@@ -308,6 +310,9 @@ export default function RanksPage() {
           campaign.board?.settled
             ? 'Campaign closed. This is the ranking the payout settles against.'
             : null
+        }
+        campaignDescription={
+          campaign.board?.strategy === 'CONNECT' ? corridorDescription(campaign.board.label) : null
         }
       />
       {/* Flex the player's BEST standing across the three boards (with its board
@@ -506,7 +511,7 @@ export default function RanksPage() {
                       The 0-not-negative decision lives in campaignOwnRowCopy,
                       where its unit tests pin it. */}
                   {activeTab === 'CAMPAIGN'
-                    ? campaignOwnRowCopy(campaign.yourNetGain)
+                    ? campaignOwnRowCopy(campaign.yourNetGain, campaign.board?.strategy)
                     : "YOU'RE UNRANKED — CLAIM A PIXEL"}
                 </div>
               </div>

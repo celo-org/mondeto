@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { campaignOwnRowCopy, netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
+import { campaignOwnRowCopy, corridorDescription, netGainEntries, ownStanding, type OwnerStatsRow } from '@/lib/campaignBoard'
 
 const row = (address: string, pixelCount: number, lastGainAt: string): OwnerStatsRow => ({
   address,
@@ -128,5 +128,22 @@ describe('campaignOwnRowCopy', () => {
   it('shows a real zero and a positive as-is (controls)', () => {
     expect(campaignOwnRowCopy(0)).toBe('0 PX THIS CAMPAIGN — BUY TO CLIMB')
     expect(campaignOwnRowCopy(4)).toBe('4 PX THIS CAMPAIGN — BUY TO CLIMB')
+  })
+})
+
+describe('corridor copy (mondeto#282)', () => {
+  it('names distance closed and the corridor, not net gain', () => {
+    expect(campaignOwnRowCopy(3, 'CONNECT')).toBe('3 PX CLOSED — BUY ALONG THE CORRIDOR')
+    expect(campaignOwnRowCopy(-2, 'CONNECT')).toBe('0 PX CLOSED — BUY ALONG THE CORRIDOR')
+    // Control: net gain keeps its copy.
+    expect(campaignOwnRowCopy(3)).toBe('3 PX THIS CAMPAIGN — BUY TO CLIMB')
+  })
+
+  it('the rule text names the corridor and says a shared rank is a tie the payout breaks', () => {
+    const d = corridorDescription('Lagos → London')
+    expect(d.startsWith('Lagos → London: ')).toBe(true)
+    expect(d).toMatch(/share a rank/)
+    expect(d).toMatch(/payout breaks the tie/)
+    expect(corridorDescription(undefined).startsWith('who closed')).toBe(true)
   })
 })
