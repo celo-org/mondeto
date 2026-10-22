@@ -179,7 +179,7 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'can-i-sell',
         q: 'Can I sell my pixel?',
-        a: 'There is no sell button and no listing. Your pixel moves only when another player buys it, and you are paid in that same transaction: what they paid, minus the 7.5% fee. Until then it stays yours.',
+        a: 'There is no sell button and no listing. Your pixel moves only when another player buys it, and you are paid in that same transaction: what they paid, minus the platform fee. Until then it stays yours.',
       },
       {
         id: 'who-runs',
