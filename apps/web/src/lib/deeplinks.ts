@@ -16,3 +16,8 @@ export const SUPPORT_URL =
 // this is the only place a player can find out a campaign is starting — the
 // FAQ points at it for exactly that reason.
 export const X_PROFILE_URL = 'https://x.com/mondeto' as const
+
+// Mondeto support cannot see or fix a MiniPay wallet, deposit or withdrawal,
+// yet those questions keep arriving on the support form. The FAQ and the
+// profile SUPPORT area send them here instead.
+export const MINIPAY_FAQ_URL = 'https://minipay.to/faq' as const
