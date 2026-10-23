@@ -24,7 +24,7 @@
  * default component and Next's own route config).
  */
 
-import { X_PROFILE_URL } from '@/lib/deeplinks'
+import { MINIPAY_FAQ_URL, X_PROFILE_URL } from '@/lib/deeplinks'
 import { BOARD_LABELS } from '@/lib/maps/leaderboards'
 
 export interface QaItem {
@@ -142,7 +142,7 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'map-reset',
         q: 'Does the map reset each day?',
-        a: 'No. The map never resets. Your pixels stay yours until you sell them or another player buys them. Campaigns come and go; the map does not.',
+        a: 'No. The map never resets. Your pixels stay yours until another player buys them. Campaigns come and go; the map does not.',
       },
       {
         id: 'boards',
@@ -168,7 +168,18 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'contact',
         q: 'How do I contact support?',
-        a: `Use the SUPPORT button on your profile page — it opens a short form, and a human reads every submission. Include your wallet address (it starts with 0x), which campaign you mean, and the date. Rewards are on-chain, so a player name, phone number or bank account can't be matched to a payment — the wallet address is the only thing we can look up. You can copy yours from MiniPay.`,
+        a: `Use the SUPPORT button on your profile page — it opens a short form, and a human reads every submission. Mondeto support only: we can't see or fix MiniPay wallets, deposits or withdrawals. Include your wallet address (it starts with 0x), which campaign you mean, and the date. Rewards are on-chain, so a player name, phone number or bank account can't be matched to a payment — the wallet address is the only thing we can look up. You can copy yours from MiniPay.`,
+      },
+      {
+        id: 'minipay-help',
+        q: 'Can support help with my MiniPay wallet?',
+        a: 'No. Mondeto support only. For MiniPay wallet, deposit or withdrawal questions, see the MiniPay FAQ.',
+        link: { href: MINIPAY_FAQ_URL, label: 'minipay.to/faq' },
+      },
+      {
+        id: 'can-i-sell',
+        q: 'Can I sell my pixel?',
+        a: 'There is no sell button and no listing. Your pixel moves only when another player buys it, and you are paid in that same transaction: what they paid, minus the platform fee. Until then it stays yours.',
       },
       {
         id: 'who-runs',
