@@ -182,6 +182,11 @@ export const FAQ_GROUPS: QaGroup[] = [
         a: 'There is no sell button and no listing. Your pixel moves only when another player buys it, and you are paid in that same transaction: what they paid, minus the platform fee. Until then it stays yours.',
       },
       {
+        id: 'marketplace',
+        q: 'Can I sell my pixel on a marketplace or to someone outside the app?',
+        a: 'No. Pixels are not NFTs or tokens: they are entries in the Mondeto smart contract, so there is nothing to list, transfer or sell on a marketplace, and nobody can buy a pixel from you outside the app. A pixel changes owner only when another player buys it in Mondeto. If someone offers to buy or sell a pixel off-app, they are not connected to Mondeto — do not send them money.',
+      },
+      {
         id: 'who-runs',
         q: 'Who runs Mondeto?',
         a: 'Mondeto is operated by Celo Core Co. It is not operated by, affiliated with, or endorsed by Opera or MiniPay — MiniPay is just the wallet that makes Mondeto accessible inside their app.',
