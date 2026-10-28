@@ -194,7 +194,7 @@ export default function TermsPage() {
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>Celo Mini Apps Terms and Conditions</h1>
       <p style={{ fontSize: 13, marginBottom: 4 }}>Mondeto T&amp;C&rsquo;s</p>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Effective Date: June 8, 2026
+        Effective Date: October 28, 2026
       </p>
 
       {SECTIONS.map((section) => (
