@@ -129,7 +129,9 @@ describe('FAQ support scope and the no-sell rule', () => {
     expect(item).toBeDefined()
     expect(item!.a).toMatch(/not NFTs or tokens/i)
     expect(item!.a).toMatch(/marketplace/i)
-    expect(item!.a).toMatch(/only when another player buys it/i)
+    expect(item!.a).toMatch(/only when someone buys it from the Mondeto contract/i)
+    // The contract does not stop a direct call, so never claim it can't happen.
+    expect(item!.a).not.toMatch(/outside the app/i)
     expect(item!.a).not.toMatch(/\b(soon|within|guarantee\w*|will sell)\b/i)
   })
 })

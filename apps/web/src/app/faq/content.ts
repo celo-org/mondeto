@@ -184,7 +184,7 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'marketplace',
         q: 'Can I sell my pixel on a marketplace or to someone outside the app?',
-        a: 'No. Pixels are not NFTs or tokens: they are entries in the Mondeto smart contract, so there is nothing to list, transfer or sell on a marketplace, and nobody can buy a pixel from you outside the app. A pixel changes owner only when another player buys it in Mondeto. If someone offers to buy or sell a pixel off-app, they are not connected to Mondeto — do not send them money.',
+        a: 'No. Pixels are not NFTs or tokens: they are entries in the Mondeto smart contract, so there is nothing to list, transfer or sell on a marketplace. A pixel changes owner only when someone buys it from the Mondeto contract, at the contract price, and you are paid in that same transaction. Nobody can pay you separately to take over a pixel. If someone offers to buy or sell a pixel off-app, they are not connected to Mondeto — do not send them money.',
       },
       {
         id: 'who-runs',
