@@ -51,6 +51,7 @@ const SECTIONS: Array<{ title: string; paragraphs: string[] }> = [
     paragraphs: [
       'MiniQuiz (miniquiz.club) — a quiz game where you join a global community and try to solve quizzes as fast as possible. Judging and prize payouts to participants are administered by and according to the sole discretion of Celo Core Co. and paid in USDT. There is currently no fee for playing MiniQuiz.',
       'Mondeto (mondeto.app) — a game where you may purchase pixels on digital representations of the world, one pixel at a time, across one or more identical maps. When a pixel is purchased, its price immediately doubles (2 times) for the next purchaser. The price of a pixel then gradually halves over each thirty (30) day period, down to a minimum price set in the smart contract. This means that if you purchase a pixel for two (2) units of a given digital asset, the price to purchase that pixel from you starts at four (4) units and returns to approximately two (2) units after thirty (30) days, continuing to halve thereafter while the pixel is not repurchased. When another user purchases a pixel you own, you receive the purchase price minus the service fee described in Section 6. Operated through its own smart contracts; Mondeto accepts payments in USDT, USDC and USDm.',
+      'Pixels in Mondeto are entries in the Mondeto smart contract. They are not tokens or NFTs, and they cannot be listed, sold or transferred on any marketplace. A pixel changes owner only when another user purchases it from the Mondeto smart contract at the price the contract sets, and nothing in the Services guarantees that anyone will purchase a pixel you own.',
       'MiniStreak — a daily check-in game with weekly rewards.',
       'We may add, modify, suspend or discontinue any feature at any time. The Services are provided on an ‘as available’ basis and depend on third-party infrastructure including the MiniPay environment and the Celo Network.',
     ],
@@ -193,7 +194,7 @@ export default function TermsPage() {
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>Celo Mini Apps Terms and Conditions</h1>
       <p style={{ fontSize: 13, marginBottom: 4 }}>Mondeto T&amp;C&rsquo;s</p>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Effective Date: June 8, 2026
+        Effective Date: October 30, 2026
       </p>
 
       {SECTIONS.map((section) => (
