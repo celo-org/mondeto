@@ -1,2 +1,12 @@
 packages:
   - "apps/*"
+# pnpm 10 skips dependency build scripts unless the package is listed here;
+# pnpm 8 ran them all. Listing the six that pnpm reports preserves pnpm 8's
+# behaviour, so this upgrade does not quietly change what gets built.
+onlyBuiltDependencies:
+  - "@reown/appkit"
+  - bufferutil
+  - core-js
+  - keccak
+  - unrs-resolver
+  - utf-8-validate
