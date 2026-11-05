@@ -21,7 +21,7 @@ import { ZERO_ADDRESS } from '@/constants/map'
 import { useReadClient } from '@/hooks/useReadClient'
 import { fetchAllPixelsFromContract } from '@/lib/contractReads'
 import { formatUSDT, formatBalanceForDisplay } from '@/lib/colorUtils'
-import { SUPPORT_URL } from '@/lib/deeplinks'
+import { MINIPAY_FAQ_URL, SUPPORT_URL } from '@/lib/deeplinks'
 import { checkProfanity } from '@/lib/profanity'
 import { ConnectButton } from '@/components/connect-button'
 import { InviteButton } from '@/components/InviteButton'
@@ -622,6 +622,29 @@ export default function ProfilePage() {
               }}
             >
               HAVE YOUR 0x WALLET ADDRESS READY
+            </div>
+            {/* Support keeps getting MiniPay wallet, deposit and withdrawal
+                questions it cannot act on. Same message as the FAQ's
+                minipay-help item. */}
+            <div
+              style={{
+                fontSize: 6,
+                fontFamily: "'Press Start 2P', monospace",
+                color: 'var(--text-muted)',
+                letterSpacing: 1,
+                lineHeight: 1.6,
+                textAlign: 'center',
+              }}
+            >
+              MONDETO SUPPORT ONLY. MINIPAY WALLET, DEPOSIT OR WITHDRAWAL:{' '}
+              <a
+                href={MINIPAY_FAQ_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+              >
+                MINIPAY.TO/FAQ
+              </a>
             </div>
             <div
               style={{

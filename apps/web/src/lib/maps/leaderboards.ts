@@ -14,8 +14,17 @@
 
 import type { Address, LeaderEntry, MapSnapshot, PixelState } from "./types";
 
-/** Internal board keys. Re-exported from `hooks/useLeaderboard` for callers. */
-export type LeaderboardTab = "AREA" | "EMPIRE" | "TYCOONS";
+/**
+ * Internal board keys. Re-exported from `hooks/useLeaderboard` for callers.
+ *
+ * `CAMPAIGN` replaces the retired `TYCOONS` slot. It is deliberately generic:
+ * it ranks whatever the running campaign rewards, which today is net pixel
+ * gain over the window but is expected to become a per-campaign strategy
+ * (celo-org/mondeto-admin#51). Keeping the key generic is what lets a second
+ * strategy ship without a new board key or a migration of stored prize plans —
+ * so this must not be renamed to the strategy it currently happens to run.
+ */
+export type LeaderboardTab = "AREA" | "EMPIRE" | "CAMPAIGN";
 
 /**
  * The board names players actually see. Lives here, in a pure lib, so server
@@ -25,11 +34,16 @@ export type LeaderboardTab = "AREA" | "EMPIRE" | "TYCOONS";
  * Note AREA renders as "LAND" — the key is internal and must never appear in
  * player-facing copy. The FAQ said "AREA" for months because this mapping was
  * trapped inside a client component; `__tests__/app/faq.test.ts` now guards it.
+ *
+ * CAMPAIGN currently renders as itself, which is a placeholder rather than a
+ * decision: LAND and EMPIRE both say *what* is measured, while "CAMPAIGN" says
+ * *when*, so it tells a player nothing about how to win. It wants a strategy
+ * name — "BIGGEST CLIMB", "TODAY'S GAIN" — and that is one string here.
  */
 export const BOARD_LABELS: Record<LeaderboardTab, string> = {
   AREA: "LAND",
   EMPIRE: "EMPIRE",
-  TYCOONS: "TYCOONS",
+  CAMPAIGN: "CAMPAIGN",
 };
 
 function ownedLandPixels(map: MapSnapshot): PixelState[] {

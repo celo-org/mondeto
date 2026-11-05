@@ -16,6 +16,7 @@
  */
 import type { Address, LeaderEntry, MapId } from '@/lib/maps/types'
 import { compareLeaderEntries } from '@/lib/maps/leaderboards'
+import type { OwnerStatsRow } from '@/lib/campaignBoard'
 
 const ENDPOINT = process.env.NEXT_PUBLIC_GOLDSKY_SUBGRAPH_URL
 
@@ -182,6 +183,132 @@ export async function fetchAreaLeaderboard(
     if (page.length < PAGE) break
   }
   return toEntries(rows).sort(compareLeaderEntries)
+}
+
+/* ------------------------------------------------------------------ *
+ * Block-pinned owner stats (the CAMPAIGN board's two reads)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Highest block the subgraph has indexed.
+ *
+ * A block-pinned query above this is an error from the endpoint, not an empty
+ * result — so the end of a campaign window has to be clamped to it. Indexing
+ * lag routinely runs longer than the few seconds a fixed block offset would
+ * buy, and a live campaign whose `endsAt` is in the future resolves to *chain*
+ * head, which is always ahead of this.
+ *
+ * Mirrors `subgraphHead()` in the admin's `src/lib/contest/subgraph.ts` so both
+ * sides clamp the same way; admin#51 requires the guard on the end block.
+ */
+export async function subgraphHead(): Promise<bigint> {
+  const data = await querySubgraph<{ _meta: { block: { number: number } } | null }>(
+    '{ _meta { block { number } } }',
+  )
+  if (!data._meta) throw new Error('subgraph _meta unavailable')
+  return BigInt(data._meta.block.number)
+}
+
+// Same shape as LOCAL_AREA_QUERY plus `block`, which asks the subgraph to
+// answer as of a past block rather than its head. Two of these, diffed, are
+// the whole CAMPAIGN board — see lib/campaignBoard.ts.
+//
+// `pixelCount_gt: 0` on purpose: a wallet holding nothing at the pinned block
+// contributes 0 to the diff either way, and omitting those rows keeps both
+// reads inside the `skip` ceiling.
+const PINNED_OWNER_STATS_QUERY = `
+  query OwnerStatsAtBlock($mapId: Int!, $block: Int!, $first: Int!, $skip: Int!) {
+    ownerMapStats(
+      where: { mapId: $mapId, pixelCount_gt: 0 }
+      orderBy: pixelCount
+      orderDirection: desc
+      first: $first
+      skip: $skip
+      block: { number: $block }
+    ) {
+      address
+      pixelCount
+      lastGainAt
+    }
+  }
+`
+
+/**
+ * Every wallet's pixel count on one map, as the subgraph saw it at `blockNumber`.
+ *
+ * The block must be at or below the subgraph's indexed head — asking about a
+ * block it hasn't reached is an error from the endpoint, not an empty result —
+ * and a few confirmations behind chain head, so a reorg can't silently change
+ * a settled window.
+ *
+ * Paged like the AREA board and capped by the same `skip` ceiling. A campaign
+ * window with more than {@link MAX_SKIP} holders would truncate; the AREA board
+ * has lived with that ceiling since it shipped, and holders-per-map is well
+ * under it in practice.
+ */
+export async function fetchOwnerStatsAtBlock(
+  mapId: MapId,
+  blockNumber: number,
+): Promise<OwnerStatsRow[]> {
+  const rows: OwnerStatsRow[] = []
+  for (let skip = 0; skip <= MAX_SKIP; skip += PAGE) {
+    const data = await querySubgraph<{ ownerMapStats?: OwnerStatsRow[] }>(
+      PINNED_OWNER_STATS_QUERY,
+      { mapId, block: blockNumber, first: PAGE, skip },
+    )
+    const page = data.ownerMapStats ?? []
+    rows.push(...page)
+    if (page.length < PAGE) break
+  }
+  return rows
+}
+
+// Every owned pixel on one map at a pinned block, paged by id rather than by
+// `skip`: a World map has 5,622 land pixels and `skip` stops at 5,000, so a
+// skip-paged read would silently drop the tail (mondeto#282). `id_gt` keeps
+// each page an index seek, however deep. Ids are "<mapId>-<pixelId>" strings,
+// so the cursor is the last id returned, compared as a string by the indexer.
+const PINNED_PIXEL_OWNERS_QUERY = `
+  query PixelOwnersAtBlock($mapId: Int!, $block: Int!, $first: Int!, $after: String!) {
+    pixels(
+      where: { mapId: $mapId, id_gt: $after }
+      orderBy: id
+      orderDirection: asc
+      first: $first
+      block: { number: $block }
+    ) {
+      id
+      pixelId
+      owner
+    }
+  }
+`
+
+/** Guard against a cursor that never advances; 30 pages is 30,000 pixels, past any map. */
+const MAX_PIXEL_PAGES = 30
+
+/**
+ * Who owned each pixel of `mapId` at `blockNumber`, as the subgraph saw it.
+ * The CONNECT board ranks from two of these (window start and end), the same
+ * two reads the payout pins (mondeto-admin `readMapPixels`).
+ */
+export async function fetchPixelOwnersAtBlock(
+  mapId: MapId,
+  blockNumber: number,
+): Promise<{ pixelId: number; owner: string }[]> {
+  const out: { pixelId: number; owner: string }[] = []
+  let after = ''
+  for (let page = 0; page < MAX_PIXEL_PAGES; page++) {
+    const data = await querySubgraph<{ pixels?: { id: string; pixelId: string; owner: string }[] }>(
+      PINNED_PIXEL_OWNERS_QUERY,
+      { mapId, block: blockNumber, first: PAGE, after },
+    )
+    const rows = data.pixels ?? []
+    for (const r of rows) out.push({ pixelId: Number(r.pixelId), owner: r.owner.toLowerCase() })
+    if (rows.length < PAGE) return out
+    after = rows[rows.length - 1].id
+  }
+  throw new Error(`pixel read for map ${mapId} did not finish in ${MAX_PIXEL_PAGES} pages`)
 }
 
 /* ------------------------------------------------------------------ *

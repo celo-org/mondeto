@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 // Celo Mini Apps Terms and Conditions, provided by counsel. The Mondeto
 // game description (§5) and fee wording (§6) were aligned with the
 // deployed contract mechanics (price doubles on purchase, halves over
-// each 30-day period to a minimum price; 5% fee deducted from the
+// each 30-day period to a minimum price; 7.5% fee deducted from the
 // previous owner's proceeds; unowned-pixel proceeds go to the contract
 // treasury). Any further edits to this text need legal sign-off.
 
@@ -50,7 +50,8 @@ const SECTIONS: Array<{ title: string; paragraphs: string[] }> = [
     title: '5. Description of the Services',
     paragraphs: [
       'MiniQuiz (miniquiz.club) — a quiz game where you join a global community and try to solve quizzes as fast as possible. Judging and prize payouts to participants are administered by and according to the sole discretion of Celo Core Co. and paid in USDT. There is currently no fee for playing MiniQuiz.',
-      'Mondeto (mondeto.app) — a game where you may purchase pixels on digital representations of the world, one pixel at a time, across one or more identical maps. When a pixel is purchased, its price immediately doubles (2 times) for the next purchaser. The price of a pixel then gradually halves over each thirty (30) day period, down to a minimum price set in the smart contract. This means that if you purchase a pixel for two (2) units of a given digital asset, the price to purchase that pixel from you starts at four (4) units and returns to approximately two (2) units after thirty (30) days, continuing to halve thereafter while the pixel is not repurchased. When another user purchases a pixel you own, you receive the purchase price minus the service fee described in Section 6. Operated through its own smart contracts; Mondeto accepts payments in USDT, USDC and USDm.',
+      'Mondeto (mondeto.app) — a game where you may purchase pixels on digital representations of the world, one pixel at a time, across one or more identical maps. When a pixel is purchased, its price immediately doubles (2 times) for the next purchaser. The price of a pixel then gradually halves over each thirty (30) day period, down to a minimum price set in the smart contract. This means that if you purchase a pixel for two (2) units of a given digital asset, the price to purchase that pixel from you starts at four (4) units and returns to approximately two (2) units after thirty (30) days, continuing to halve thereafter while the pixel is not repurchased. When another person purchases a pixel you own, you receive the purchase price minus the service fee described in Section 6. Operated through its own smart contracts; Mondeto accepts payments in USDT, USDC and USDm.',
+      'Pixels in Mondeto are entries in the Mondeto smart contract that record which Wallet currently holds each pixel. They are not tokens, NFTs or Digital Assets, and the Mondeto smart contract does not allow a pixel to be transferred, listed or sold between Wallets. Under the current version of the Mondeto smart contract, a pixel changes holder only when another person purchases it from the smart contract at the price the contract sets, whether through the Mini App or by interacting with the smart contract directly. Nothing in the Services guarantees that anyone will purchase a pixel you hold, or that the amount you receive when it is purchased will equal or exceed the amount you paid.',
       'MiniStreak — a daily check-in game with weekly rewards.',
       'We may add, modify, suspend or discontinue any feature at any time. The Services are provided on an ‘as available’ basis and depend on third-party infrastructure including the MiniPay environment and the Celo Network.',
     ],
@@ -58,7 +59,7 @@ const SECTIONS: Array<{ title: string; paragraphs: string[] }> = [
   {
     title: '6. Fees & Prizes',
     paragraphs: [
-      'For Mondeto, Celo Core Co. may receive a service fee of up to five percent (5%) of the value of each purchase of an owned pixel, deducted from the amount paid to the previous owner. The full purchase price of a previously unowned pixel is paid to Celo Core Co.’s smart-contract treasury. For MiniQuiz, judging and prize amounts are determined in the sole discretion of and paid by Celo Core Co. via its admin process in USDT. Participating in some of the Services and transacting on the Celo Network may require the payment of network "gas" fees. Gas fees fluctuate, are payable by you to network validators, and are non-refundable. Applicable amounts and currency are presented to you before you confirm a transaction.',
+      'For Mondeto, Celo Core Co. may receive a service fee of up to seven and a half percent (7.5%) of the value of each purchase of an owned pixel, deducted from the amount paid to the previous owner. The full purchase price of a previously unowned pixel is paid to Celo Core Co.’s smart-contract treasury. For MiniQuiz, judging and prize amounts are determined in the sole discretion of and paid by Celo Core Co. via its admin process in USDT. Participating in some of the Services and transacting on the Celo Network may require the payment of network "gas" fees. Gas fees fluctuate, are payable by you to network validators, and are non-refundable. Applicable amounts and currency are presented to you before you confirm a transaction.',
     ],
   },
   {
@@ -193,7 +194,7 @@ export default function TermsPage() {
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>Celo Mini Apps Terms and Conditions</h1>
       <p style={{ fontSize: 13, marginBottom: 4 }}>Mondeto T&amp;C&rsquo;s</p>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Effective Date: June 8, 2026
+        Effective Date: November 2, 2026
       </p>
 
       {SECTIONS.map((section) => (

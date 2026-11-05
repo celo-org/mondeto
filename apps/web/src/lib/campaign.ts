@@ -25,9 +25,31 @@ export interface CampaignConfig {
   startsAt?: string
   endsAt?: string
   mapId?: number
+  /**
+   * What the campaign pays, published by the admin's `bannerView`
+   * (mondeto-admin#116): `board` is `CAMPAIGN` when it pays that board,
+   * `strategy` the id that ranks it (`NET_PIXEL_GAIN`, `CONNECT`), `label` a
+   * player-facing name ("Lagos → London"). Absent on keys written before #116.
+   */
+  board?: 'CAMPAIGN'
+  strategy?: string
+  label?: string
+  /**
+   * A CONNECT campaign's two frozen anchor pixel lists, the same the payout
+   * ranks from (mondeto#282). Both or neither.
+   */
+  anchors?: { from: number[]; to: number[] }
 }
 
-function coerceCampaign(value: unknown): CampaignConfig | null {
+/** World grid size: CONNECT runs on the World map only. */
+const WORLD_PIXEL_COUNT = 170 * 100
+
+function anchorPixels(x: unknown): number[] | null {
+  if (!Array.isArray(x) || x.length === 0 || x.length > 256) return null
+  return x.every((p) => Number.isInteger(p) && p >= 0 && p < WORLD_PIXEL_COUNT) ? (x as number[]) : null
+}
+
+export function coerceCampaign(value: unknown): CampaignConfig | null {
   if (typeof value !== 'object' || value === null) return null
   const v = value as Record<string, unknown>
   if (typeof v.id !== 'string' || v.id === '') return null
@@ -40,6 +62,15 @@ function coerceCampaign(value: unknown): CampaignConfig | null {
   if (typeof v.endsAt === 'string') campaign.endsAt = v.endsAt
   if (typeof v.mapId === 'number' && Number.isInteger(v.mapId) && v.mapId >= 0) {
     campaign.mapId = v.mapId
+  }
+  if (v.board === 'CAMPAIGN') campaign.board = 'CAMPAIGN'
+  if (typeof v.strategy === 'string' && v.strategy !== '' && v.strategy.length <= 64) campaign.strategy = v.strategy
+  if (typeof v.label === 'string' && v.label !== '' && v.label.length <= 128) campaign.label = v.label
+  if (typeof v.anchors === 'object' && v.anchors !== null && !Array.isArray(v.anchors)) {
+    const a = v.anchors as Record<string, unknown>
+    const from = anchorPixels(a.from)
+    const to = anchorPixels(a.to)
+    if (from && to) campaign.anchors = { from, to }
   }
   return campaign
 }
@@ -89,6 +120,48 @@ export async function readCampaignServer(): Promise<CampaignConfig | null> {
     const campaign = coerceCampaign(value)
     if (!campaign) return null
     return isCampaignActive(campaign, new Date()) ? campaign : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * How long a finished campaign's board stays visible after it closes.
+ *
+ * `isCampaignActive` flips false the instant `endsAt` passes, which is right
+ * for the banner — the countdown is over — but wrong for the board. The
+ * settled standings are what the payout is computed from, so hiding them at
+ * the buzzer means winners never see the ranking they were paid on, and
+ * nobody can eyeball the board against the payout. Payouts land the day after
+ * a campaign ends (see the FAQ), so the window has to outlast that.
+ */
+export const SETTLED_BOARD_GRACE_MS = 48 * 60 * 60 * 1000
+
+/**
+ * The campaign whose board should be shown: the running one, or the one that
+ * just finished while its result is still worth reading.
+ *
+ * Returns `settled: true` for the latter so callers can label it as final
+ * rather than passing it off as live — the distinction between "closed" and
+ * "still running" is exactly what a player at the buzzer needs.
+ */
+export async function readCampaignForBoard(
+  now: Date = new Date(),
+): Promise<{ campaign: CampaignConfig; settled: boolean } | null> {
+  if (!process.env.EDGE_CONFIG) return null
+  try {
+    const { get } = await import('@vercel/edge-config')
+    const campaign = coerceCampaign(await get('campaign'))
+    if (!campaign) return null
+    if (isCampaignActive(campaign, now)) return { campaign, settled: false }
+
+    // Only *finished* campaigns get the grace period. One that hasn't started
+    // is also "not active", and showing its (empty) board would be a lie.
+    if (!campaign.endsAt) return null
+    const end = Date.parse(campaign.endsAt)
+    if (!Number.isFinite(end) || now.getTime() < end) return null
+    if (now.getTime() - end > SETTLED_BOARD_GRACE_MS) return null
+    return { campaign, settled: true }
   } catch {
     return null
   }

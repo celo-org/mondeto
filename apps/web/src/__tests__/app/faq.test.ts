@@ -61,8 +61,9 @@ describe('FAQ facts', () => {
   // These are the exact values that were wrong before, verified against
   // mainnet `feeRate()` and `config()`. Re-verify with `cast call` before
   // changing either the copy or this test.
-  it('states the 5% fee and never the old 3%', () => {
-    expect(allCopy).toContain('5% ')
+  it('states the 7.5% fee and never an older rate', () => {
+    expect(allCopy).toContain('7.5% ')
+    expect(allCopy).not.toMatch(/(^|[^.\d])5% /)
     expect(allCopy).not.toContain('3%')
   })
 
@@ -89,5 +90,48 @@ describe('FAQ facts', () => {
   it('never tells players rewards are daily or need claiming', () => {
     expect(allCopy).not.toMatch(/daily reward/i)
     expect(allCopy).not.toMatch(/claim your reward/i)
+  })
+})
+
+describe('FAQ support scope and the no-sell rule', () => {
+  // Players keep asking support how to sell a pixel and how to recover MiniPay
+  // deposits. There is no sell action, and MiniPay wallet questions are not
+  // ours to answer, so the FAQ has to say both plainly.
+  const support = FAQ_GROUPS.find((g) => g.id === 'support')
+
+  it('never implies that a player can sell a pixel', () => {
+    // map-reset used to say "until you sell them", which contradicts the
+    // onboarding's "No sell button".
+    const answers = allItems.map((i) => i.a).join('\n')
+    expect(answers).not.toMatch(/\b(you|to|can) sell\b/i)
+  })
+
+  it('answers "Can I sell my pixel?" from the support section', () => {
+    const item = support?.items.find((i) => i.id === 'can-i-sell')
+    expect(item).toBeDefined()
+    expect(item!.a).toMatch(/no sell button/i)
+    expect(item!.a).toMatch(/no listing/i)
+    // No resale promise and no timeline.
+    expect(item!.a).not.toMatch(/\b(soon|within|guarantee\w*|will sell)\b/i)
+  })
+
+  it('says support is Mondeto-only and links the MiniPay FAQ', () => {
+    expect(support).toBeDefined()
+    const copy = support!.items.map((i) => i.a).join('\n')
+    expect(copy).toContain('Mondeto support only')
+    expect(support!.items.map((i) => i.link?.href)).toContain('https://minipay.to/faq')
+  })
+
+  it('says pixels cannot be sold on a marketplace or outside the app', () => {
+    // Pixels are contract storage, not NFTs: there is nothing to list. Say so
+    // where a player looks for how to sell, and warn about off-app offers.
+    const item = support?.items.find((i) => i.id === 'marketplace')
+    expect(item).toBeDefined()
+    expect(item!.a).toMatch(/not NFTs or tokens/i)
+    expect(item!.a).toMatch(/marketplace/i)
+    expect(item!.a).toMatch(/only when someone buys it from the Mondeto contract/i)
+    // The contract does not stop a direct call, so never claim it can't happen.
+    expect(item!.a).not.toMatch(/outside the app/i)
+    expect(item!.a).not.toMatch(/\b(soon|within|guarantee\w*|will sell)\b/i)
   })
 })

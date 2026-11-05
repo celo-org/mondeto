@@ -12,17 +12,19 @@
  * answer (mondeto.app/faq#payout-timing). Don't rename ids casually — they get
  * pasted into support replies.
  *
- * Numbers here (5% fee, ~30-day halving) were verified against mainnet
- * `feeRate()` and `config()`. They're per-deployment constructor values, so
- * re-check with `cast call` before editing — three different halving periods
- * were in circulation across this repo before this was written.
+ * Numbers here (7.5% fee, ~30-day halving) must match mainnet `feeRate()`
+ * and `config()`. The halving period is a per-deployment constructor value;
+ * the fee is owner-settable (`setFeeRate`, capped at 20%) and stepped from
+ * 500 to 750 bps in the tx referenced by the PR that landed this line. Re-check
+ * both with `cast call` before editing — three different halving periods were
+ * in circulation across this repo before this was written.
  *
  * Lives beside the page rather than inside it so `__tests__/app/faq.test.ts`
  * can import it without pulling in React (a `page.tsx` may only export the
  * default component and Next's own route config).
  */
 
-import { X_PROFILE_URL } from '@/lib/deeplinks'
+import { MINIPAY_FAQ_URL, X_PROFILE_URL } from '@/lib/deeplinks'
 import { BOARD_LABELS } from '@/lib/maps/leaderboards'
 
 export interface QaItem {
@@ -67,7 +69,7 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'which-board',
         q: 'Which leaderboard gets paid?',
-        a: `It depends on the campaign. Some pay the ${BOARD_LABELS.AREA} board, some pay ${BOARD_LABELS.TYCOONS}, some pay ${BOARD_LABELS.EMPIRE}. The campaign banner says which board it pays and how many places. Topping a board the campaign didn't name pays nothing.`,
+        a: `It depends on the campaign. Some pay the ${BOARD_LABELS.AREA} board, some pay ${BOARD_LABELS.EMPIRE}, some pay ${BOARD_LABELS.CAMPAIGN}. The campaign banner says which board it pays and how many places. Topping a board the campaign didn't name pays nothing.`,
       },
       {
         id: 'ranked-not-paid',
@@ -114,12 +116,12 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'who-pays-whom',
         q: 'Who pays whom when I buy a pixel?',
-        a: `If you buy a pixel from another player, they receive what you paid minus a 5% platform fee. If the pixel was unowned, the full amount goes to the contract's treasury.`,
+        a: `If you buy a pixel from another player, they receive what you paid minus a 7.5% platform fee. If the pixel was unowned, the full amount goes to the contract's treasury.`,
       },
       {
         id: 'sniped',
         q: 'Can someone buy my pixel away from me?',
-        a: `Yes — and that's how you get paid. Anyone can buy any pixel at its current price; there is no listing and no approval needed. The moment someone buys yours, you are paid in the same transaction: what they paid, minus the 5% fee. How much that is depends on timing. The instant a pixel is bought, its price doubles for the next buyer, then decays from there — halving about every 30 days. So a quick resale pays you close to double what you paid, while a pixel nobody touches for a long time gets cheaper for the next buyer, and pays you less.`,
+        a: `Yes — and that's how you get paid. Anyone can buy any pixel at its current price; there is no listing and no approval needed. The moment someone buys yours, you are paid in the same transaction: what they paid, minus the 7.5% fee. How much that is depends on timing. The instant a pixel is bought, its price doubles for the next buyer, then decays from there — halving about every 30 days. So a quick resale pays you close to double what you paid, while a pixel nobody touches for a long time gets cheaper for the next buyer, and pays you less.`,
       },
       {
         id: 'no-buyers',
@@ -140,12 +142,12 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'map-reset',
         q: 'Does the map reset each day?',
-        a: 'No. The map never resets. Your pixels stay yours until you sell them or another player buys them. Campaigns come and go; the map does not.',
+        a: 'No. The map never resets. Your pixels stay yours until another player buys them. Campaigns come and go; the map does not.',
       },
       {
         id: 'boards',
         q: 'How do leaderboards work?',
-        a: `Three boards per map: ${BOARD_LABELS.AREA} (most pixels owned), ${BOARD_LABELS.EMPIRE} (largest single connected run of land), and ${BOARD_LABELS.TYCOONS} (single most valuable pixel). Each map has its own boards, so you can rank on one map and not another.`,
+        a: `Three boards per map: ${BOARD_LABELS.AREA} (most pixels owned), ${BOARD_LABELS.EMPIRE} (largest single connected run of land), and ${BOARD_LABELS.CAMPAIGN} (who grew the most while a campaign is running — pixels gained minus pixels bought from you). ${BOARD_LABELS.AREA} and ${BOARD_LABELS.EMPIRE} count what you hold right now, so long-time players tend to stay on top; ${BOARD_LABELS.CAMPAIGN} only counts movement inside the campaign window, so it starts level every time. Each map has its own boards, so you can rank on one map and not another.`,
       },
       {
         id: 'buyout-rule',
@@ -166,7 +168,23 @@ export const FAQ_GROUPS: QaGroup[] = [
       {
         id: 'contact',
         q: 'How do I contact support?',
-        a: `Use the SUPPORT button on your profile page — it opens a short form, and a human reads every submission. Include your wallet address (it starts with 0x), which campaign you mean, and the date. Rewards are on-chain, so a player name, phone number or bank account can't be matched to a payment — the wallet address is the only thing we can look up. You can copy yours from MiniPay.`,
+        a: `Use the SUPPORT button on your profile page — it opens a short form, and a human reads every submission. Mondeto support only: we can't see or fix MiniPay wallets, deposits or withdrawals. Include your wallet address (it starts with 0x), which campaign you mean, and the date. Rewards are on-chain, so a player name, phone number or bank account can't be matched to a payment — the wallet address is the only thing we can look up. You can copy yours from MiniPay.`,
+      },
+      {
+        id: 'minipay-help',
+        q: 'Can support help with my MiniPay wallet?',
+        a: 'No. Mondeto support only. For MiniPay wallet, deposit or withdrawal questions, see the MiniPay FAQ.',
+        link: { href: MINIPAY_FAQ_URL, label: 'minipay.to/faq' },
+      },
+      {
+        id: 'can-i-sell',
+        q: 'Can I sell my pixel?',
+        a: 'There is no sell button and no listing. Your pixel moves only when another player buys it, and you are paid in that same transaction: what they paid, minus the platform fee. Until then it stays yours.',
+      },
+      {
+        id: 'marketplace',
+        q: 'Can I sell my pixel on a marketplace or to someone outside the app?',
+        a: 'No. Pixels are not NFTs or tokens: they are entries in the Mondeto smart contract, so there is nothing to list, transfer or sell on a marketplace. A pixel changes owner only when someone buys it from the Mondeto contract, at the contract price, and you are paid in that same transaction. Nobody can pay you separately to take over a pixel. If someone offers to buy or sell a pixel off-app, they are not connected to Mondeto — do not send them money.',
       },
       {
         id: 'who-runs',
