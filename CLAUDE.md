@@ -28,7 +28,7 @@ pnpm workspace (`apps/*`) driven by Turborepo.
 
 ## Setup
 
-Pinned: **pnpm 8.10.0**, **Node 24** (`packageManager` + `engines`, and
+Pinned: **pnpm 10.34.9**, **Node 24** (`packageManager` + `engines`, and
 what CI installs). Use those versions.
 
 ```sh
