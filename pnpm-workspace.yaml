@@ -18,3 +18,21 @@ onlyBuiltDependencies:
 overrides:
   "@fastify/busboy@<3.2.2": ^3.2.2   # GHSA-x8mw-p69m-v3mx + later busboy alerts
   "undici@>=7.0.0 <7.30.1": ^7.30.1  # GHSA-rfgv-xxqx-mfg5 + later undici 7.x alerts
+# Floors for the transitive packages Dependabot flags that end up in the shipped
+# web build (client or server bundle). None is imported by apps/web itself; each
+# arrives through wagmi/privy/viem or their wallet connectors, and each parent's
+# declared range already admits the fixed version except viem's exact `ws` pin.
+# Same-major only. zod (fix is 4.x, @privy-io/api-base wants ^3) and uuid (fix is
+# 11.x) are deliberately not here: no same-major fix exists.
+  "axios@>=1.0.0 <1.20.0": ^1.20.0          # 34 alerts; @coinbase/cdp-sdk via wagmi connectors
+  "form-data@>=4.0.0 <4.0.6": ^4.0.6        # GHSA-hmw2-7cc7-3qxx
+  "follow-redirects@<1.16.0": ^1.16.0       # GHSA-r4q5-vmmm-2653
+  "lodash@<4.18.1": ^4.18.1                 # GHSA-r5fr-rjxr-66jc, GHSA-f23m-r3pf-42rh
+  "js-cookie@<3.0.7": ^3.0.7                # GHSA-qjx8-664m-686j
+  "socket.io-parser@>=4.0.0 <4.2.7": ^4.2.7 # GHSA-2m8v-j782-fhvr
+  "ws@>=8.0.0 <8.21.0": ^8.21.0             # GHSA-96hv-2xvq-fx4p; viem pins ws 8.18.3 exactly
+  "ws@>=7.0.0 <7.5.11": ^7.5.11             # GHSA-96hv-2xvq-fx4p
+# Declared by posthog-js / porto but absent from every compiled bundle today.
+# Floored anyway so a later import cannot pull in a vulnerable copy.
+  "dompurify@<3.4.17": ^3.4.17              # critical GHSA-cg2g-xh64-v4q7 + the rest of the family
+  "hono@<4.13.11": ^4.13.11                 # GHSA family, 32 alerts
