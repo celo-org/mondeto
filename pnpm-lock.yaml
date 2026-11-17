@@ -6,7 +6,7 @@ settings:
 
 overrides:
   '@fastify/busboy@<3.2.2': ^3.2.2
-  undici@>=7.0.0 <7.30.1: ^7.30.1
+  undici@>=7.0.0 <7.30.1: ^8.0.0
   axios@>=1.0.0 <1.20.0: ^1.20.0
   form-data@>=4.0.0 <4.0.6: ^4.0.6
   follow-redirects@<1.16.0: ^1.16.0
@@ -4854,7 +4854,7 @@ packages:
   native-fetch@4.0.2:
     resolution: {integrity: sha512-4QcVlKFtv2EYVS5MBgsGX5+NWKtbDbIECdUXDBGDMAZXq3Jkv9zf+y8iS7Ub8fEdga3GpYeazp9gauNqXHJOCg==}
     peerDependencies:
-      undici: ^7.30.1
+      undici: ^8.0.0
 
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
@@ -6113,10 +6113,6 @@ packages:
   undici-types@7.25.0:
     resolution: {integrity: sha512-AXNgS1Byr27fTI+2bsPEkV9CxkT8H6xNyRI68b3TatlZo3RkzlqQBLL+w7SmGPVpokjHbcuNVQUWE7FRTg+LRA==}
 
-  undici@7.30.2:
-    resolution: {integrity: sha512-mLyPQnHwUxaM/rideoK/+KL8DaAJLRl4aBCfmX444aCSLnIaomqPLtNRe2jdCYcsk5wZzXrDIQC8ZeYNRAYyIA==}
-    engines: {node: '>=20.18.1'}
-
   undici@8.12.4:
     resolution: {integrity: sha512-8Mx+uNKKER2bA4AdtedkqRbwUCIJFr2nJckXRe5yrDqzePqwLP7VNcctN8/XdmDSbF7mS+jJKIszlL+vbam1VA==}
     engines: {node: '>=22.19.0'}
@@ -7037,13 +7033,13 @@ snapshots:
       immutable: 5.1.4
       jayson: 4.2.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       js-yaml: 4.1.0
-      kubo-rpc-client: 5.4.1(undici@7.30.2)
+      kubo-rpc-client: 5.4.1(undici@8.12.4)
       open: 10.2.0
       prettier: 3.6.2
       progress: 2.0.3
       semver: 7.7.3
       tmp-promise: 3.0.3
-      undici: 7.30.2
+      undici: 8.12.4
       web3-eth-abi: 4.4.1(typescript@7.0.2)(zod@3.25.76)
       yaml: 2.8.1
     transitivePeerDependencies:
@@ -13551,7 +13547,7 @@ snapshots:
 
   keyvaluestorage-interface@1.0.0: {}
 
-  kubo-rpc-client@5.4.1(undici@7.30.2):
+  kubo-rpc-client@5.4.1(undici@8.12.4):
     dependencies:
       '@ipld/dag-cbor': 9.2.7
       '@ipld/dag-json': 10.2.9
@@ -13580,7 +13576,7 @@ snapshots:
       merge-options: 3.0.4
       multiformats: 13.4.2
       nanoid: 5.1.16
-      native-fetch: 4.0.2(undici@7.30.2)
+      native-fetch: 4.0.2(undici@8.12.4)
       parse-duration: 2.1.8
       react-native-fetch-api: 3.0.0
       stream-to-it: 1.0.1
@@ -13848,9 +13844,9 @@ snapshots:
 
   napi-postinstall@0.3.4: {}
 
-  native-fetch@4.0.2(undici@7.30.2):
+  native-fetch@4.0.2(undici@8.12.4):
     dependencies:
-      undici: 7.30.2
+      undici: 8.12.4
 
   natural-compare@1.4.0: {}
 
@@ -15358,8 +15354,6 @@ snapshots:
   undici-types@6.21.0: {}
 
   undici-types@7.25.0: {}
-
-  undici@7.30.2: {}
 
   undici@8.12.4: {}
 

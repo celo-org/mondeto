@@ -17,7 +17,7 @@ onlyBuiltDependencies:
 # a later upstream bump past the floor takes over without editing this.
 overrides:
   "@fastify/busboy@<3.2.2": ^3.2.2   # GHSA-x8mw-p69m-v3mx + later busboy alerts
-  "undici@>=7.0.0 <7.30.1": ^7.30.1  # GHSA-rfgv-xxqx-mfg5 + later undici 7.x alerts
+  "undici@>=7.0.0 <7.30.1": ^8.0.0  # GHSA-rfgv-xxqx-mfg5 + later undici 7.x alerts
 # Floors for the transitive packages Dependabot flags that end up in the shipped
 # web build (client or server bundle). None is imported by apps/web itself; each
 # arrives through wagmi/privy/viem or their wallet connectors, and each parent's
