@@ -22,8 +22,10 @@ overrides:
 # web build (client or server bundle). None is imported by apps/web itself; each
 # arrives through wagmi/privy/viem or their wallet connectors, and each parent's
 # declared range already admits the fixed version except viem's exact `ws` pin.
-# Same-major only. zod (fix is 4.x, @privy-io/api-base wants ^3) and uuid (fix is
-# 11.x) are deliberately not here: no same-major fix exists.
+# Same-major only. Zod 3 consumers (including @privy-io/api-base) remain on 3.x;
+# the Porto floor below only updates its existing 4.x dependency. uuid is omitted
+# because its fix is 11.x and no same-major fix exists.
+  "porto>zod@>=4.0.0 <4.6.6": ^4.6.6       # GHSA-mrhx-c7xc-m3w5; preserve optional peers' Zod 3 ranges
   "axios@>=1.0.0 <1.20.0": ^1.20.0          # 34 alerts; @coinbase/cdp-sdk via wagmi connectors
   "form-data@>=4.0.0 <4.0.6": ^4.0.6        # GHSA-hmw2-7cc7-3qxx
   "follow-redirects@<1.16.0": ^1.16.0       # GHSA-r4q5-vmmm-2653
