@@ -20,7 +20,7 @@
   "devDependencies": {
     "@types/node": "^20.19.43",
     "turbo": "^2",
-    "typescript": "^5.2.2"
+    "typescript": "^7.0.0"
   },
   "packageManager": "pnpm@10.34.9",
   "engines": {
